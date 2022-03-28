@@ -1,0 +1,15 @@
+version: '3.7'
+services:
+  pandahub:
+    image: dev/pandahub
+    build: .
+    environment:
+        - SECRET=devonly!
+        - MONGODB_URL=${MONGODB_URL:-mongodb://db:27017}
+    ports:
+        - "8002:8002"
+    volumes:
+        - ./pandahub:/code/pandahub
+
+
+

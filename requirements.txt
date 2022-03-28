@@ -1,0 +1,11 @@
+uvicorn
+fastapi
+fastapi-users[mongodb]
+fastapi-mail
+pandapower
+pandapipes
+pymongo
+pydantic
+simplejson
+requests
+python-dotenv

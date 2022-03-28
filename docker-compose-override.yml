@@ -1,0 +1,11 @@
+version: '3.7'
+services:
+  pandahub:
+    depends_on:
+      - db
+
+  db:
+    image: mongo:latest
+    restart: always
+    volumes:
+      - pandahub_mongodb_data:/data/db
