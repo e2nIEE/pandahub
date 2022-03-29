@@ -1,6 +1,6 @@
 [![pandapower](https://www.pandapower.org/images/pp.svg)](https://www.pandapower.org)         [![pandapipes](https://www.pandapipes.org/images/pp.svg)](https://www.pandapipes.org)
 
-[![pandahub](https://badge.fury.io/py/pandahub.svg)](https://pypi.org/project/pandahub.svg/) [![pandahub](https://img.shields.io/pypi/pyversions/pandahub.svg)](https://pypi.org/project/pandahub.svg/) [![pandahub](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/e2nIEE/pandahub/blob/master/LICENSE)
+[![pandahub](https://badge.fury.io/py/pandahub.svg)](https://pypi.org/project/pandahub/) [![pandahub](https://img.shields.io/pypi/pyversions/pandahub.svg)](https://pypi.org/project/pandahub/) [![pandahub](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/e2nIEE/pandahub/blob/master/LICENSE)
 
 
 pandahub is a data hub for pandapower and pandapipes networks based on MongoDB. It allows you to store pandapower and pandapipes networks as well as timeseries in a MongoDB. pandahub allows you to access the database directly for local development, but also includes a client/server architecture that exposes all relevant methods as an API based on FastAPI. Access through the API is managed with a user management implementation based on FastAPI Users.
