@@ -50,10 +50,10 @@ class PandaHubClient:
     def write_network_to_db(self, net, name, overwrite=True):
         json = locals()
         json["net"] = pp.to_json(net)
-        return self._post("/write_network_to_db", json=json)
+        return self._post("/net/write_network_to_db", json=json)
 
     def get_net_from_db(self, name, include_results=True, only_tables=None):
-        r = self._post("/get_net_from_db", json=locals())
+        r = self._post("/net/get_net_from_db", json=locals())
         return pp.from_json_string(r.json())
 
 
