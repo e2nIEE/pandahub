@@ -9,7 +9,7 @@ with open('CHANGELOG.md', 'rb') as f:
 with open('requirements.txt') as req_file:
     requirements = req_file.read()
 
-long_description = '\n\n'.join((changelog, readme))
+long_description = '\n\n'.join((readme, changelog))
 
 test_requirements = ['pytest>=3', ]
 
@@ -27,7 +27,7 @@ setup(
     ],
     description="Data hub for pandapower and pandapipes networks based on MongoDB",
     install_requires=requirements,
-    long_description=long_description,
+    long_description=readme,
     entry_points = {
     'console_scripts': ['pandahub-login=pandahub.client.user_management:login'],
     },
@@ -35,7 +35,7 @@ setup(
     name='pandahub',
     packages=find_packages(),
     url='https://github.com/e2nIEE/pandahub',
-    version='0.1.0',
+    version='0.1.1',
     include_package_data=True,
     long_description_content_type='text/markdown',
     zip_safe=False,
