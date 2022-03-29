@@ -58,9 +58,3 @@ def write_config(url, token, cert_path="", key_path=""):
             "client_cert_path": cert_path,
             "client_key_path": key_path
         }, f)
-
-if __name__ == '__main__':
-    url='127.0.0.1'
-    email = "leon.thurner2@retoflow.de"
-    password = "mypass"
-    _login(url, email, password)
