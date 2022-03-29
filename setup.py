@@ -1,15 +1,15 @@
 from setuptools import setup, find_packages
 
-with open('README.rst') as readme_file:
+with open('README.md') as readme_file:
     readme = readme_file.read()
 
-with open('CHANGELOG.rst', 'rb') as f:
+with open('CHANGELOG.md', 'rb') as f:
     changelog = f.read().decode('utf-8')
     
 with open('requirements.txt') as req_file:
     requirements = req_file.read()
 
-long_description = '\n\n'.join((readme, changelog))
+long_description = '\n\n'.join((changelog, readme))
 
 test_requirements = ['pytest>=3', ]
 
@@ -35,7 +35,8 @@ setup(
     name='pandahub',
     packages=find_packages(),
     url='https://github.com/e2nIEE/pandahub',
-    version='0.1',
+    version='0.1.0',
     include_package_data=True,
+    long_description_content_type='text/markdown',
     zip_safe=False,
 )
