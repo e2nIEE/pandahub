@@ -41,7 +41,7 @@ class MultiGetTimeSeriesModel(BaseModel):
     exclude_timestamp_range: Optional[tuple] = None
 
 
-@router.post("multi_get_timeseries_from_db")
+@router.post("/multi_get_timeseries_from_db")
 def multi_get_timeseries_from_db(data: MultiGetTimeSeriesModel, ph=Depends(pandahub)):
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
