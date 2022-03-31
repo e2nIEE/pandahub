@@ -25,7 +25,7 @@ Steps to test the client/server structure locally:
 
    ```
    # windows
-   set MONGODB_URL=mongodb://localhost:[mongo-port] & set SECRET=secret python main.py
+   set MONGODB_URL=mongodb://localhost:[mongo-port] & set SECRET=secret & python main.py
 
    # linux
    MONGODB_URL=mongodb://localhost:[mongo-port] SECRET=secret python main.py
