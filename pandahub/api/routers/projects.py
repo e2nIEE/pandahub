@@ -56,3 +56,21 @@ def set_active_project(data: SetActiveProjectModel, ph=Depends(pandahub)):
     ph.set_active_project(**data.dict())
     print("ACTIVATED PROJECT", ph.active_project)
     return str(ph.active_project["_id"])
+
+
+class GetProjectSettingsModel(BaseModel):
+    project_id: str
+
+@router.post("/get_project_settings")
+def get_project_settings(data: GetProjectSettingsModel, ph=Depends(pandahub)):
+    settings = ph.get_project_settings(**data.dict())
+    return settings
+
+class SetProjectSettingsModel(BaseModel):
+    project_id: str
+    settings: dict
+
+@router.post("/set_project_settings")
+def set_project_settings(data: SetProjectSettingsModel, ph=Depends(pandahub)):
+    print("SET PROJECT SETTINGS", data.dict())
+    return ph.set_project_settings(**data.dict())

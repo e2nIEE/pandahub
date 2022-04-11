@@ -45,6 +45,12 @@ class PandaHubClient:
     def get_projects(self):
         return self._post("/projects/get_projects").json()
 
+    def get_project_settings(self):
+        return self._post("/projects/get_project_settings").json()
+
+    def set_project_settings(self, settings):
+        return self._post("/projects/set_project_settings", json=locals())
+    
     ### NET HANDLING
 
     def write_network_to_db(self, net, name, overwrite=True):

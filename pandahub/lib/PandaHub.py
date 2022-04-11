@@ -168,11 +168,15 @@ class PandaHub:
             "permissions": self.get_permissions_by_role(p.get("users").get(self.user_id)) if self.user_id else None
         } for p in projects]
 
-    def get_project_settings(self):
+    def get_project_settings(self, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
         self.check_permission("read")
         return self.active_project["settings"]
 
-    def set_project_settings(self, settings):
+    def set_project_settings(self, settings, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
         self.check_permission("write")
         _id = self.active_project["_id"]
         new_settings = {**self.active_project["settings"], **settings}
