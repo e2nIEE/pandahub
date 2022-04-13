@@ -123,6 +123,15 @@ class PandaHub:
     def has_permission(self, permission):
         if not "users" in self.active_project:
             return True
+
+        user = self._get_user()
+
+        if user is None:
+            return False
+
+        if user["is_superuser"]:
+            return True
+
         users = self.active_project["users"]
         if self.user_id not in users:
             return False
@@ -153,7 +162,11 @@ class PandaHub:
 
     def get_projects(self):
         if self.user_id is not None:
-            filter_dict = {"users.{}".format(self.user_id): {"$exists": True}}
+            user = self._get_user()
+            if user["is_superuser"]:
+                filter_dict = {}
+            else:
+                filter_dict = {"users.{}".format(self.user_id): {"$exists": True}}
         else:
             filter_dict = {"users":  {"$exists": False}}
         db = self.mongo_client["user_management"]
@@ -268,6 +281,14 @@ class PandaHub:
         if str(user["id"]) != self.user_id:
             self.check_permission("user_management")
         return user
+
+    def _get_user(self):
+        user_mgmnt_db = self.mongo_client["user_management"]
+        user = user_mgmnt_db["users"].find_one(
+            {"id": UUID4(self.user_id)}, projection={"_id": 0, "hashed_password": 0}
+        )
+        return user
+
 
     def get_permissions_by_role(self, role):
         permissions = []
@@ -734,7 +755,7 @@ class PandaHub:
         else:
             self.check_permission("write")
             db = self._get_project_database()
-            
+
         # get metada before change
         meta_before = self.get_timeseries_metadata(filter_document, global_database=global_database,
                                                    collection_name=collection_name)
