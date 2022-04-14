@@ -636,7 +636,9 @@ class PandaHub:
     # -------------------------
 
     def get_net_value_from_db(self, net_name, element, element_index,
-                              parameter):
+                              parameter, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
@@ -648,7 +650,9 @@ class PandaHub:
             raise PandaHubError("Parameter doesn't exist", 404)
         return element[parameter]
 
-    def delete_net_element(self, net_name, element, element_index):
+    def delete_net_element(self, net_name, element, element_index, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
@@ -656,21 +660,28 @@ class PandaHub:
 
 
     def set_net_value_in_db(self, net_name, element, element_index,
-                            parameter, value):
+                            parameter, value, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        print("SET", net_name, element, element_index, parameter, value)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {parameter: value}})
 
-    def create_element_in_db(self, net_name, element, element_index, data):
+    def create_element_in_db(self, net_name, element, element_index, data, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         element_data = {**data, **{"index": element_index, "net_id": _id}}
         db[element].insert_one(element_data)
 
-    def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list):
+    def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)

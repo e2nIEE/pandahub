@@ -69,6 +69,24 @@ class PandaHubClient:
         return pp.from_json_string(r.json())
 
 
+    ### ELEMENT HANDLING
+
+    def get_net_value_from_db(self, net_name, element, element_index, parameter):
+        return self._post("/net/get_net_value_from_db", json=locals()).json()
+
+    def set_net_value_in_db(self, net_name, element, element_index, parameter, value):
+        return self._post("/net/set_net_value_in_db", json=locals())
+
+    def create_element_in_db(self, net_name, element, element_index, data):
+        return self._post("/net/create_element_in_db", json=locals())
+
+    def create_elements_in_db(self, net_name, element_type, elements_data):
+        return self._post("/net/create_elements_in_db", json=locals())
+
+    def delete_net_element(self, net_name, element, element_index):
+        return self._post("/net/delete_net_element", json=locals())
+
+
     ### TIMESERIES
 
     def multi_get_timeseries_from_db(self, filter_document={}, timestamp_range=None,
