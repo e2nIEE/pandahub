@@ -13,6 +13,19 @@ from typing import Optional
 import logging
 logger = logging.getLogger(__name__)
 
+# -------------------------
+# Exceptions
+# -------------------------
+
+class PandaHubError(Exception):
+    def __init__(self, message, status_code=400):
+        self.status_code = status_code
+        super().__init__(message)
+
+
+# -------------------------
+# PandaHub
+# -------------------------
 
 class PandaHub:
     permissions = {
@@ -20,6 +33,10 @@ class PandaHub:
         "write": ["owner", "developer"],
         "user_management": ["owner"]
     }
+
+    # -------------------------
+    # Initialization
+    # -------------------------
 
     def __init__(self, connection_url=None, check_server_available=False, user_id=None):
         if connection_url is None:
@@ -31,6 +48,11 @@ class PandaHub:
         self.user_id = user_id
         if check_server_available:
             self.server_is_available()
+
+
+    # -------------------------
+    # Database connection checks
+    # -------------------------
 
     def server_is_available(self):
         """
@@ -54,6 +76,117 @@ class PandaHub:
                 return "ok"
         except (ServerSelectionTimeoutError, timeout) as e:
             return "connection timeout"
+
+
+    # -------------------------
+    # Permission check
+    # -------------------------
+
+    def check_permission(self, permission):
+        if self.active_project is None:
+            raise PandaHubError("No project is activated")
+        if not self.has_permission(permission):
+            raise PandaHubError("You don't have {} rights on this project".format(permission), 403)
+
+    def has_permission(self, permission):
+        if not "users" in self.active_project:
+            return True
+
+        user = self._get_user()
+
+        if user is None:
+            return False
+
+        if user["is_superuser"]:
+            return True
+
+        users = self.active_project["users"]
+        if self.user_id not in users:
+            return False
+        role = users[self.user_id]
+        return role in self.permissions[permission]
+
+    def get_permissions_by_role(self, role):
+        permissions = []
+        for perm, roles in self.permissions.items():
+            if role in roles:
+                permissions.append(perm)
+        return permissions
+
+
+    # -------------------------
+    # User handling
+    # -------------------------
+
+    def get_user_by_email(self, email):
+        user_mgmnt_db = self.mongo_client["user_management"]
+        user = user_mgmnt_db["users"].find_one({"email": email})
+        if user is None:
+            return None
+        if str(user["id"]) != self.user_id:
+            self.check_permission("user_management")
+        return user
+
+    def _get_user(self):
+        user_mgmnt_db = self.mongo_client["user_management"]
+        user = user_mgmnt_db["users"].find_one(
+            {"id": UUID4(self.user_id)}, projection={"_id": 0, "hashed_password": 0}
+        )
+        return user
+
+
+    # -------------------------
+    # Project handling
+    # -------------------------
+
+    def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        if self.project_exists(name, realm):
+            raise PandaHubError("Project already exists")
+        if settings is None:
+             settings = {}
+        if metadata is None:
+            metadata = {}
+
+        project_data = {"name": name, "realm": realm, "settings": settings, "metadata": metadata}
+        if self.user_id is not None:
+             project_data["users"] = {self.user_id: "owner"}
+        self.mongo_client["user_management"]["projects"].insert_one(project_data)
+        self.set_active_project(name, realm)
+        return project_data
+
+    def delete_project(self, i_know_this_action_is_final=False, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        project_id = self.active_project["_id"]
+        self.check_permission("write")
+        if not i_know_this_action_is_final:
+            raise PandaHubError("Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm.")
+        self.mongo_client.drop_database(str(project_id))
+        self.mongo_client.user_management.projects.delete_one({"_id": project_id})
+        self.active_project = None
+
+    def get_projects(self):
+        if self.user_id is not None:
+            user = self._get_user()
+            if user["is_superuser"]:
+                filter_dict = {}
+            else:
+                filter_dict = {"users.{}".format(self.user_id): {"$exists": True}}
+        else:
+            filter_dict = {"users":  {"$exists": False}}
+        db = self.mongo_client["user_management"]
+        projects = list(db["projects"].find(filter_dict))
+        return [{
+            "id": str(p["_id"]),
+            "name": p["name"],
+            "realm": str(p["realm"]),
+            "settings": p["settings"],
+            "locked": p.get("locked"),
+            "locked_by": p.get("locked_by"),
+            "permissions": self.get_permissions_by_role(p.get("users").get(self.user_id)) if self.user_id else None
+        } for p in projects]
 
     def set_active_project(self, project_name, realm=None):
         projects = self.get_projects()
@@ -89,6 +222,25 @@ class PandaHub:
                                                {"$set": {"realm": realm}})
         self.set_active_project(project_name, realm)
 
+    def lock_project(self):
+        db = self.mongo_client["user_management"]["projects"]
+        result = db.update_one(
+            {"_id": self.active_project["_id"],},
+            {"$set": {"locked": True, "locked_by": self.user_id}}
+        )
+        return result.acknowledged and result.modified_count > 0
+
+    def unlock_projects(self):
+        db = self.mongo_client["user_management"]["projects"]
+        return db.update_many(
+            {"locked_by": self.user_id}, {"$set": {"locked": False, "locked_by": None}}
+        )
+
+    def project_exists(self, project_name=None, realm=None):
+        project_collection = self.mongo_client["user_management"].projects
+        project = project_collection.find_one({"name": project_name, "realm": realm})
+        return project is not None
+
     def _get_project_document(self, filter_dict: dict) -> Optional[dict]:
         project_collection = self.mongo_client["user_management"].projects
         projects = list(project_collection.find(filter_dict))
@@ -106,80 +258,16 @@ class PandaHub:
         else:
             return project_doc
 
-    def lock_project(self):
-        db = self.mongo_client["user_management"]["projects"]
-        result = db.update_one(
-            {"_id": self.active_project["_id"],},
-            {"$set": {"locked": True, "locked_by": self.user_id}}
-        )
-        return result.acknowledged and result.modified_count > 0
+    def _get_project_database(self):
+        return self.mongo_client[str(self.active_project["_id"])]
 
-    def unlock_projects(self):
-        db = self.mongo_client["user_management"]["projects"]
-        return db.update_many(
-            {"locked_by": self.user_id}, {"$set": {"locked": False, "locked_by": None}}
-        )
+    def _get_global_database(self):
+        return self.mongo_client["global_data"]
 
-    def has_permission(self, permission):
-        if not "users" in self.active_project:
-            return True
 
-        user = self._get_user()
-
-        if user is None:
-            return False
-
-        if user["is_superuser"]:
-            return True
-
-        users = self.active_project["users"]
-        if self.user_id not in users:
-            return False
-        role = users[self.user_id]
-        return role in self.permissions[permission]
-
-    def project_exists(self, project_name=None, realm=None):
-        project_collection = self.mongo_client["user_management"].projects
-        project = project_collection.find_one({"name": project_name, "realm": realm})
-        return project is not None
-
-    def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None):
-        if project_id:
-            self.set_active_project_by_id(project_id)
-        if self.project_exists(name, realm):
-            raise PandaHubError("Project already exists")
-        if settings is None:
-             settings = {}
-        if metadata is None:
-            metadata = {}
-
-        project_data = {"name": name, "realm": realm, "settings": settings, "metadata": metadata}
-        if self.user_id is not None:
-             project_data["users"] = {self.user_id: "owner"}
-        self.mongo_client["user_management"]["projects"].insert_one(project_data)
-        self.set_active_project(name, realm)
-        return project_data
-
-    def get_projects(self):
-        if self.user_id is not None:
-            user = self._get_user()
-            if user["is_superuser"]:
-                filter_dict = {}
-            else:
-                filter_dict = {"users.{}".format(self.user_id): {"$exists": True}}
-        else:
-            filter_dict = {"users":  {"$exists": False}}
-        db = self.mongo_client["user_management"]
-        projects = list(db["projects"].find(filter_dict))
-        return [{
-            "id": str(p["_id"]),
-            "name": p["name"],
-            "realm": str(p["realm"]),
-            "settings": p["settings"],
-            "locked": p.get("locked"),
-            "locked_by": p.get("locked_by"),
-            "permissions": self.get_permissions_by_role(p.get("users").get(self.user_id)) if self.user_id else None
-        } for p in projects]
+    # -------------------------
+    # Project settings and metadata
+    # -------------------------
 
     def get_project_settings(self, project_id=None):
         if project_id:
@@ -227,6 +315,11 @@ class PandaHub:
             ]
         )
         self.active_project["metadata"] = update_metadata
+
+
+    # -------------------------
+    # Project user management
+    # -------------------------
 
     def get_project_users(self):
         self.check_permission("user_management")
@@ -279,54 +372,317 @@ class PandaHub:
             {"$unset": {f"users.{user_id}": ""}}
         )
 
-    def get_user_by_email(self, email):
-        user_mgmnt_db = self.mongo_client["user_management"]
-        user = user_mgmnt_db["users"].find_one({"email": email})
-        if user is None:
-            return None
-        if str(user["id"]) != self.user_id:
-            self.check_permission("user_management")
-        return user
 
-    def _get_user(self):
-        user_mgmnt_db = self.mongo_client["user_management"]
-        user = user_mgmnt_db["users"].find_one(
-            {"id": UUID4(self.user_id)}, projection={"_id": 0, "hashed_password": 0}
-        )
-        return user
+    # -------------------------
+    # Net handling
+    # -------------------------
 
-
-    def get_permissions_by_role(self, role):
-        permissions = []
-        for perm, roles in self.permissions.items():
-            if role in roles:
-                permissions.append(perm)
-        return permissions
-
-    def _get_project_database(self):
-        return self.mongo_client[str(self.active_project["_id"])]
-
-    def _get_global_database(self):
-        return self.mongo_client["global_data"]
-
-    def check_permission(self, permission):
-        if self.active_project is None:
-            raise PandaHubError("No project is activated")
-        if not self.has_permission(permission):
-            raise PandaHubError("You don't have {} rights on this project".format(permission), 403)
-
-
-    def delete_project(self, i_know_this_action_is_final=False, project_id=None):
+    def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
-        project_id = self.active_project["_id"]
-        self.check_permission("write")
-        if not i_know_this_action_is_final:
-            raise PandaHubError("Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm.")
-        self.mongo_client.drop_database(str(project_id))
-        self.mongo_client.user_management.projects.delete_one({"_id": project_id})
-        self.active_project = None
+        self.check_permission("read")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(name, db)
+        if _id is None:
+            return None
+        return self.get_net_from_db_by_id(_id, include_results, only_tables)
 
+    def get_net_from_db_by_id(self, id, include_results=True, only_tables=None):
+        self.check_permission("read")
+        return self._get_net_from_db_by_id(id, include_results, only_tables)
+
+    def get_subnet_from_db(self, name, bus_filter=None, bus_geodata_filter=None,
+                           include_results=True, add_edge_branches=True):
+        self.check_permission("read")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(name, db)
+        if _id is None:
+            return None
+
+        meta = self._get_network_metadata(db, _id)
+
+        net = pp.create_empty_network()
+
+        if bus_geodata_filter is not None:
+            self._add_element_from_collection(net, db, "bus_geodata", _id, bus_geodata_filter)
+            self._add_element_from_collection(net, db, "bus", _id, {"index": {"$in": net.bus_geodata.index.tolist()}})
+
+        # Add buses with filter
+        if bus_filter is not None:
+            self._add_element_from_collection(net, db, "bus", _id, bus_filter)
+        buses = net.bus.index.tolist()
+
+        branch_operator = "$or" if add_edge_branches else "$and"
+        # Add branch elements connected to at least one bus
+        self._add_element_from_collection(net, db, "line", _id,
+                                          {branch_operator: [
+                                              {"from_bus": {"$in": buses}},
+                                              {"to_bus": {"$in": buses}}]})
+        self._add_element_from_collection(net, db,  "trafo", _id,
+                                          {branch_operator: [
+                                              {"hv_bus": {"$in": buses}},
+                                              {"lv_bus": {"$in": buses}}]})
+        self._add_element_from_collection(net, db, "trafo3w", _id,
+                                          {branch_operator: [
+                                              {"hv_bus": {"$in": buses}},
+                                              {"mv_bus": {"$in": buses}},
+                                              {"lv_bus": {"$in": buses}}]})
+
+        self._add_element_from_collection(net, db, "switch", _id,
+                                          {"$and": [
+                                              {"et": "b"},
+                                              {branch_operator: [
+                                                  {"bus": {"$in": buses}},
+                                                  {"element": {"$in": buses}}
+                                               ]}
+                                              ]
+                                           })
+        if add_edge_branches:
+            # Add buses on the other side of the branches
+            branch_buses = set(net.trafo.hv_bus.values) | set(net.trafo.lv_bus.values) | \
+                    set(net.line.from_bus) | set(net.line.to_bus) | \
+                    set(net.trafo3w.hv_bus.values) | set(net.trafo3w.mv_bus.values) | \
+                    set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
+            branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
+            self._add_element_from_collection(net, db, "bus", _id,
+                                              {"index": {"$in": branch_buses_outside}})
+            buses = net.bus.index.tolist()
+
+        switch_filter = {"$or": [
+                            {"$and": [
+                                 {"et": "t"},
+                                 {"element": {"$in": net.trafo.index.tolist()}}
+                                 ]
+                                },
+                            {"$and": [
+                                 {"et": "l"},
+                                 {"element": {"$in": net.line.index.tolist()}}
+                                 ]
+                                },
+                            {"$and": [
+                                 {"et": "t3"},
+                                 {"element": {"$in": net.trafo3w.index.tolist()}}
+                                 ]
+                                }
+                            ]
+                        }
+        self._add_element_from_collection(net, db,"switch", _id, switch_filter)
+
+        #add node elements
+        node_elements = ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor", "storage"]
+        branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
+        all_elements = node_elements + branch_elements + ["bus"]
+
+        #add all node elements that are connected to buses within the network
+        for element in node_elements:
+            filter = {"bus": {"$in": buses}}
+            self._add_element_from_collection(net, db, element, _id,
+                                              filter=filter,
+                                              include_results=include_results)
+
+        #add all other collections
+        collection_names = self._get_net_collections(db)
+        for collection in collection_names:
+            #skip all element tables that we have already added
+            if collection in all_elements:
+                continue
+            #for tables that share an index with an element (e.g. load->res_load) load only relevant entries
+            for element in all_elements:
+                if collection.startswith(element + "_") or collection.startswith("res_" + element):
+                    filter = {"index": {"$in": net[element].index.tolist()}}
+                    break
+            else:
+                #all other tables (e.g. std_types) are loaded without filter
+                filter = None
+            self._add_element_from_collection(net, db, collection, _id,
+                                              filter=filter,
+                                              include_results=include_results)
+        net.update(meta["data"])
+        return net
+
+    def write_network_to_db(self, net, name, overwrite=True, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        self.check_permission("write")
+        db = self._get_project_database()
+        if isinstance(net, pp.pandapowerNet):
+            net_type = "power"
+        elif isinstance(net, pps.pandapipesNet):
+            net_type = "pipe"
+        else:
+            raise PandaHubError("net must be a pandapower or pandapipes object")
+        if self._network_with_name_exists(name, db):
+            if overwrite:
+                self.delete_net_from_db(name)
+            else:
+                raise PandaHubError("Network name already exists")
+        max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
+        _id = 0 if max_id_network is None else max_id_network["_id"] + 1
+        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id)
+        self._write_net_collections_to_db(db, dataframes)
+
+        net_dict = {"_id": _id, "name": name, "dtypes": types,
+                    "net_type": net_type,
+                    "data": other_parameters}
+        db["_networks"].insert_one(net_dict)
+
+    def delete_net_from_db(self, name):
+        self.check_permission("write")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(name, db)
+        if _id is None:
+            raise PandaHubError("Network does not exist", 404)
+        collection_names = self._get_net_collections(db) #TODO
+        for collection_name in collection_names:
+            db[collection_name].delete_many({'net_id': _id})
+        db["_networks"].delete_one({"_id": _id})
+
+    def network_with_name_exists(self, name):
+        self.check_permission("read")
+        db = self._get_project_database()
+        return self._network_with_name_exists(name, db)
+
+    def load_networks_meta(self, networks, load_area=False):
+        self.check_permission("read")
+        db = self._get_project_database()
+        fi = {"name": {"$in": networks}}
+        proj = {"net": 0}
+        if not load_area:
+            proj["area_geojson"] = 0
+        nets = pd.DataFrame(list(db.find(fi,rojection=proj)))
+        return nets
+
+    def _write_net_collections_to_db(self, db, collections):
+        for key, item in collections.items():
+            if len(item) > 0:
+                try:
+                    db[key].insert_many(item, ordered= True)
+                    db[key].create_index([("net_id", DESCENDING)])
+                except:
+                    print("FAILED TO WRITE TABLE", key)
+
+    def _get_metadata_from_name(self, name, db):
+        return list(db["_networks"].find({"name": name}))
+
+    def _get_id_from_name(self, name, db):
+        metadata = self._get_metadata_from_name(name, db)
+        if len(metadata) > 1:
+            raise PandaHubError("Duplicate Network!")
+        return None if len(metadata) == 0 else metadata[0]["_id"]
+
+    def _network_with_name_exists(self, name, db):
+        return self._get_id_from_name(name, db) is not None
+
+
+    def _get_net_collections(self, db):
+        all_collection_names = db.list_collection_names()
+        return [name for name in all_collection_names if
+                    not name.startswith("_") and
+                    not name=="timeseries"]
+
+
+    def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None):
+        db = self._get_project_database()
+        meta = self._get_network_metadata(db, id)
+        if meta["net_type"] == "power":
+            net = pp.create_empty_network()
+        elif meta["net_type"] == "pipe":
+            net = pps.create_empty_network()
+        collection_names = self._get_net_collections(db)
+        for collection_name in collection_names:
+            self._add_element_from_collection(net, db, collection_name, id,
+                                              include_results=include_results,
+                                              only_tables=only_tables)
+        net.update(meta["data"])
+        return net
+
+    def _get_network_metadata(self, db, net_id):
+        return db["_networks"].find_one({"_id": net_id})
+
+
+
+    def _add_element_from_collection(self, net, db, element, net_id,
+                                     filter=None, include_results=True,
+                                     only_tables=None):
+        if only_tables is not None and not element in only_tables:
+            return
+        if not include_results and element.startswith("res_"):
+            return
+        filter_dict = {"net_id": net_id}
+        if filter is not None:
+            filter_dict = {**filter_dict, **filter}
+        data = list(db[element].find(filter_dict))
+        if len(data) == 0:
+            return
+        dtypes = db["_networks"].find_one({"_id": net_id})["dtypes"]
+        df = pd.DataFrame.from_records(data, index="index")
+        if element in dtypes:
+            df = df.astype(dtypes[element])
+        df.index.name = None
+        df.drop(columns=["_id", "net_id"], inplace=True)
+        df.sort_index(inplace=True)
+        if "object" in df.columns:
+            df["object"] = df["object"].apply(lambda obj: JSONSerializableClass.from_dict(obj))
+        if not element in net or net[element].empty:
+            net[element] = df
+        else:
+            new_rows = set(df.index) - set(net[element].index)
+            if new_rows:
+                net[element] = pd.concat([net[element], df.loc[new_rows]])
+
+
+    # -------------------------
+    # Net element handling
+    # -------------------------
+
+    def get_net_value_from_db(self, net_name, element, element_index,
+                              parameter):
+        self.check_permission("write")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(net_name, db)
+        elements = list(db[element].find({"index": element_index, "net_id": _id}))
+        if len(elements) == 0:
+            raise PandaHubError("Element doesn't exist", 404)
+        element = elements[0]
+        if parameter not in element:
+            raise PandaHubError("Parameter doesn't exist", 404)
+        return element[parameter]
+
+    def delete_net_element(self, net_name, element, element_index):
+        self.check_permission("write")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(net_name, db)
+        db[element].delete_one({"index": element_index, "net_id": _id})
+
+
+    def set_net_value_in_db(self, net_name, element, element_index,
+                            parameter, value):
+        self.check_permission("write")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(net_name, db)
+        db[element].find_one_and_update({"index": element_index, "net_id": _id},
+                                        {"$set": {parameter: value}})
+
+    def create_element_in_db(self, net_name, element, element_index, data):
+        self.check_permission("write")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(net_name, db)
+        element_data = {**data, **{"index": element_index, "net_id": _id}}
+        db[element].insert_one(element_data)
+
+    def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list):
+        self.check_permission("write")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(net_name, db)
+        data = []
+        for elm_data in elements_data:
+            data.append({**elm_data, **{"net_id": _id}})
+        db[element_type].insert_many(data)
+
+
+    # -------------------------
+    # Bulk operations
+    # -------------------------
 
     def bulk_write_to_db(self, data, collection_name="tasks", global_database=True):
         """
@@ -397,6 +753,11 @@ class PandaHub:
             i+=1
 
         db[collection_name].bulk_write(operations)
+
+
+    # -------------------------
+    # Timeseries
+    # -------------------------
 
     def write_timeseries_to_db(self, timeseries, data_type, element_type=None,
                                netname=None, element_index=None, name=None,
@@ -925,302 +1286,6 @@ class PandaHub:
             timeseries = timeseries.pivot(columns=pivot_by_column, values="value")
         return timeseries
 
-    def write_network_to_db(self, net, name, overwrite=True, project_id=None):
-        if project_id:
-            self.set_active_project_by_id(project_id)
-        self.check_permission("write")
-        db = self._get_project_database()
-        if isinstance(net, pp.pandapowerNet):
-            net_type = "power"
-        elif isinstance(net, pps.pandapipesNet):
-            net_type = "pipe"
-        else:
-            raise PandaHubError("net must be a pandapower or pandapipes object")
-        if self._network_with_name_exists(name, db):
-            if overwrite:
-                self.delete_net_from_db(name)
-            else:
-                raise PandaHubError("Network name already exists")
-        max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
-        _id = 0 if max_id_network is None else max_id_network["_id"] + 1
-        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id)
-        self._write_net_collections_to_db(db, dataframes)
-
-        net_dict = {"_id": _id, "name": name, "dtypes": types,
-                    "net_type": net_type,
-                    "data": other_parameters}
-        db["_networks"].insert_one(net_dict)
-
-    def _write_net_collections_to_db(self, db, collections):
-        for key, item in collections.items():
-            if len(item) > 0:
-                try:
-                    db[key].insert_many(item, ordered= True)
-                    db[key].create_index([("net_id", DESCENDING)])
-                except:
-                    print("FAILED TO WRITE TABLE", key)
-
-    def _get_metadata_from_name(self, name, db):
-        return list(db["_networks"].find({"name": name}))
-
-    def _get_id_from_name(self, name, db):
-        metadata = self._get_metadata_from_name(name, db)
-        if len(metadata) > 1:
-            raise PandaHubError("Duplicate Network!")
-        return None if len(metadata) == 0 else metadata[0]["_id"]
-
-    def _network_with_name_exists(self, name, db):
-        return self._get_id_from_name(name, db) is not None
-
-    def network_with_name_exists(self, name):
-        self.check_permission("read")
-        db = self._get_project_database()
-        return self._network_with_name_exists(name, db)
-
-    def _get_net_collections(self, db):
-        all_collection_names = db.list_collection_names()
-        return [name for name in all_collection_names if
-                    not name.startswith("_") and
-                    not name=="timeseries"]
-
-    def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None):
-        if project_id:
-            self.set_active_project_by_id(project_id)
-        self.check_permission("read")
-        db = self._get_project_database()
-        _id = self._get_id_from_name(name, db)
-        if _id is None:
-            return None
-        return self.get_net_from_db_by_id(_id, include_results, only_tables)
-
-    def get_net_from_db_by_id(self, id, include_results=True, only_tables=None):
-        self.check_permission("read")
-        return self._get_net_from_db_by_id(id, include_results, only_tables)
-
-    def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None):
-        db = self._get_project_database()
-        meta = self._get_network_metadata(db, id)
-        if meta["net_type"] == "power":
-            net = pp.create_empty_network()
-        elif meta["net_type"] == "pipe":
-            net = pps.create_empty_network()
-        collection_names = self._get_net_collections(db)
-        for collection_name in collection_names:
-            self._add_element_from_collection(net, db, collection_name, id,
-                                              include_results=include_results,
-                                              only_tables=only_tables)
-        net.update(meta["data"])
-        return net
-
-    def _get_network_metadata(self, db, net_id):
-        return db["_networks"].find_one({"_id": net_id})
-
-    def get_subnet_from_db(self, name, bus_filter=None, bus_geodata_filter=None,
-                           include_results=True, add_edge_branches=True):
-        self.check_permission("read")
-        db = self._get_project_database()
-        _id = self._get_id_from_name(name, db)
-        if _id is None:
-            return None
-
-        meta = self._get_network_metadata(db, _id)
-
-        net = pp.create_empty_network()
-
-        if bus_geodata_filter is not None:
-            self._add_element_from_collection(net, db, "bus_geodata", _id, bus_geodata_filter)
-            self._add_element_from_collection(net, db, "bus", _id, {"index": {"$in": net.bus_geodata.index.tolist()}})
-
-        # Add buses with filter
-        if bus_filter is not None:
-            self._add_element_from_collection(net, db, "bus", _id, bus_filter)
-        buses = net.bus.index.tolist()
-
-        branch_operator = "$or" if add_edge_branches else "$and"
-        # Add branch elements connected to at least one bus
-        self._add_element_from_collection(net, db, "line", _id,
-                                          {branch_operator: [
-                                              {"from_bus": {"$in": buses}},
-                                              {"to_bus": {"$in": buses}}]})
-        self._add_element_from_collection(net, db,  "trafo", _id,
-                                          {branch_operator: [
-                                              {"hv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]})
-        self._add_element_from_collection(net, db, "trafo3w", _id,
-                                          {branch_operator: [
-                                              {"hv_bus": {"$in": buses}},
-                                              {"mv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]})
-
-        self._add_element_from_collection(net, db, "switch", _id,
-                                          {"$and": [
-                                              {"et": "b"},
-                                              {branch_operator: [
-                                                  {"bus": {"$in": buses}},
-                                                  {"element": {"$in": buses}}
-                                               ]}
-                                              ]
-                                           })
-        if add_edge_branches:
-            # Add buses on the other side of the branches
-            branch_buses = set(net.trafo.hv_bus.values) | set(net.trafo.lv_bus.values) | \
-                    set(net.line.from_bus) | set(net.line.to_bus) | \
-                    set(net.trafo3w.hv_bus.values) | set(net.trafo3w.mv_bus.values) | \
-                    set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
-            branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
-            self._add_element_from_collection(net, db, "bus", _id,
-                                              {"index": {"$in": branch_buses_outside}})
-            buses = net.bus.index.tolist()
-
-        switch_filter = {"$or": [
-                            {"$and": [
-                                 {"et": "t"},
-                                 {"element": {"$in": net.trafo.index.tolist()}}
-                                 ]
-                                },
-                            {"$and": [
-                                 {"et": "l"},
-                                 {"element": {"$in": net.line.index.tolist()}}
-                                 ]
-                                },
-                            {"$and": [
-                                 {"et": "t3"},
-                                 {"element": {"$in": net.trafo3w.index.tolist()}}
-                                 ]
-                                }
-                            ]
-                        }
-        self._add_element_from_collection(net, db,"switch", _id, switch_filter)
-
-        #add node elements
-        node_elements = ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor", "storage"]
-        branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
-        all_elements = node_elements + branch_elements + ["bus"]
-
-        #add all node elements that are connected to buses within the network
-        for element in node_elements:
-            filter = {"bus": {"$in": buses}}
-            self._add_element_from_collection(net, db, element, _id,
-                                              filter=filter,
-                                              include_results=include_results)
-
-        #add all other collections
-        collection_names = self._get_net_collections(db)
-        for collection in collection_names:
-            #skip all element tables that we have already added
-            if collection in all_elements:
-                continue
-            #for tables that share an index with an element (e.g. load->res_load) load only relevant entries
-            for element in all_elements:
-                if collection.startswith(element + "_") or collection.startswith("res_" + element):
-                    filter = {"index": {"$in": net[element].index.tolist()}}
-                    break
-            else:
-                #all other tables (e.g. std_types) are loaded without filter
-                filter = None
-            self._add_element_from_collection(net, db, collection, _id,
-                                              filter=filter,
-                                              include_results=include_results)
-        net.update(meta["data"])
-        return net
-
-
-    def _add_element_from_collection(self, net, db, element, net_id,
-                                     filter=None, include_results=True,
-                                     only_tables=None):
-        if only_tables is not None and not element in only_tables:
-            return
-        if not include_results and element.startswith("res_"):
-            return
-        filter_dict = {"net_id": net_id}
-        if filter is not None:
-            filter_dict = {**filter_dict, **filter}
-        data = list(db[element].find(filter_dict))
-        if len(data) == 0:
-            return
-        dtypes = db["_networks"].find_one({"_id": net_id})["dtypes"]
-        df = pd.DataFrame.from_records(data, index="index")
-        if element in dtypes:
-            df = df.astype(dtypes[element])
-        df.index.name = None
-        df.drop(columns=["_id", "net_id"], inplace=True)
-        df.sort_index(inplace=True)
-        if "object" in df.columns:
-            df["object"] = df["object"].apply(lambda obj: JSONSerializableClass.from_dict(obj))
-        if not element in net or net[element].empty:
-            net[element] = df
-        else:
-            new_rows = set(df.index) - set(net[element].index)
-            if new_rows:
-                net[element] = pd.concat([net[element], df.loc[new_rows]])
-
-
-    def delete_net_from_db(self, name):
-        self.check_permission("write")
-        db = self._get_project_database()
-        _id = self._get_id_from_name(name, db)
-        if _id is None:
-            raise PandaHubError("Network does not exist", 404)
-        collection_names = self._get_net_collections(db) #TODO
-        for collection_name in collection_names:
-            db[collection_name].delete_many({'net_id': _id})
-        db["_networks"].delete_one({"_id": _id})
-
-
-    def get_net_value_from_db(self, net_name, element, element_index,
-                              parameter):
-        self.check_permission("write")
-        db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
-        elements = list(db[element].find({"index": element_index, "net_id": _id}))
-        if len(elements) == 0:
-            raise PandaHubError("Element doesn't exist", 404)
-        element = elements[0]
-        if parameter not in element:
-            raise PandaHubError("Parameter doesn't exist", 404)
-        return element[parameter]
-
-    def delete_net_element(self, net_name, element, element_index):
-        self.check_permission("write")
-        db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
-        db[element].delete_one({"index": element_index, "net_id": _id})
-
-
-    def set_net_value_in_db(self, net_name, element, element_index,
-                            parameter, value):
-        self.check_permission("write")
-        db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
-        db[element].find_one_and_update({"index": element_index, "net_id": _id},
-                                        {"$set": {parameter: value}})
-
-    def create_element_in_db(self, net_name, element, element_index, data):
-        self.check_permission("write")
-        db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
-        element_data = {**data, **{"index": element_index, "net_id": _id}}
-        db[element].insert_one(element_data)
-
-    def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list):
-        self.check_permission("write")
-        db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
-        data = []
-        for elm_data in elements_data:
-            data.append({**elm_data, **{"net_id": _id}})
-        db[element_type].insert_many(data)
-
-    def load_networks_meta(self, networks, load_area=False):
-        self.check_permission("read")
-        db = self._get_project_database()
-        fi = {"name": {"$in": networks}}
-        proj = {"net": 0}
-        if not load_area:
-            proj["area_geojson"] = 0
-        nets = pd.DataFrame(list(db.find(fi,rojection=proj)))
-        return nets
-
 
     def delete_timeseries_from_db(self, element_type, data_type, netname=None,
                                   element_index=None, collection_name="timeseries",
@@ -1315,10 +1380,6 @@ class PandaHub:
         del_res = db[collection_name].delete_many(match_filter)
         return del_res
 
-class PandaHubError(Exception):
-    def __init__(self, message, status_code=400):
-        self.status_code = status_code
-        super().__init__(message)
 
 if __name__ == '__main__':
     self = PandaHub()
