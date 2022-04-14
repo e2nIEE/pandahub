@@ -50,7 +50,13 @@ class PandaHubClient:
 
     def set_project_settings(self, settings):
         return self._post("/projects/set_project_settings", json=locals())
-    
+
+    def get_project_metadata(self):
+        return self._post("/projects/get_project_metadata").json()
+
+    def set_project_metadata(self, metadata):
+        return self._post("/projects/set_project_metadata", json=locals())
+
     ### NET HANDLING
 
     def write_network_to_db(self, net, name, overwrite=True):
@@ -85,6 +91,8 @@ class PandaHubClient:
         json = locals()
         json["timeseries"] = json["timeseries"].to_json(date_format="iso")
         return self._post("/timeseries/write_timeseries_to_db", json=json)
+
+
 
     ### INTERNAL
 

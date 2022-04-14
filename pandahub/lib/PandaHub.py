@@ -197,15 +197,21 @@ class PandaHub:
         project_collection.find_one_and_update({"_id": _id}, {"$set": {"settings": new_settings}})
         self.active_project["settings"] = new_settings
 
-    def get_project_metadata(self):
+    def get_project_metadata(self, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
         self.check_permission("read")
-        return self.active_project["metadata"]
+        return self.active_project.get("metadata") or dict()
 
-    def set_project_metadata(self, metadata: dict):
+    def set_project_metadata(self, metadata: dict, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
         self.check_permission("write")
         project_data = self.active_project
-        new_metadata = {**project_data["metadata"], **metadata}
-        self.active_project = project_data
+        if "metadata" in project_data.keys():
+            new_metadata = {**project_data["metadata"], **metadata}
+        else:
+            new_metadata = metadata
 
         # Workaround until mongo 5.0
         update_metadata = dict()
