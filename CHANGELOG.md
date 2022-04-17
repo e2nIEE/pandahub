@@ -2,6 +2,7 @@
 
 ## [0.2.0]- 2021-04-17
 
+   - ADDED Python 3.7 support
    - ADDED getting/setting project settings and metadata
    - ADDED full database access for superusers
    - ADDED element handling to API and client
