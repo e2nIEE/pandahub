@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.2.1]- 2021-04-22
+
+   - FIXED superuser flag not respected when activating project
+
 ## [0.2.0]- 2021-04-17
 
    - ADDED Python 3.7 support
