@@ -618,7 +618,10 @@ class PandaHub:
         dtypes = db["_networks"].find_one({"_id": net_id})["dtypes"]
         df = pd.DataFrame.from_records(data, index="index")
         if element in dtypes:
-            df = df.astype(dtypes[element])
+            dtypes_found_columns = {
+                column: dtype for column, dtype in dtypes[element].items() if column in df.columns
+            }
+            df = df.astype(dtypes_found_columns)
         df.index.name = None
         df.drop(columns=["_id", "net_id"], inplace=True)
         df.sort_index(inplace=True)

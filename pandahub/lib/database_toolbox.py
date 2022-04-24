@@ -171,6 +171,7 @@ def convert_dataframes_to_dicts(net, _id):
         if key.startswith("_"):
             continue
         if isinstance(data, pd.core.frame.DataFrame):
+            types[key] = {column: str(dtype) for column, dtype in net[key].dtypes.items()}
             if data.empty:
                 continue
             # convert pandapower objects in dataframes to dict
@@ -180,8 +181,6 @@ def convert_dataframes_to_dicts(net, _id):
             net[key]["net_id"] = _id
             dataframes[key] = net[key].to_dict(orient="records")
             net[key].drop(columns=["index", "net_id"], inplace=True)
-            types[key] = {column: str(dtype) for column, dtype
-                                       in net[key].dtypes.items()}
         else:
             try:
                 json.dumps(data)
