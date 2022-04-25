@@ -7,9 +7,11 @@ from pandahub.lib.database_toolbox import create_timeseries_document, convert_ti
 from pandahub.api.internal import settings
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 from pandapower.io_utils import JSONSerializableClass
+from pandapower.std_types import load_std_type
 from bson.objectid import ObjectId
 from pydantic.types import UUID4
 from typing import Optional
+from inspect import signature, _empty
 import logging
 logger = logging.getLogger(__name__)
 
@@ -681,6 +683,7 @@ class PandaHub:
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         element_data = {**data, **{"index": element_index, "net_id": _id}}
+        self._add_missing_defaults(db, _id, element, element_data)
         db[element].insert_one(element_data)
 
     def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list, project_id=None):
@@ -691,8 +694,40 @@ class PandaHub:
         _id = self._get_id_from_name(net_name, db)
         data = []
         for elm_data in elements_data:
+            self._add_missing_defaults(db, _id, element_type, elm_data)
             data.append({**elm_data, **{"net_id": _id}})
         db[element_type].insert_many(data)
+
+    def _add_missing_defaults(self, db, net_id, element_type, element_data):
+        func_str = f"create_{element_type}"
+        if not hasattr(pp, func_str):
+            return
+        create_func = getattr(pp, func_str)
+        sig = signature(create_func)
+        params = sig.parameters
+
+        for par, data in params.items():
+            if par in ["net", "kwargs"]:
+                continue
+            if par in element_data:
+                continue
+            if data.default == _empty:
+                continue
+            element_data[par] = data.default
+
+        if element_type in ["line", "trafo", "trafo3w"]:
+            # add standard type values
+            std_type = element_data["std_type"]
+            net_doc = db["_networks"].find_one({"_id": net_id})
+            if net_doc is not None:
+                std_types = net_doc["data"]["std_types"][element_type]
+                if std_type in std_types:
+                    element_data.update(std_types[std_type])
+
+            # add needed parameters not defined in standard type
+            if element_type == "line":
+                if "g_us_per_km" not in element_data:
+                    element_data["g_us_per_km"] = 0
 
 
     # -------------------------
