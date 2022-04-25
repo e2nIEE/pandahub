@@ -168,7 +168,7 @@ def convert_dataframes_to_dicts(net, _id):
     other_parameters = {}
     types = {}
     for key, data in net.items():
-        if key.startswith("_"):
+        if key.startswith("_") or key.startswith("res"):
             continue
         if isinstance(data, pd.core.frame.DataFrame):
             types[key] = {column: str(dtype) for column, dtype in net[key].dtypes.items()}
