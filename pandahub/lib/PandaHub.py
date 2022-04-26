@@ -294,7 +294,22 @@ class PandaHub:
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
-        return self.active_project.get("metadata") or dict()
+        metadata = self.active_project.get("metadata") or dict()
+
+        # Workaround until mongo 5.0
+        def restore_empty(data):
+            for key, val in data.items():
+                if isinstance(val, dict):
+                    restore_empty(val)
+                elif isinstance(val, str):
+                    if val == "_none":
+                        val = None
+                    elif val.startswith("_empty_"):
+                        t = getattr(builtins, val.replace("_empty_", ""))
+                        val = t()
+                data[key] = val
+        restore_empty(metadata)
+        return metadata
 
     def set_project_metadata(self, metadata: dict, project_id=None):
         if project_id:
@@ -307,10 +322,20 @@ class PandaHub:
             new_metadata = metadata
 
         # Workaround until mongo 5.0
+        def replace_empty(updated, data):
+            for key, val in data.items():
+                if val is None:
+                    updated[key] = "_none"
+                elif hasattr(val, "__iter__") and len(val) == 0:
+                    updated[key] = f"_empty_{type(val).__name__}"
+                elif isinstance(val, dict):
+                    sub_upd = dict()
+                    replace_empty(sub_upd, val)
+                    updated[key] = sub_upd
+                else:
+                    updated[key] = val
         update_metadata = dict()
-        for key, val in new_metadata.items():
-            if val:
-                update_metadata[key] = val
+        replace_empty(update_metadata, new_metadata)
 
         self.mongo_client.user_management.projects.update_one(
             {"_id": project_data['_id']},
