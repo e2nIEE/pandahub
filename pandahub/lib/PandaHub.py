@@ -13,6 +13,8 @@ from pydantic.types import UUID4
 from typing import Optional
 from inspect import signature, _empty
 import logging
+import importlib
+import builtins
 logger = logging.getLogger(__name__)
 
 # -------------------------
@@ -628,7 +630,11 @@ class PandaHub:
         df.drop(columns=["_id", "net_id"], inplace=True)
         df.sort_index(inplace=True)
         if "object" in df.columns:
-            df["object"] = df["object"].apply(lambda obj: JSONSerializableClass.from_dict(obj))
+            def js_to_object(js):
+                _module = importlib.import_module(js["_module"])
+                _class = getattr(_module, js["_class"])
+                return _class.from_json(js["_object"])
+            df["object"] = df["object"].apply(lambda obj: js_to_object(obj))
         if not element in net or net[element].empty:
             net[element] = df
         else:

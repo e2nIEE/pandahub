@@ -175,12 +175,18 @@ def convert_dataframes_to_dicts(net, _id):
             if data.empty:
                 continue
             # convert pandapower objects in dataframes to dict
-            if "object" in net[key].columns:
-                net[key]["object"] = net[key]["object"].apply(lambda obj: obj.to_dict())
-            net[key]["index"] = net[key].index
-            net[key]["net_id"] = _id
-            dataframes[key] = net[key].to_dict(orient="records")
-            net[key].drop(columns=["index", "net_id"], inplace=True)
+            df = net[key].copy(deep=True)
+            if "object" in df.columns:
+                df["object"] = df["object"].apply(
+                    lambda obj: {
+                        "_module": obj.__class__.__module__,
+                        "_class": obj.__class__.__name__,
+                        "_object": obj.to_json()
+                    }
+                )
+            df["index"] = df.index
+            df["net_id"] = _id
+            dataframes[key] = df.to_dict(orient="records")
         else:
             try:
                 json.dumps(data)
