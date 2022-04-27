@@ -253,10 +253,11 @@ class PandaHub:
         if len(projects) > 1:
             raise PandaHubError("Duplicate Project detected. This should never happen if you create projects through the API. Remove duplicate projects manually in the database.")
         project_doc = projects[0]
-        user = self._get_user()
         if "users" not in project_doc:
             return project_doc #project is not user protected
-        elif not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
+
+        user = self._get_user()
+        if not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
             raise PandaHubError("You don't have rights to access this project", 403)
         elif project_doc.get("locked") and project_doc.get("locked_by") != self.user_id:
             raise PandaHubError("Project is locked by another user")
