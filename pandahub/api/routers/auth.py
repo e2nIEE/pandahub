@@ -2,6 +2,8 @@ from fastapi import APIRouter
 
 from pandahub.api.internal.users import auth_backend, fastapi_users
 
+from pandahub.api.internal.settings import REGISTRATION_ENABLED
+
 router = APIRouter(
     prefix="/auth",
     tags=["auth"]
@@ -10,12 +12,16 @@ router = APIRouter(
 router.include_router(
     fastapi_users.get_auth_router(auth_backend)
 )
-router.include_router(
-    fastapi_users.get_register_router()
-)
+
 router.include_router(
     fastapi_users.get_reset_password_router()
 )
-router.include_router(
-    fastapi_users.get_verify_router()
-)
+
+if REGISTRATION_ENABLED:
+    router.include_router(
+        fastapi_users.get_register_router()
+    )
+
+    router.include_router(
+        fastapi_users.get_verify_router()
+    )
