@@ -86,7 +86,7 @@ class CreateElementsModel(BaseModel):
     project_id: str
     net_name: str
     element_type: str
-    elements_data: list[dict]
+    elements_data: list
 
 @router.post("/create_elements_in_db")
 def create_elements_in_db(data: CreateElementsModel, ph=Depends(pandahub)):

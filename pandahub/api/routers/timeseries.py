@@ -29,6 +29,7 @@ class GetTimeSeriesModel(BaseModel):
 def get_timeseries_from_db(data: GetTimeSeriesModel, ph=Depends(pandahub)):
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
+    print("GETTING TIMESERIES FROM DB", data)
     ts = ph.get_timeseries_from_db(**data.dict())
     return ts.to_json(date_format="iso")
 
