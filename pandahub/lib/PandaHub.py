@@ -12,7 +12,7 @@ from bson.objectid import ObjectId
 from pydantic.types import UUID4
 from typing import Optional
 from inspect import signature, _empty
-from traceback import format_exc
+import traceback
 import logging
 logger = logging.getLogger(__name__)
 
@@ -563,7 +563,8 @@ class PandaHub:
                     db[key].insert_many(item, ordered= True)
                     db[key].create_index([("net_id", DESCENDING)])
                 except Exception as e:
-                    print(repr(e) + " ---- " + format_exc())
+                    traceback.print_exc()
+                    print(f"\nFAILED TO WRITE TABLE '{key}' TO DATABASE! (details above)")
 
     def _get_metadata_from_name(self, name, db):
         return list(db["_networks"].find({"name": name}))
