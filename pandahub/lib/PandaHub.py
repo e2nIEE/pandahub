@@ -4,6 +4,7 @@ import pandas as pd
 import pandapower as pp
 import pandapipes as pps
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts
+from pandahub.lib.datatypes import datatypes
 from pandahub.api.internal import settings
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 from pandapower.io_utils import JSONSerializableClass
@@ -685,7 +686,11 @@ class PandaHub:
         element = elements[0]
         if parameter not in element:
             raise PandaHubError("Parameter doesn't exist", 404)
-        return element[parameter]
+        dtypes = datatypes.get(element)
+        if dtypes is not None and parameter in dtypes:
+            return dtypes[parameter](element[parameter])
+        else:
+            return element[parameter]
 
     def delete_net_element(self, net_name, element, element_index, project_id=None):
         if project_id:
@@ -704,6 +709,9 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
+        dtypes = datatypes.get(element)
+        if dtypes is not None and parameter in dtypes:
+            parameter = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {parameter: value}})
 
@@ -715,6 +723,7 @@ class PandaHub:
         _id = self._get_id_from_name(net_name, db)
         element_data = {**data, **{"index": element_index, "net_id": _id}}
         self._add_missing_defaults(db, _id, element, element_data)
+        self._ensure_dtypes(element, element_data)
         db[element].insert_one(element_data)
 
     def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list, project_id=None):
@@ -760,12 +769,20 @@ class PandaHub:
                 if "g_us_per_km" not in element_data:
                     element_data["g_us_per_km"] = 0
 
+    def _ensure_dtypes(self, element, data):
+        dtypes = datatypes.get(element)
+        if dtypes is None:
+            return
+        for key, val in data.items():
+            if key in dtypes:
+                data[key] = dtypes[key](val)
+
 
     # -------------------------
     # Bulk operations
     # -------------------------
 
-    def bulk_write_to_db(self, data, collection_name="tasks", global_database=True):
+    def bulk_write_to_db(self, data, collection_name="tasks", global_database=True, project_id=None):
         """
         Writes any number of documents to the database at once. Checks, if any
         document with the same _id already exists in the database. Already existing
@@ -785,6 +802,9 @@ class PandaHub:
         None.
 
         """
+        if project_id:
+            self.set_active_project_by_id(project_id)
+
         if global_database:
             db = self._get_global_database()
         else:
