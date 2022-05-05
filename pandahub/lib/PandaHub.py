@@ -4,14 +4,21 @@ import numpy as np
 import pandas as pd
 import pandapower as pp
 import pandapipes as pps
+
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts, decompress_timeseries_data
+from pandahub.lib.datatypes import datatypes
 from pandahub.api.internal import settings
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 from pandapower.io_utils import JSONSerializableClass
+from pandapower.std_types import load_std_type
 from bson.objectid import ObjectId
 from pydantic.types import UUID4
 from typing import Optional
+from inspect import signature, _empty
+import traceback
 import logging
+import importlib
+import builtins
 logger = logging.getLogger(__name__)
 
 # -------------------------
@@ -250,9 +257,10 @@ class PandaHub:
         if len(projects) > 1:
             raise PandaHubError("Duplicate Project detected. This should never happen if you create projects through the API. Remove duplicate projects manually in the database.")
         project_doc = projects[0]
+        user = self._get_user()
         if "users" not in project_doc:
             return project_doc #project is not user protected
-        elif self.user_id not in project_doc["users"].keys():
+        elif not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
             raise PandaHubError("You don't have rights to access this project", 403)
         elif project_doc.get("locked") and project_doc.get("locked_by") != self.user_id:
             raise PandaHubError("Project is locked by another user")
@@ -290,7 +298,22 @@ class PandaHub:
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
-        return self.active_project.get("metadata") or dict()
+        metadata = self.active_project.get("metadata") or dict()
+
+        # Workaround until mongo 5.0
+        def restore_empty(data):
+            for key, val in data.items():
+                if isinstance(val, dict):
+                    restore_empty(val)
+                elif isinstance(val, str):
+                    if val == "_none":
+                        val = None
+                    elif val.startswith("_empty_"):
+                        t = getattr(builtins, val.replace("_empty_", ""))
+                        val = t()
+                data[key] = val
+        restore_empty(metadata)
+        return metadata
 
     def set_project_metadata(self, metadata: dict, project_id=None):
         if project_id:
@@ -303,10 +326,20 @@ class PandaHub:
             new_metadata = metadata
 
         # Workaround until mongo 5.0
+        def replace_empty(updated, data):
+            for key, val in data.items():
+                if val is None:
+                    updated[key] = "_none"
+                elif hasattr(val, "__iter__") and len(val) == 0:
+                    updated[key] = f"_empty_{type(val).__name__}"
+                elif isinstance(val, dict):
+                    sub_upd = dict()
+                    replace_empty(sub_upd, val)
+                    updated[key] = sub_upd
+                else:
+                    updated[key] = val
         update_metadata = dict()
-        for key, val in new_metadata.items():
-            if val:
-                update_metadata[key] = val
+        replace_empty(update_metadata, new_metadata)
 
         self.mongo_client.user_management.projects.update_one(
             {"_id": project_data['_id']},
@@ -559,8 +592,9 @@ class PandaHub:
                 try:
                     db[key].insert_many(item, ordered= True)
                     db[key].create_index([("net_id", DESCENDING)])
-                except:
-                    print("FAILED TO WRITE TABLE", key)
+                except Exception as e:
+                    traceback.print_exc()
+                    print(f"\nFAILED TO WRITE TABLE '{key}' TO DATABASE! (details above)")
 
     def _get_metadata_from_name(self, name, db):
         return list(db["_networks"].find({"name": name}))
@@ -618,12 +652,19 @@ class PandaHub:
         dtypes = db["_networks"].find_one({"_id": net_id})["dtypes"]
         df = pd.DataFrame.from_records(data, index="index")
         if element in dtypes:
-            df = df.astype(dtypes[element])
+            dtypes_found_columns = {
+                column: dtype for column, dtype in dtypes[element].items() if column in df.columns
+            }
+            df = df.astype(dtypes_found_columns)
         df.index.name = None
         df.drop(columns=["_id", "net_id"], inplace=True)
         df.sort_index(inplace=True)
         if "object" in df.columns:
-            df["object"] = df["object"].apply(lambda obj: JSONSerializableClass.from_dict(obj))
+            def js_to_object(js):
+                _module = importlib.import_module(js["_module"])
+                _class = getattr(_module, js["_class"])
+                return _class.from_json(js["_object"])
+            df["object"] = df["object"].apply(lambda obj: js_to_object(obj))
         if not element in net or net[element].empty:
             net[element] = df
         else:
@@ -649,7 +690,11 @@ class PandaHub:
         element = elements[0]
         if parameter not in element:
             raise PandaHubError("Parameter doesn't exist", 404)
-        return element[parameter]
+        dtypes = datatypes.get(element)
+        if dtypes is not None and parameter in dtypes:
+            return dtypes[parameter](element[parameter])
+        else:
+            return element[parameter]
 
     def delete_net_element(self, net_name, element, element_index, project_id=None):
         if project_id:
@@ -668,6 +713,9 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
+        dtypes = datatypes.get(element)
+        if dtypes is not None and parameter in dtypes:
+            value = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {parameter: value}})
 
@@ -678,6 +726,8 @@ class PandaHub:
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         element_data = {**data, **{"index": element_index, "net_id": _id}}
+        self._add_missing_defaults(db, _id, element, element_data)
+        self._ensure_dtypes(element, element_data)
         db[element].insert_one(element_data)
 
     def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list, project_id=None):
@@ -688,15 +738,55 @@ class PandaHub:
         _id = self._get_id_from_name(net_name, db)
         data = []
         for elm_data in elements_data:
+            self._add_missing_defaults(db, _id, element_type, elm_data)
             data.append({**elm_data, **{"net_id": _id}})
         db[element_type].insert_many(data)
+
+    def _add_missing_defaults(self, db, net_id, element_type, element_data):
+        func_str = f"create_{element_type}"
+        if not hasattr(pp, func_str):
+            return
+        create_func = getattr(pp, func_str)
+        sig = signature(create_func)
+        params = sig.parameters
+
+        for par, data in params.items():
+            if par in ["net", "kwargs"]:
+                continue
+            if par in element_data:
+                continue
+            if data.default == _empty:
+                continue
+            element_data[par] = data.default
+
+        if element_type in ["line", "trafo", "trafo3w"]:
+            # add standard type values
+            std_type = element_data["std_type"]
+            net_doc = db["_networks"].find_one({"_id": net_id})
+            if net_doc is not None:
+                std_types = net_doc["data"]["std_types"][element_type]
+                if std_type in std_types:
+                    element_data.update(std_types[std_type])
+
+            # add needed parameters not defined in standard type
+            if element_type == "line":
+                if "g_us_per_km" not in element_data:
+                    element_data["g_us_per_km"] = 0
+
+    def _ensure_dtypes(self, element, data):
+        dtypes = datatypes.get(element)
+        if dtypes is None:
+            return
+        for key, val in data.items():
+            if key in dtypes:
+                data[key] = dtypes[key](val)
 
 
     # -------------------------
     # Bulk operations
     # -------------------------
 
-    def bulk_write_to_db(self, data, collection_name="tasks", global_database=True):
+    def bulk_write_to_db(self, data, collection_name="tasks", global_database=True, project_id=None):
         """
         Writes any number of documents to the database at once. Checks, if any
         document with the same _id already exists in the database. Already existing
@@ -716,6 +806,9 @@ class PandaHub:
         None.
 
         """
+        if project_id:
+            self.set_active_project_by_id(project_id)
+
         if global_database:
             db = self._get_global_database()
         else:

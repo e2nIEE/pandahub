@@ -10,6 +10,7 @@ import base64
 import hashlib
 import logging
 import json
+from .datatypes import datatypes
 logger = logging.getLogger(__name__)
 
 
@@ -202,20 +203,50 @@ def convert_dataframes_to_dicts(net, _id):
     other_parameters = {}
     types = {}
     for key, data in net.items():
-        if key.startswith("_"):
+        if key.startswith("_") or key.startswith("res"):
             continue
         if isinstance(data, pd.core.frame.DataFrame):
+
+            # ------------
+            # create type lookup
+
+            types[key] = dict()
+            default_dtypes = datatypes.get(key)
+            if default_dtypes is not None:
+                types[key].update({key: dtype.__name__ for key, dtype in default_dtypes.items()})
+            types[key].update(
+                {
+                    column: str(dtype) for column, dtype in net[key].dtypes.items()
+                    if column not in types[key]
+                }
+            )
             if data.empty:
                 continue
+
+            # ------------
             # convert pandapower objects in dataframes to dict
-            if "object" in net[key].columns:
-                net[key]["object"] = net[key]["object"].apply(lambda obj: obj.to_dict())
-            net[key]["index"] = net[key].index
-            net[key]["net_id"] = _id
-            dataframes[key] = net[key].to_dict(orient="records")
-            net[key].drop(columns=["index", "net_id"], inplace=True)
-            types[key] = {column: str(dtype) for column, dtype
-                                       in net[key].dtypes.items()}
+
+            df = net[key].copy(deep=True)
+
+            # ------------
+            # cast all columns with their default datatype
+
+            if default_dtypes is not None:
+                for column in df.columns:
+                    if column in default_dtypes:
+                        df[column] = df[column].astype(default_dtypes[column])
+
+            if "object" in df.columns:
+                df["object"] = df["object"].apply(
+                    lambda obj: {
+                        "_module": obj.__class__.__module__,
+                        "_class": obj.__class__.__name__,
+                        "_object": obj.to_json()
+                    }
+                )
+            df["index"] = df.index
+            df["net_id"] = _id
+            dataframes[key] = df.to_dict(orient="records")
         else:
             try:
                 json.dumps(data)

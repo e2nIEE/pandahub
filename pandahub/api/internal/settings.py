@@ -1,10 +1,10 @@
 from dotenv import load_dotenv
 import os
 
-def settings_bool(var_name):
+def settings_bool(var_name, default=None):
     var = os.getenv(var_name)
     if var is None:
-        return None
+        return default
     if isinstance(var, str) and var.lower() == "true":
         return True
     elif isinstance(var, str) and var.lower() == "false":
@@ -28,3 +28,5 @@ MAIL_SSL = os.getenv("MAIL_SSL") or False
 PASSWORD_RESET_URL = os.getenv("PASSWORD_RESET_URL") or ""
 EMAIL_VERIFY_URL = os.getenv("EMAIL_VERIFY_URL") or ""
 SECRET = os.getenv("SECRET")
+
+REGISTRATION_ENABLED = settings_bool("REGISTRATION_ENABLED", default=True)
