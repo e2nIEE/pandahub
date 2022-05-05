@@ -905,6 +905,7 @@ class PandaHub:
             else:
                 args = kwargs
             doc = create_timeseries_document(timeseries[col],
+                                             data_type,
                                              ts_format=ts_format,
                                              compress_ts_data=compress_ts_data,
                                              **args)
@@ -1191,7 +1192,10 @@ class PandaHub:
             else:
                 match_filter.append({key: filter_value})
 
-        pipeline = [{"$match": {"$and": match_filter}}]
+        if len(match_filter) > 0:
+            pipeline = [{"$match": {"$and": match_filter}}]
+        else:
+            pipeline = []
         if timestamp_range:
             projection = {"timeseries_data": {"$filter": {"input": "$timeseries_data",
                                                           "as": "timeseries_data",
