@@ -39,6 +39,8 @@ class PandaHub:
         "user_management": ["owner"]
     }
 
+    _datatypes = datatypes
+
     # -------------------------
     # Initialization
     # -------------------------
@@ -686,7 +688,7 @@ class PandaHub:
         element = elements[0]
         if parameter not in element:
             raise PandaHubError("Parameter doesn't exist", 404)
-        dtypes = datatypes.get(element)
+        dtypes = _datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             return dtypes[parameter](element[parameter])
         else:
@@ -709,7 +711,7 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
-        dtypes = datatypes.get(element)
+        dtypes = _datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             parameter = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
@@ -770,7 +772,7 @@ class PandaHub:
                     element_data["g_us_per_km"] = 0
 
     def _ensure_dtypes(self, element, data):
-        dtypes = datatypes.get(element)
+        dtypes = _datatypes.get(element)
         if dtypes is None:
             return
         for key, val in data.items():
