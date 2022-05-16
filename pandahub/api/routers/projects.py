@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -75,8 +75,21 @@ class SetProjectSettingsModel(BaseModel):
 @router.post("/set_project_settings")
 def set_project_settings(data: SetProjectSettingsModel, ph=Depends(pandahub)):
     print("SET PROJECT SETTINGS", data.dict())
-    return ph.set_project_settings(**data.dict())
+    ph.set_project_settings(**data.dict())
 
+class SetProjectSettingsValueModel(BaseModel):
+    project_id: str
+    category: str
+    value: Any
+
+@router.post("/set_project_settings_value")
+def set_project_settings_value(data: SetProjectSettingsValueModel, ph=Depends(pandahub)):
+    category = data.category
+    value = data.value
+    project_id = data.project_id
+    settings = ph.get_project_settings(project_id=project_id)
+    settings[category] = value
+    ph.set_project_settings(settings=settings, project_id=project_id)
 
 # -------------------------
 # Metadata
