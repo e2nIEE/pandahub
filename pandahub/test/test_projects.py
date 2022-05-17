@@ -1,3 +1,9 @@
+import pandapower.networks as nw
+import pandahub
+import pandapower as pp
+import pytest
+from pandahub.lib.database_toolbox import convert_dataframes_to_dicts
+from pymongo import DESCENDING
 
 
 def test_project_management(ph):
@@ -8,3 +14,72 @@ def test_project_management(ph):
     ph.set_active_project(project)
     ph.delete_project(i_know_this_action_is_final=True)
     assert not ph.project_exists(project)
+
+
+def test_upgrade_project():
+    class PandaHubV0_2_2(pandahub.PandaHub):
+        def write_network_to_db(self, net, name, overwrite=True, project_id=None):
+            if project_id:
+                self.set_active_project_by_id(project_id)
+            self.check_permission("write")
+            db = self._get_project_database()
+            if isinstance(net, pp.pandapowerNet):
+                net_type = "power"
+            elif isinstance(net, pp.pandapipesNet):
+                net_type = "pipe"
+            else:
+                raise pandahub.PandaHubError("net must be a pandapower or pandapipes object")
+            if self._network_with_name_exists(name, db):
+                if overwrite:
+                    self.delete_net_from_db(name)
+                else:
+                    raise pandahub.PandaHubError("Network name already exists")
+            max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
+            _id = 0 if max_id_network is None else max_id_network["_id"] + 1
+            dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id)
+            self._write_net_collections_to_db(db, dataframes)
+
+            net_dict = {"_id": _id, "name": name, "dtypes": types,
+                        "net_type": net_type,
+                        "data": other_parameters}
+            db["_networks"].insert_one(net_dict)
+
+
+        def _write_net_collections_to_db(self, db, collections):
+            for key, item in collections.items():
+                if len(item) > 0:
+                    try:
+                        db[key].insert_many(item, ordered= True)
+                        db[key].create_index([("net_id", DESCENDING)])
+                    except:
+                        print("FAILED TO WRITE TABLE", key)
+    # we use the implemetation of 0.2.2 to write a net
+    oldph = PandaHubV0_2_2(connection_url="mongodb://localhost:27017")
+    oldph.set_active_project("pytest")
+    db = oldph._get_project_database()
+    reset_project(db)
+    net = nw.simple_four_bus_system()
+    oldph.write_network_to_db(net, "simple_network")
+    # convert the db to latest version
+    ph = pandahub.PandaHub(connection_url="mongodb://localhost:27017")
+    ph.set_active_project("pytest")
+    ph.upgrade_project_to_latest_version()
+    # and test if everything went fine
+    net2 = ph.get_net_from_db("simple_network")
+    assert pp.nets_equal(net, net2)
+
+
+def reset_project(db):
+    for cname in db.list_collection_names():
+        db.drop_collection(cname)
+
+
+if __name__ == '__main__':
+    pass
+
+
+
+
+
+
+
