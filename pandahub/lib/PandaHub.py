@@ -552,7 +552,7 @@ class PandaHub:
                 raise PandaHubError("Network name already exists")
         max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
         _id = 0 if max_id_network is None else max_id_network["_id"] + 1
-        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id)
+        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, self._datatypes)
         self._write_net_collections_to_db(db, dataframes)
 
         net_dict = {"_id": _id, "name": name, "dtypes": types,
@@ -690,7 +690,7 @@ class PandaHub:
         element = elements[0]
         if parameter not in element:
             raise PandaHubError("Parameter doesn't exist", 404)
-        dtypes = _datatypes.get(element)
+        dtypes = self._datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             return dtypes[parameter](element[parameter])
         else:
@@ -713,7 +713,7 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
-        dtypes = _datatypes.get(element)
+        dtypes = self._datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
@@ -774,7 +774,7 @@ class PandaHub:
                     element_data["g_us_per_km"] = 0
 
     def _ensure_dtypes(self, element, data):
-        dtypes = _datatypes.get(element)
+        dtypes = self._datatypes.get(element)
         if dtypes is None:
             return
         for key, val in data.items():

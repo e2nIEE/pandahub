@@ -164,7 +164,10 @@ def create_timeseries_document(timeseries, data_type, element_type=None,
     document["timeseries_data"] = convert_timeseries_to_subdocuments(timeseries)
     return document
 
-def convert_dataframes_to_dicts(net, _id):
+def convert_dataframes_to_dicts(net, _id, dtypes=None):
+    if dtypes is None:
+        dtypes = datatypes
+
     dataframes = {}
     other_parameters = {}
     types = {}
