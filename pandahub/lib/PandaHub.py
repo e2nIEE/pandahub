@@ -4,7 +4,6 @@ import pandas as pd
 import pandapower as pp
 import pandapipes as pps
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts
-from pandahub.lib.datatypes import datatypes
 from pandahub.api.internal import settings
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 from pandapower.io_utils import JSONSerializableClass
@@ -40,7 +39,7 @@ class PandaHub:
         "user_management": ["owner"]
     }
 
-    _datatypes = datatypes
+    _datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
 
     # -------------------------
     # Initialization

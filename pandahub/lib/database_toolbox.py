@@ -8,11 +8,12 @@ Created on Tue Feb  2 11:32:07 2021
 import pandas as pd
 import pandapower as pp
 import pandapipes as pps
+from pandahub.api.internal import settings
 import base64
 import hashlib
 import logging
 import json
-from .datatypes import datatypes
+import importlib
 logger = logging.getLogger(__name__)
 
 
@@ -164,9 +165,9 @@ def create_timeseries_document(timeseries, data_type, element_type=None,
     document["timeseries_data"] = convert_timeseries_to_subdocuments(timeseries)
     return document
 
-def convert_dataframes_to_dicts(net, _id, dtypes=None):
-    if dtypes is None:
-        dtypes = datatypes
+def convert_dataframes_to_dicts(net, _id, datatypes=None):
+    if datatypes is None:
+        datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
 
     dataframes = {}
     other_parameters = {}
