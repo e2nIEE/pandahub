@@ -13,6 +13,7 @@ from bson.objectid import ObjectId
 from pydantic.types import UUID4
 from typing import Optional
 from inspect import signature, _empty
+import traceback
 import logging
 import importlib
 import builtins
@@ -591,8 +592,9 @@ class PandaHub:
                 try:
                     db[key].insert_many(item, ordered= True)
                     db[key].create_index([("net_id", DESCENDING)])
-                except:
-                    print("FAILED TO WRITE TABLE", key)
+                except Exception as e:
+                    traceback.print_exc()
+                    print(f"\nFAILED TO WRITE TABLE '{key}' TO DATABASE! (details above)")
 
     def _get_metadata_from_name(self, name, db):
         return list(db["_networks"].find({"name": name}))
@@ -713,7 +715,7 @@ class PandaHub:
         _id = self._get_id_from_name(net_name, db)
         dtypes = _datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
-            parameter = dtypes[parameter](value)
+            value = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {parameter: value}})
 

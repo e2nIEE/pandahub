@@ -69,7 +69,16 @@ datatypes = {
         "max_p_mw": float,
         "min_p_mw": float,
         "max_q_mvar": float,
-        "min_q_mvar": float
+        "min_q_mvar": float,
+        "s_sc_max_mva": float,
+        "s_sc_min_mva": float,
+        "rx_max": float,
+        "rx_min": float,
+        "x0x_max": float,
+        "x0x_min": float,
+        "r0x0_max": float,
+        "r0x0_min": float,
+
     },
     "line": {
         "name": str,
