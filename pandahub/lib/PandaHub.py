@@ -51,6 +51,11 @@ class PandaHub:
         if not connection_url.startswith('mongodb://'):
             raise PandaHubError("Connection URL needs to point to a mongodb instance: 'mongodb://..'")
         self.mongo_client = MongoClient(host=connection_url, uuidRepresentation="standard")
+        self.mongo_client_global_db = None
+        if not settings.MONGODB_URL_GLOBAL_DATABASE is None:
+            self.mongo_client_global_db = MongoClient(
+                host=settings.MONGODB_URL_GLOBAL_DATABASE, uuidRepresentation="standard"
+            )
         self.active_project = None
         self.user_id = user_id
         if check_server_available:
@@ -270,7 +275,11 @@ class PandaHub:
         return self.mongo_client[str(self.active_project["_id"])]
 
     def _get_global_database(self):
-        return self.mongo_client["global_data"]
+        if self.mongo_client_global_db is None:
+            return self.mongo_client["global_data"]
+        else:
+            return self.mongo_client_global_db["global_data"]
+
 
 
     # -------------------------
