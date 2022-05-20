@@ -1,9 +1,9 @@
-uvicorn
-fastapi
-fastapi-users[mongodb]
-fastapi-mail
-pandapower
-pandapipes
+uvicorn==0.17.4
+fastapi==0.73.0
+fastapi-users[mongodb]==9.2.4
+fastapi-mail==1.0.4
+pandapower==2.8.0
+pandapipes==0.6.0
 pymongo
 pydantic
 simplejson
