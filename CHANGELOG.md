@@ -1,5 +1,12 @@
 # Change Log
 
+## [0.2.3]- 2022-05-20
+
+    - ADDED version property in project data
+    - ADDED method to migrate projects to latest version
+    - IMPROVED collections for element tables now start with 'net_'
+    - IMPROVED project IDs now can be any name
+
 ## [0.2.2]- 2022-04-27
 
    - IMPROVED object support in network dataframes
