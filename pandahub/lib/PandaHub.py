@@ -4,7 +4,6 @@ import pandas as pd
 import pandapower as pp
 import pandapipes as pps
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts
-from pandahub.lib.datatypes import datatypes
 from pandahub.api.internal import settings
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 from pandapower.io_utils import JSONSerializableClass
@@ -40,6 +39,8 @@ class PandaHub:
         "user_management": ["owner"]
     }
 
+    _datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
+
     # -------------------------
     # Initialization
     # -------------------------
@@ -50,6 +51,7 @@ class PandaHub:
         if not connection_url.startswith('mongodb://'):
             raise PandaHubError("Connection URL needs to point to a mongodb instance: 'mongodb://..'")
         self.mongo_client = MongoClient(host=connection_url, uuidRepresentation="standard")
+        self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
         if check_server_available:
@@ -278,7 +280,15 @@ class PandaHub:
         return self.mongo_client[str(self.active_project["_id"])]
 
     def _get_global_database(self):
-        return self.mongo_client["global_data"]
+        if self.mongo_client_global_db is None and not settings.MONGODB_URL_GLOBAL_DATABASE is None:
+            self.mongo_client_global_db = MongoClient(
+                host=settings.MONGODB_URL_GLOBAL_DATABASE, uuidRepresentation="standard"
+            )
+        if self.mongo_client_global_db is None:
+            return self.mongo_client["global_data"]
+        else:
+            return self.mongo_client_global_db["global_data"]
+
 
     def get_project_version(self):
         return self.active_project.get("version", "0.2.2")
@@ -592,7 +602,8 @@ class PandaHub:
                 raise PandaHubError("Network name already exists")
         max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
         _id = 0 if max_id_network is None else max_id_network["_id"] + 1
-        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id)
+
+        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, self._datatypes)
 
         self._write_net_collections_to_db(db, dataframes)
 
@@ -727,7 +738,7 @@ class PandaHub:
         element = elements[0]
         if parameter not in element:
             raise PandaHubError("Parameter doesn't exist", 404)
-        dtypes = datatypes.get(element)
+        dtypes = self._datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             return dtypes[parameter](element[parameter])
         else:
@@ -750,7 +761,7 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
-        dtypes = datatypes.get(element)
+        dtypes = self._datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
@@ -811,7 +822,7 @@ class PandaHub:
                     element_data["g_us_per_km"] = 0
 
     def _ensure_dtypes(self, element, data):
-        dtypes = datatypes.get(element)
+        dtypes = self._datatypes.get(element)
         if dtypes is None:
             return
         for key, val in data.items():
