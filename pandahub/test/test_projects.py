@@ -18,6 +18,27 @@ def test_project_management(ph):
 
 def test_upgrade_project():
     class PandaHubV0_2_2(pandahub.PandaHub):
+        def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None):
+            # if project_id:
+            #     self.set_active_project_by_id(project_id)
+            if self.project_exists(name, realm):
+                raise pandahub.PandaHubError("Project already exists")
+            if settings is None:
+                 settings = {}
+            if metadata is None:
+                metadata = {}
+            project_data = {"name": name,
+                            "realm": realm,
+                            "settings": settings,
+                            "metadata": metadata}
+            if project_id:
+                project_data["_id"] = project_id
+            if self.user_id is not None:
+                 project_data["users"] = {self.user_id: "owner"}
+            self.mongo_client["user_management"]["projects"].insert_one(project_data)
+            self.set_active_project(name, realm)
+            return project_data
+
         def write_network_to_db(self, net, name, overwrite=True, project_id=None):
             if project_id:
                 self.set_active_project_by_id(project_id)
@@ -44,7 +65,6 @@ def test_upgrade_project():
                         "data": other_parameters}
             db["_networks"].insert_one(net_dict)
 
-
         def _write_net_collections_to_db(self, db, collections):
             for key, item in collections.items():
                 if len(item) > 0:
@@ -55,9 +75,13 @@ def test_upgrade_project():
                         print("FAILED TO WRITE TABLE", key)
     # we use the implemetation of 0.2.2 to write a net
     oldph = PandaHubV0_2_2(connection_url="mongodb://localhost:27017")
+
+    if oldph.project_exists("pytest"):
+        oldph.set_active_project("pytest")
+        oldph.delete_project(i_know_this_action_is_final=True)
+
+    oldph.create_project("pytest")
     oldph.set_active_project("pytest")
-    db = oldph._get_project_database()
-    reset_project(db)
     net = nw.simple_four_bus_system()
     oldph.write_network_to_db(net, "simple_network")
     # convert the db to latest version
@@ -75,7 +99,7 @@ def reset_project(db):
 
 
 if __name__ == '__main__':
-    pass
+    test_upgrade_project()
 
 
 

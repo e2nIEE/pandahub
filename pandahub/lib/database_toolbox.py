@@ -12,6 +12,7 @@ import base64
 import hashlib
 import logging
 import json
+from .datatypes import datatypes
 logger = logging.getLogger(__name__)
 
 
@@ -171,11 +172,36 @@ def convert_dataframes_to_dicts(net, _id):
         if key.startswith("_") or key.startswith("res"):
             continue
         if isinstance(data, pd.core.frame.DataFrame):
-            types[key] = {column: str(dtype) for column, dtype in net[key].dtypes.items()}
+
+            # ------------
+            # create type lookup
+
+            types[key] = dict()
+            default_dtypes = datatypes.get(key)
+            if default_dtypes is not None:
+                types[key].update({key: dtype.__name__ for key, dtype in default_dtypes.items()})
+            types[key].update(
+                {
+                    column: str(dtype) for column, dtype in net[key].dtypes.items()
+                    if column not in types[key]
+                }
+            )
             if data.empty:
                 continue
+
+            # ------------
             # convert pandapower objects in dataframes to dict
+
             df = net[key].copy(deep=True)
+
+            # ------------
+            # cast all columns with their default datatype
+
+            if default_dtypes is not None:
+                for column in df.columns:
+                    if column in default_dtypes:
+                        df[column] = df[column].astype(default_dtypes[column])
+
             if "object" in df.columns:
                 df["object"] = df["object"].apply(
                     lambda obj: {

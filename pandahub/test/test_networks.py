@@ -119,37 +119,39 @@ if __name__ == '__main__':
 
     ph = PandaHub(connection_url="mongodb://localhost:27017")
 
-    project_name = "pytest"
+    test_network_io(ph)
+    0/0
+    # project_name = "pytest"
 
-    if ph.project_exists(project_name):
-        ph.set_active_project(project_name)
-        ph.delete_project(i_know_this_action_is_final=True)
+    # if ph.project_exists(project_name):
+    #     ph.set_active_project(project_name)
+    #     ph.delete_project(i_know_this_action_is_final=True)
 
-    ph.create_project(project_name)
-    ph.set_active_project(project_name)
+    # ph.create_project(project_name)
+    ph.set_active_project("pytest")
+    net = ph.get_net_from_db("oberrhein_network")
+    # name = "oberrhein_network"
 
-    name = "oberrhein_network"
+    # net = nw.mv_oberrhein()
+    # if not ph.network_with_name_exists(name):
+    #     ph.write_network_to_db(net, name)
 
-    net = nw.mv_oberrhein()
-    if not ph.network_with_name_exists(name):
-        ph.write_network_to_db(net, name)
+    # element = "sgen"
+    # parameter = "p_mw"
+    # index = 4
+    # p_mw_new = 0.1
 
-    element = "sgen"
-    parameter = "p_mw"
-    index = 4
-    p_mw_new = 0.1
+    # value = ph.get_net_value_from_db(name, element, index, parameter)
+    # assert value == net[element][parameter].at[index]
 
-    value = ph.get_net_value_from_db(name, element, index, parameter)
-    assert value == net[element][parameter].at[index]
+    # ph.set_net_value_in_db(name, element, index, parameter, p_mw_new)
+    # value = ph.get_net_value_from_db(name, element, index, parameter)
+    # assert value == p_mw_new
 
-    ph.set_net_value_in_db(name, element, index, parameter, p_mw_new)
-    value = ph.get_net_value_from_db(name, element, index, parameter)
-    assert value == p_mw_new
-
-    ph.delete_net_element(name, element, index)
-    with pytest.raises(PandaHubError):
-        ph.get_net_value_from_db(name, element, index, parameter)
-    net = ph.get_net_from_db(name)
-    assert index not in net[element].index
+    # ph.delete_net_element(name, element, index)
+    # with pytest.raises(PandaHubError):
+    #     ph.get_net_value_from_db(name, element, index, parameter)
+    # net = ph.get_net_from_db(name)
+    # assert index not in net[element].index
 
 
