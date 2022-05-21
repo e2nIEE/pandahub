@@ -238,11 +238,24 @@ class PandaHub:
         )
         return result.acknowledged and result.modified_count > 0
 
-    def unlock_projects(self):
+    def unlock_project(self):
         db = self.mongo_client["user_management"]["projects"]
-        return db.update_many(
-            {"locked_by": self.user_id}, {"$set": {"locked": False, "locked_by": None}}
+        return db.update_one(
+            {"_id": self.active_project["_id"], "locked_by": self.user_id},
+            {"$set": {"locked": False, "locked_by": None}}
         )
+
+    def force_unlock_project(self, project_id):
+        db = self.mongo_client["user_management"]["projects"]
+        project = db.find_one({"_id": ObjectId(project_id)})
+        user = self._get_user()
+        if project is None:
+            return None
+        if "users" not in project or self.user_id in project["users"].keys() or user["is_superuser"]:
+            return db.update_one({"_id": ObjectId(project_id)}, {"$set": {"locked": False, "locked_by": None}})
+        else:
+            raise PandaHubError("You don't have rights to access this project", 403)
+
 
     def project_exists(self, project_name=None, realm=None):
         project_collection = self.mongo_client["user_management"].projects
