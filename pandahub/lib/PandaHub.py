@@ -663,7 +663,7 @@ class PandaHub:
             dtypes_found_columns = {
                 column: dtype for column, dtype in dtypes[element].items() if column in df.columns
             }
-            df = df.astype(dtypes_found_columns)
+            df = df.astype(dtypes_found_columns, errors="ignore")
         df.index.name = None
         df.drop(columns=["_id", "net_id"], inplace=True)
         df.sort_index(inplace=True)
@@ -747,6 +747,7 @@ class PandaHub:
         data = []
         for elm_data in elements_data:
             self._add_missing_defaults(db, _id, element_type, elm_data)
+            self._ensure_dtypes(element_type, elm_data)
             data.append({**elm_data, **{"net_id": _id}})
         db[element_type].insert_many(data)
 
@@ -786,7 +787,7 @@ class PandaHub:
         if dtypes is None:
             return
         for key, val in data.items():
-            if key in dtypes:
+            if not val is None and key in dtypes and not dtypes[key] == object:
                 data[key] = dtypes[key](val)
 
 
