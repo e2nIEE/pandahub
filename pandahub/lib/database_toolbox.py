@@ -204,7 +204,7 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
             if default_dtypes is not None:
                 for column in df.columns:
                     if column in default_dtypes:
-                        df[column] = df[column].astype(default_dtypes[column])
+                        df[column] = df[column].astype(default_dtypes[column], errors="ignore")
 
             if "object" in df.columns:
                 df["object"] = df["object"].apply(

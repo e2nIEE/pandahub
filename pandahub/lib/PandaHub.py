@@ -246,11 +246,24 @@ class PandaHub:
         )
         return result.acknowledged and result.modified_count > 0
 
-    def unlock_projects(self):
+    def unlock_project(self):
         db = self.mongo_client["user_management"]["projects"]
-        return db.update_many(
-            {"locked_by": self.user_id}, {"$set": {"locked": False, "locked_by": None}}
+        return db.update_one(
+            {"_id": self.active_project["_id"], "locked_by": self.user_id},
+            {"$set": {"locked": False, "locked_by": None}}
         )
+
+    def force_unlock_project(self, project_id):
+        db = self.mongo_client["user_management"]["projects"]
+        project = db.find_one({"_id": ObjectId(project_id)})
+        user = self._get_user()
+        if project is None:
+            return None
+        if "users" not in project or self.user_id in project["users"].keys() or user["is_superuser"]:
+            return db.update_one({"_id": ObjectId(project_id)}, {"$set": {"locked": False, "locked_by": None}})
+        else:
+            raise PandaHubError("You don't have rights to access this project", 403)
+
 
     def project_exists(self, project_name=None, realm=None):
         project_collection = self.mongo_client["user_management"].projects
@@ -703,7 +716,7 @@ class PandaHub:
             dtypes_found_columns = {
                 column: dtype for column, dtype in dtypes[element].items() if column in df.columns
             }
-            df = df.astype(dtypes_found_columns)
+            df = df.astype(dtypes_found_columns, errors="ignore")
         df.index.name = None
         df.drop(columns=["_id", "net_id"], inplace=True)
         df.sort_index(inplace=True)
@@ -787,6 +800,7 @@ class PandaHub:
         data = []
         for elm_data in elements_data:
             self._add_missing_defaults(db, _id, element_type, elm_data)
+            self._ensure_dtypes(element_type, elm_data)
             data.append({**elm_data, **{"net_id": _id}})
         db[element_type].insert_many(data)
 
@@ -826,7 +840,7 @@ class PandaHub:
         if dtypes is None:
             return
         for key, val in data.items():
-            if key in dtypes:
+            if not val is None and key in dtypes and not dtypes[key] == object:
                 data[key] = dtypes[key](val)
 
 
