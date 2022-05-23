@@ -735,7 +735,7 @@ class PandaHub:
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         dtypes = self._datatypes.get(element)
-        if dtypes is not None and parameter in dtypes:
+        if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {parameter: value}})
