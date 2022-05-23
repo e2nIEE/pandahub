@@ -147,9 +147,8 @@ class PandaHub:
     # Project handling
     # -------------------------
 
-    def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None):
-        # if project_id:
-        #     self.set_active_project_by_id(project_id)
+    def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None,
+                       activate=True):
         if self.project_exists(name, realm):
             raise PandaHubError("Project already exists")
         if settings is None:
@@ -166,7 +165,8 @@ class PandaHub:
         if self.user_id is not None:
              project_data["users"] = {self.user_id: "owner"}
         self.mongo_client["user_management"]["projects"].insert_one(project_data)
-        self.set_active_project(name, realm)
+        if activate:
+            self.set_active_project(name, realm)
         return project_data
 
     def delete_project(self, i_know_this_action_is_final=False, project_id=None):
