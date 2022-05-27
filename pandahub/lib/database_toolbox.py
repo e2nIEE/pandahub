@@ -6,11 +6,14 @@ Created on Tue Feb  2 11:32:07 2021
 """
 import numpy as np
 import pandas as pd
+import pandapower as pp
+import pandapipes as pps
+from pandahub.api.internal import settings
 import base64
 import hashlib
 import logging
 import json
-from .datatypes import datatypes
+import importlib
 logger = logging.getLogger(__name__)
 
 
@@ -198,7 +201,10 @@ def create_timeseries_document(timeseries,
     
     return document
 
-def convert_dataframes_to_dicts(net, _id):
+def convert_dataframes_to_dicts(net, _id, datatypes=None):
+    if datatypes is None:
+        datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
+
     dataframes = {}
     other_parameters = {}
     types = {}
@@ -234,7 +240,7 @@ def convert_dataframes_to_dicts(net, _id):
             if default_dtypes is not None:
                 for column in df.columns:
                     if column in default_dtypes:
-                        df[column] = df[column].astype(default_dtypes[column])
+                        df[column] = df[column].astype(default_dtypes[column], errors="ignore")
 
             if "object" in df.columns:
                 df["object"] = df["object"].apply(

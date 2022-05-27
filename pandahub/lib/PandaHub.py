@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import pandapower as pp
 import pandapipes as pps
-
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts, decompress_timeseries_data
 from pandahub.lib.datatypes import datatypes
 from pandahub.api.internal import settings
@@ -42,6 +41,8 @@ class PandaHub:
         "user_management": ["owner"]
     }
 
+    _datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
+
     # -------------------------
     # Initialization
     # -------------------------
@@ -52,6 +53,7 @@ class PandaHub:
         if not connection_url.startswith('mongodb://'):
             raise PandaHubError("Connection URL needs to point to a mongodb instance: 'mongodb://..'")
         self.mongo_client = MongoClient(host=connection_url, uuidRepresentation="standard")
+        self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
         if check_server_available:
@@ -238,11 +240,24 @@ class PandaHub:
         )
         return result.acknowledged and result.modified_count > 0
 
-    def unlock_projects(self):
+    def unlock_project(self):
         db = self.mongo_client["user_management"]["projects"]
-        return db.update_many(
-            {"locked_by": self.user_id}, {"$set": {"locked": False, "locked_by": None}}
+        return db.update_one(
+            {"_id": self.active_project["_id"], "locked_by": self.user_id},
+            {"$set": {"locked": False, "locked_by": None}}
         )
+
+    def force_unlock_project(self, project_id):
+        db = self.mongo_client["user_management"]["projects"]
+        project = db.find_one({"_id": ObjectId(project_id)})
+        user = self._get_user()
+        if project is None:
+            return None
+        if "users" not in project or self.user_id in project["users"].keys() or user["is_superuser"]:
+            return db.update_one({"_id": ObjectId(project_id)}, {"$set": {"locked": False, "locked_by": None}})
+        else:
+            raise PandaHubError("You don't have rights to access this project", 403)
+
 
     def project_exists(self, project_name=None, realm=None):
         project_collection = self.mongo_client["user_management"].projects
@@ -271,7 +286,15 @@ class PandaHub:
         return self.mongo_client[str(self.active_project["_id"])]
 
     def _get_global_database(self):
-        return self.mongo_client["global_data"]
+        if self.mongo_client_global_db is None and not settings.MONGODB_URL_GLOBAL_DATABASE is None:
+            self.mongo_client_global_db = MongoClient(
+                host=settings.MONGODB_URL_GLOBAL_DATABASE, uuidRepresentation="standard"
+            )
+        if self.mongo_client_global_db is None:
+            return self.mongo_client["global_data"]
+        else:
+            return self.mongo_client_global_db["global_data"]
+
 
 
     # -------------------------
@@ -552,7 +575,7 @@ class PandaHub:
                 raise PandaHubError("Network name already exists")
         max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
         _id = 0 if max_id_network is None else max_id_network["_id"] + 1
-        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id)
+        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, self._datatypes)
         self._write_net_collections_to_db(db, dataframes)
 
         net_dict = {"_id": _id, "name": name, "dtypes": types,
@@ -655,7 +678,7 @@ class PandaHub:
             dtypes_found_columns = {
                 column: dtype for column, dtype in dtypes[element].items() if column in df.columns
             }
-            df = df.astype(dtypes_found_columns)
+            df = df.astype(dtypes_found_columns, errors="ignore")
         df.index.name = None
         df.drop(columns=["_id", "net_id"], inplace=True)
         df.sort_index(inplace=True)
@@ -690,7 +713,7 @@ class PandaHub:
         element = elements[0]
         if parameter not in element:
             raise PandaHubError("Parameter doesn't exist", 404)
-        dtypes = datatypes.get(element)
+        dtypes = self._datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             return dtypes[parameter](element[parameter])
         else:
@@ -713,8 +736,8 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
-        dtypes = datatypes.get(element)
-        if dtypes is not None and parameter in dtypes:
+        dtypes = self._datatypes.get(element)
+        if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {parameter: value}})
@@ -739,6 +762,7 @@ class PandaHub:
         data = []
         for elm_data in elements_data:
             self._add_missing_defaults(db, _id, element_type, elm_data)
+            self._ensure_dtypes(element_type, elm_data)
             data.append({**elm_data, **{"net_id": _id}})
         db[element_type].insert_many(data)
 
@@ -774,11 +798,11 @@ class PandaHub:
                     element_data["g_us_per_km"] = 0
 
     def _ensure_dtypes(self, element, data):
-        dtypes = datatypes.get(element)
+        dtypes = self._datatypes.get(element)
         if dtypes is None:
             return
         for key, val in data.items():
-            if key in dtypes:
+            if not val is None and key in dtypes and not dtypes[key] == object:
                 data[key] = dtypes[key](val)
 
 
