@@ -19,7 +19,7 @@ import logging
 import importlib
 import builtins
 logger = logging.getLogger(__name__)
-
+from pandahub import __version__
 # -------------------------
 # Exceptions
 # -------------------------
@@ -149,21 +149,26 @@ class PandaHub:
     # Project handling
     # -------------------------
 
-    def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None):
-        if project_id:
-            self.set_active_project_by_id(project_id)
+    def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None,
+                       activate=True):
         if self.project_exists(name, realm):
             raise PandaHubError("Project already exists")
         if settings is None:
              settings = {}
         if metadata is None:
             metadata = {}
-
-        project_data = {"name": name, "realm": realm, "settings": settings, "metadata": metadata}
+        project_data = {"name": name,
+                        "realm": realm,
+                        "settings": settings,
+                        "metadata": metadata,
+                        "version": __version__}
+        if project_id:
+            project_data["_id"] = project_id
         if self.user_id is not None:
              project_data["users"] = {self.user_id: "owner"}
         self.mongo_client["user_management"]["projects"].insert_one(project_data)
-        self.set_active_project(name, realm)
+        if activate:
+            self.set_active_project(name, realm)
         return project_data
 
     def delete_project(self, i_know_this_action_is_final=False, project_id=None):
@@ -210,7 +215,10 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
 
     def set_active_project_by_id(self, project_id):
-        self.active_project = self._get_project_document({"_id": ObjectId(project_id)})
+        try:
+            self.active_project = self._get_project_document({"_id": ObjectId(project_id)})
+        except:
+            self.active_project = self._get_project_document({"_id": project_id})
 
     def rename_project(self, project_name):
         self.has_permission("write")
@@ -272,10 +280,11 @@ class PandaHub:
         if len(projects) > 1:
             raise PandaHubError("Duplicate Project detected. This should never happen if you create projects through the API. Remove duplicate projects manually in the database.")
         project_doc = projects[0]
-        user = self._get_user()
         if "users" not in project_doc:
             return project_doc #project is not user protected
-        elif not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
+
+        user = self._get_user()
+        if not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
             raise PandaHubError("You don't have rights to access this project", 403)
         elif project_doc.get("locked") and project_doc.get("locked_by") != self.user_id:
             raise PandaHubError("Project is locked by another user")
@@ -296,6 +305,32 @@ class PandaHub:
             return self.mongo_client_global_db["global_data"]
 
 
+    def get_project_version(self):
+        return self.active_project.get("version", "0.2.2")
+
+    def upgrade_project_to_latest_version(self):
+        from packaging import version
+
+        # TODO check that user has right to write user_management
+        # TODO these operations should be encapsulated in a transaction in order to avoid
+        #      inconsistent Database states in case of occuring errors
+
+        if version.parse(self.get_project_version()) <= version.parse("0.2.2"):
+            db = self._get_project_database()
+            all_collection_names = db.list_collection_names()
+            old_net_collections = [name for name in all_collection_names if
+                                   not name.startswith("_") and
+                                   not name=="timeseries"]
+
+            for element in old_net_collections:
+                db[element].rename(self._collection_name_of_element(element))
+
+            project_collection = self.mongo_client["user_management"].projects
+            project_collection.find_one_and_update({"_id": self.active_project["_id"]},
+                                                   {"$set": {"version": __version__}})
+            logger.info(f"upgraded projekt '{self.active_project['name']}' from version"
+                        f" {self.get_project_version()} to version {__version__}")
+            self.active_project["version"] = __version__
 
     # -------------------------
     # Project settings and metadata
@@ -557,11 +592,18 @@ class PandaHub:
         net.update(meta["data"])
         return net
 
+    def _collection_name_of_element(self, element):
+        return f"net_{element}"
+
+    def _element_name_of_collection(self, collection):
+        return collection[4:]  # remove "net_" prefix
+
     def write_network_to_db(self, net, name, overwrite=True, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
+
         if isinstance(net, pp.pandapowerNet):
             net_type = "power"
         elif isinstance(net, pps.pandapipesNet):
@@ -575,13 +617,27 @@ class PandaHub:
                 raise PandaHubError("Network name already exists")
         max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
         _id = 0 if max_id_network is None else max_id_network["_id"] + 1
+
         dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, self._datatypes)
+
         self._write_net_collections_to_db(db, dataframes)
 
-        net_dict = {"_id": _id, "name": name, "dtypes": types,
+        net_dict = {"_id": _id,
+                    "name": name,
+                    "dtypes": types,
                     "net_type": net_type,
                     "data": other_parameters}
         db["_networks"].insert_one(net_dict)
+
+    def _write_net_collections_to_db(self, db, collections):
+        for key, item in collections.items():
+            if len(item) > 0:
+                try:
+                    db[self._collection_name_of_element(key)].insert_many(item, ordered=True)
+                    db[self._collection_name_of_element(key)].create_index([("net_id", DESCENDING)])
+                except Exception as e:
+                    traceback.print_exc()
+                    print(f"\nFAILED TO WRITE TABLE '{key}' TO DATABASE! (details above)")
 
     def delete_net_from_db(self, name):
         self.check_permission("write")
@@ -609,16 +665,6 @@ class PandaHub:
         nets = pd.DataFrame(list(db.find(fi,rojection=proj)))
         return nets
 
-    def _write_net_collections_to_db(self, db, collections):
-        for key, item in collections.items():
-            if len(item) > 0:
-                try:
-                    db[key].insert_many(item, ordered= True)
-                    db[key].create_index([("net_id", DESCENDING)])
-                except Exception as e:
-                    traceback.print_exc()
-                    print(f"\nFAILED TO WRITE TABLE '{key}' TO DATABASE! (details above)")
-
     def _get_metadata_from_name(self, name, db):
         return list(db["_networks"].find({"name": name}))
 
@@ -631,13 +677,9 @@ class PandaHub:
     def _network_with_name_exists(self, name, db):
         return self._get_id_from_name(name, db) is not None
 
-
     def _get_net_collections(self, db):
         all_collection_names = db.list_collection_names()
-        return [name for name in all_collection_names if
-                    not name.startswith("_") and
-                    not name=="timeseries"]
-
+        return [name for name in all_collection_names if self._element_name_of_collection(name)]
 
     def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None):
         db = self._get_project_database()
@@ -648,16 +690,14 @@ class PandaHub:
             net = pps.create_empty_network()
         collection_names = self._get_net_collections(db)
         for collection_name in collection_names:
-            self._add_element_from_collection(net, db, collection_name, id,
-                                              include_results=include_results,
+            el =  self._element_name_of_collection(collection_name)
+            self._add_element_from_collection(net, db, el, id, include_results=include_results,
                                               only_tables=only_tables)
         net.update(meta["data"])
         return net
 
     def _get_network_metadata(self, db, net_id):
         return db["_networks"].find_one({"_id": net_id})
-
-
 
     def _add_element_from_collection(self, net, db, element, net_id,
                                      filter=None, include_results=True,
@@ -669,7 +709,7 @@ class PandaHub:
         filter_dict = {"net_id": net_id}
         if filter is not None:
             filter_dict = {**filter_dict, **filter}
-        data = list(db[element].find(filter_dict))
+        data = list(db[self._collection_name_of_element(element)].find(filter_dict))
         if len(data) == 0:
             return
         dtypes = db["_networks"].find_one({"_id": net_id})["dtypes"]
