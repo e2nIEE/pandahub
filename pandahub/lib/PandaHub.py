@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
+import numpy as np
 import pandas as pd
 import pandapower as pp
 import pandapipes as pps
-from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts
+from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts, decompress_timeseries_data
+from pandahub.lib.datatypes import datatypes
 from pandahub.api.internal import settings
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 from pandapower.io_utils import JSONSerializableClass
@@ -928,10 +930,15 @@ class PandaHub:
     # Timeseries
     # -------------------------
 
-    def write_timeseries_to_db(self, timeseries, data_type, element_type=None,
-                               netname=None, element_index=None, name=None,
-                               global_database=False, collection_name="timeseries",
-                               project_id=None, **kwargs):
+    def write_timeseries_to_db(self, 
+                               timeseries, 
+                               data_type,
+                               ts_format="timestamp_value",
+                               compress_ts_data=False,
+                               global_database=False, 
+                               collection_name="timeseries",
+                               project_id=None, 
+                               **kwargs):
         """
         This function can be used to write a timeseries to a MongoDB database.
         The timeseries must be provided as a pandas Series with the timestamps as
@@ -989,10 +996,8 @@ class PandaHub:
             db = self._get_project_database()
         document = create_timeseries_document(timeseries=timeseries,
                                               data_type=data_type,
-                                              element_type=element_type,
-                                              netname=netname,
-                                              element_index=element_index,
-                                              name=name,
+                                              ts_format=ts_format,
+                                              compress_ts_data=compress_ts_data,
                                               **kwargs)
         db[collection_name].find_one_and_replace(
             {"_id": document["_id"]},
@@ -1003,8 +1008,9 @@ class PandaHub:
 
 
     def bulk_write_timeseries_to_db(self, timeseries, data_type,
-                                    element_type=None, netname=None,
                                     meta_frame=None,
+                                    ts_format="timestamp_value",
+                                    compress_ts_data=False,
                                     global_database=False,
                                     collection_name="timeseries",
                                     **kwargs):
@@ -1058,11 +1064,10 @@ class PandaHub:
             else:
                 args = kwargs
             doc = create_timeseries_document(timeseries[col],
-                                                        element_type=element_type,
-                                                        data_type=data_type,
-                                                        netname=netname,
-                                                        element_index=col,
-                                                        **args)
+                                             data_type,
+                                             ts_format=ts_format,
+                                             compress_ts_data=compress_ts_data,
+                                             **args)
             documents.append(doc)
         self.bulk_write_to_db(documents, collection_name=collection_name,
                               global_database=global_database)
@@ -1152,6 +1157,8 @@ class PandaHub:
 
 
     def get_timeseries_from_db(self, filter_document={}, timestamp_range=None,
+                               ts_format="timestamp_value",
+                               compressed_ts_data=False,
                                global_database=False, collection_name="timeseries",
                                include_metadata=False, project_id=None, **kwargs):
         """
@@ -1206,19 +1213,27 @@ class PandaHub:
             db = self._get_project_database()
         filter_document = {**filter_document, **kwargs}
         pipeline = [{"$match": filter_document}]
-        if timestamp_range:
-            pipeline.append({"$project": {"timeseries_data": {"$filter": {"input": "$timeseries_data",
-                                                                          "as": "timeseries_data",
-                                                                          "cond": {"$and": [{"$gte": ["$$timeseries_data.timestamp", timestamp_range[0]]},
-                                                                                            {"$lt": ["$$timeseries_data.timestamp", timestamp_range[1]]}]}}}}})
-        pipeline.append({"$addFields": {"timestamps": "$timeseries_data.timestamp",
-                                            "values": "$timeseries_data.value" }})
-        if include_metadata:
-            pipeline.append({"$project": {"timeseries_data": 0}})
+        if not compressed_ts_data:
+            if ts_format == "timestamp_value":
+                if timestamp_range:
+                    pipeline.append({"$project": {"timeseries_data": {"$filter": {"input": "$timeseries_data",
+                                                                                  "as": "timeseries_data",
+                                                                                  "cond": {"$and": [{"$gte": ["$$timeseries_data.timestamp", timestamp_range[0]]},
+                                                                                                    {"$lt": ["$$timeseries_data.timestamp", timestamp_range[1]]}]}}}}})
+                pipeline.append({"$addFields": {"timestamps": "$timeseries_data.timestamp",
+                                                    "values": "$timeseries_data.value" }})
+                if include_metadata:
+                    pipeline.append({"$project": {"timeseries_data": 0}})
+                else:
+                    pipeline.append({"$project": {"timestamps":1,
+                                                  "values":1,
+                                                  "_id":0}})
+            elif ts_format == "array":
+                if not include_metadata:
+                    pipeline.append({"$project": {"timeseries_data": 1}})
         else:
-            pipeline.append({"$project": {"timestamps":1,
-                                          "values":1,
-                                          "_id":0}})
+            if not include_metadata:
+                pipeline.append({"$project": {"timeseries_data": 1}})
         data = list(db[collection_name].aggregate(pipeline))
         if len(data) == 0:
             raise PandaHubError("no documents matching the provided filter found", 404)
@@ -1226,7 +1241,15 @@ class PandaHub:
             raise PandaHubError("multiple documents matching the provided filter found")
         else:
             data = data[0]
-        timeseries_data = pd.Series(data["values"], index=data["timestamps"])
+        if compressed_ts_data:
+            timeseries_data = decompress_timeseries_data(data["timeseries_data"], ts_format)
+        else:
+            if ts_format == "timestamp_value":
+                timeseries_data = pd.Series(data["values"], 
+                                            index=data["timestamps"],
+                                            dtype="float64")
+            elif ts_format == "array":
+                timeseries_data = data["timeseries_data"]
         if include_metadata:
             data["timeseries_data"] = timeseries_data
             del data["timestamps"]
@@ -1304,8 +1327,12 @@ class PandaHub:
                                                  meta_copy, upsert=True)
         return meta_copy
 
-    def multi_get_timeseries_from_db(self, filter_document={}, timestamp_range=None,
+    def multi_get_timeseries_from_db(self, filter_document={}, 
+                                     timestamp_range=None,
                                      exclude_timestamp_range=None,
+                                     include_metadata=False,
+                                     ts_format="timestamp_value",
+                                     compressed_ts_data=False,
                                      global_database=False, collection_name="timeseries",
                                      project_id=None,**kwargs):
         if project_id:
@@ -1324,7 +1351,10 @@ class PandaHub:
             else:
                 match_filter.append({key: filter_value})
 
-        pipeline = [{"$match": {"$and": match_filter}}]
+        if len(match_filter) > 0:
+            pipeline = [{"$match": {"$and": match_filter}}]
+        else:
+            pipeline = []
         if timestamp_range:
             projection = {"timeseries_data": {"$filter": {"input": "$timeseries_data",
                                                           "as": "timeseries_data",
@@ -1337,21 +1367,40 @@ class PandaHub:
                                                           "cond": {"$or": [{"$lt": ["$$timeseries_data.timestamp", timestamp_range[0]]},
                                                                            {"$gte": ["$$timeseries_data.timestamp", timestamp_range[1]]}]}}}}
             pipeline.append({"$project": projection})
+        if not include_metadata:
+            pipeline.append({"$project": {"timeseries_data": 1}})
 
         timeseries = []
         for ts in db[collection_name].aggregate(pipeline):
             if len(ts["timeseries_data"]) == 0:
                 continue
-            df = pd.DataFrame(ts["timeseries_data"])
-            df.set_index("timestamp", inplace=True)
-            df.index.name = None
-            ts["timeseries_data"] = df["value"]
-            if exclude_timestamp_range is not None or timestamp_range is not None:
-                #TODO: Second query to get the metadata, since metadata is not returned if a projection on the subfield is used
-                metadata = db[collection_name].find_one({"_id": ts["_id"]}, projection={"timeseries_data": 0})
-                ts.update(metadata)
-            timeseries.append(ts)
-        return timeseries
+            data = ts["timeseries_data"]
+            if compressed_ts_data:
+                timeseries_data = decompress_timeseries_data(data, ts_format)
+                ts["timeseries_data"] = timeseries_data
+            else:
+                if ts_format == "timestamp_value":
+                    timeseries_data = pd.DataFrame(ts["timeseries_data"])
+                    timeseries_data.set_index("timestamp", inplace=True)
+                    timeseries_data.index.name = None
+                    ts["timeseries_data"] = timeseries_data.value
+            if include_metadata:
+                timeseries.append(ts)
+                if exclude_timestamp_range is not None or timestamp_range is not None:
+                    #TODO: Second query to get the metadata, since metadata is not returned if a projection on the subfield is used
+                    metadata = db[collection_name].find_one({"_id": ts["_id"]}, projection={"timeseries_data": 0})
+                    ts.update(metadata)
+            else:
+                if ts_format == "timestamp_value":
+                    timeseries.append(ts["timeseries_data"].values)
+                elif ts_format == "array":
+                    timeseries.append(ts["timeseries_data"])
+        if include_metadata:
+            return timeseries
+        else:
+            if ts_format == "timestamp_value":
+                return pd.DataFrame(np.array(timeseries).T, index=timeseries_data.index)
+            return pd.DataFrame(np.array(timeseries).T)
 
     def bulk_get_timeseries_from_db(self, filter_document={}, timestamp_range=None,
                                     exclude_timestamp_range=None,
