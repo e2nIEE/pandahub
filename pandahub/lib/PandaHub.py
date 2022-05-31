@@ -321,7 +321,7 @@ class PandaHub:
             all_collection_names = db.list_collection_names()
             old_net_collections = [name for name in all_collection_names if
                                    not name.startswith("_") and
-                                   not name=="timeseries"]
+                                   not name=="timeseries" and not name.startswith("net_")]
 
             for element in old_net_collections:
                 db[element].rename(self._collection_name_of_element(element))
