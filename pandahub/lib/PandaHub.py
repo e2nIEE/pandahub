@@ -576,18 +576,19 @@ class PandaHub:
         #add all other collections
         collection_names = self._get_net_collections(db)
         for collection in collection_names:
+            table_name = self._element_name_of_collection(collection)
             #skip all element tables that we have already added
-            if collection in all_elements:
+            if table_name in all_elements:
                 continue
             #for tables that share an index with an element (e.g. load->res_load) load only relevant entries
             for element in all_elements:
-                if collection.startswith(element + "_") or collection.startswith("res_" + element):
+                if table_name.startswith(element + "_") or table_name.startswith("net_res_" + element):
                     filter = {"index": {"$in": net[element].index.tolist()}}
                     break
             else:
                 #all other tables (e.g. std_types) are loaded without filter
                 filter = None
-            self._add_element_from_collection(net, db, collection, _id,
+            self._add_element_from_collection(net, db, table_name, _id,
                                               filter=filter,
                                               include_results=include_results)
         net.update(meta["data"])
