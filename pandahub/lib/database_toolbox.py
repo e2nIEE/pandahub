@@ -243,13 +243,7 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
                         df[column] = df[column].astype(default_dtypes[column], errors="ignore")
 
             if "object" in df.columns:
-                df["object"] = df["object"].apply(
-                    lambda obj: {
-                        "_module": obj.__class__.__module__,
-                        "_class": obj.__class__.__name__,
-                        "_object": obj.to_json()
-                    }
-                )
+                df["object"] = df["object"].apply(object_to_json)
             df["index"] = df.index
             df["net_id"] = _id
             dataframes[key] = df.to_dict(orient="records")
@@ -261,3 +255,15 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
             else:
                 other_parameters[key] = data
     return dataframes, other_parameters, types
+
+def json_to_object(js):
+    _module = importlib.import_module(js["_module"])
+    _class = getattr(_module, js["_class"])
+    return _class.from_json(js["_object"])
+
+def object_to_json(obj):
+    return {
+        "_module": obj.__class__.__module__,
+        "_class": obj.__class__.__name__,
+        "_object": obj.to_json()
+    }

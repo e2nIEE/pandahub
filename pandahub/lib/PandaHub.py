@@ -6,6 +6,7 @@ import pandapower as pp
 import pandapipes as pps
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts, decompress_timeseries_data
 from pandahub.lib.datatypes import datatypes
+from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts, json_to_object
 from pandahub.api.internal import settings
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 from pandapower.io_utils import JSONSerializableClass
@@ -725,11 +726,7 @@ class PandaHub:
         df.drop(columns=["_id", "net_id"], inplace=True)
         df.sort_index(inplace=True)
         if "object" in df.columns:
-            def js_to_object(js):
-                _module = importlib.import_module(js["_module"])
-                _class = getattr(_module, js["_class"])
-                return _class.from_json(js["_object"])
-            df["object"] = df["object"].apply(lambda obj: js_to_object(obj))
+            df["object"] = df["object"].apply(json_to_object)
         if not element in net or net[element].empty:
             net[element] = df
         else:
@@ -783,6 +780,23 @@ class PandaHub:
             value = dtypes[parameter](value)
         db[element].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {parameter: value}})
+
+    def set_object_attribute(self, net_name, element, element_index,
+                            parameter, value, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        print("SET OBJECT", net_name, element, element_index, parameter, value)
+        self.check_permission("write")
+        db = self._get_project_database()
+        _id = self._get_id_from_name(net_name, db)
+        dtypes = self._datatypes.get(element)
+        if dtypes is not None and parameter in dtypes:
+            value = dtypes[parameter](value)
+        js = list(db[element].find({"index": element_index, "net_id": _id}))[0]
+        obj = json_to_object(js["object"])
+        setattr(obj, parameter, value)
+        db[element].find_one_and_update({"index": element_index, "net_id": _id},
+                                        {"$set": {"object._object": obj.to_json()}})
 
     def create_element_in_db(self, net_name, element, element_index, data, project_id=None):
         if project_id:
