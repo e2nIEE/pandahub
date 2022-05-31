@@ -477,9 +477,9 @@ class PandaHub:
             return None
         return self.get_net_from_db_by_id(_id, include_results, only_tables)
 
-    def get_net_from_db_by_id(self, id, include_results=True, only_tables=None):
+    def get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True):
         self.check_permission("read")
-        return self._get_net_from_db_by_id(id, include_results, only_tables)
+        return self._get_net_from_db_by_id(id, include_results, only_tables, convert=convert)
 
     def get_subnet_from_db(self, name, bus_filter=None, bus_geodata_filter=None,
                            include_results=True, add_edge_branches=True):
@@ -679,7 +679,7 @@ class PandaHub:
         all_collection_names = db.list_collection_names()
         return [name for name in all_collection_names if self._element_name_of_collection(name)]
 
-    def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None):
+    def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id)
         if meta["net_type"] == "power":
@@ -692,6 +692,8 @@ class PandaHub:
             self._add_element_from_collection(net, db, el, id, include_results=include_results,
                                               only_tables=only_tables)
         net.update(meta["data"])
+        if convert:
+            pp.convert_format(net)
         return net
 
     def _get_network_metadata(self, db, net_id):
