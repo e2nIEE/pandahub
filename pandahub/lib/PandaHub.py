@@ -747,7 +747,8 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
-        elements = list(db[element].find({"index": element_index, "net_id": _id}))
+        collection = self._collection_name_of_element(element)
+        elements = list(db[collection].find({"index": element_index, "net_id": _id}))
         if len(elements) == 0:
             raise PandaHubError("Element doesn't exist", 404)
         element = elements[0]
@@ -765,21 +766,23 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
-        db[element].delete_one({"index": element_index, "net_id": _id})
+        collection = self._collection_name_of_element(element)
+        db[collection].delete_one({"index": element_index, "net_id": _id})
 
 
     def set_net_value_in_db(self, net_name, element, element_index,
                             parameter, value, project_id=None):
+        print("SET", net_name, element, element_index, parameter, value)
         if project_id:
             self.set_active_project_by_id(project_id)
-        print("SET", net_name, element, element_index, parameter, value)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         dtypes = self._datatypes.get(element)
         if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
-        db[element].find_one_and_update({"index": element_index, "net_id": _id},
+        collection = self._collection_name_of_element(element)
+        db[collection].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {parameter: value}})
 
     def set_object_attribute(self, net_name, element, element_index,
@@ -793,10 +796,11 @@ class PandaHub:
         dtypes = self._datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
-        js = list(db[element].find({"index": element_index, "net_id": _id}))[0]
+        collection = self._collection_name_of_element(element)
+        js = list(db[collection].find({"index": element_index, "net_id": _id}))[0]
         obj = json_to_object(js["object"])
         setattr(obj, parameter, value)
-        db[element].find_one_and_update({"index": element_index, "net_id": _id},
+        db[collection].find_one_and_update({"index": element_index, "net_id": _id},
                                         {"$set": {"object._object": obj.to_json()}})
 
     def create_element_in_db(self, net_name, element, element_index, data, project_id=None):
@@ -808,7 +812,8 @@ class PandaHub:
         element_data = {**data, **{"index": element_index, "net_id": _id}}
         self._add_missing_defaults(db, _id, element, element_data)
         self._ensure_dtypes(element, element_data)
-        db[element].insert_one(element_data)
+        collection = self._collection_name_of_element(element)
+        db[collection].insert_one(element_data)
 
     def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list, project_id=None):
         if project_id:
@@ -821,7 +826,8 @@ class PandaHub:
             self._add_missing_defaults(db, _id, element_type, elm_data)
             self._ensure_dtypes(element_type, elm_data)
             data.append({**elm_data, **{"net_id": _id}})
-        db[element_type].insert_many(data)
+        collection = self._collection_name_of_element(element_type)
+        db[collection].insert_many(data)
 
     def _add_missing_defaults(self, db, net_id, element_type, element_data):
         func_str = f"create_{element_type}"
