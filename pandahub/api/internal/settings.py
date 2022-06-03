@@ -15,6 +15,7 @@ def settings_bool(var_name, default=None):
 load_dotenv()
 
 MONGODB_URL = os.getenv("MONGODB_URL") or "mongodb://localhost:27017"
+MONGODB_URL_GLOBAL_DATABASE = os.getenv("MONGODB_URL_GLOBAL_DATABASE") or None
 
 EMAIL_VERIFICATION_REQUIRED = settings_bool("EMAIL_VERIFICATION_REQUIRED")
 
@@ -30,3 +31,5 @@ EMAIL_VERIFY_URL = os.getenv("EMAIL_VERIFY_URL") or ""
 SECRET = os.getenv("SECRET")
 
 REGISTRATION_ENABLED = settings_bool("REGISTRATION_ENABLED", default=True)
+
+DATATYPES_MODULE = os.getenv("DATATYPES_MODULE") or "pandahub.lib.datatypes"

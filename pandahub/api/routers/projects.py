@@ -79,17 +79,12 @@ def set_project_settings(data: SetProjectSettingsModel, ph=Depends(pandahub)):
 
 class SetProjectSettingsValueModel(BaseModel):
     project_id: str
-    category: str
+    parameter: str
     value: Any
 
 @router.post("/set_project_settings_value")
 def set_project_settings_value(data: SetProjectSettingsValueModel, ph=Depends(pandahub)):
-    category = data.category
-    value = data.value
-    project_id = data.project_id
-    settings = ph.get_project_settings(project_id=project_id)
-    settings[category] = value
-    ph.set_project_settings(settings=settings, project_id=project_id)
+    ph.set_project_settings_value(**data.dict())
 
 # -------------------------
 # Metadata
