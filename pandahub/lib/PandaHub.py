@@ -353,6 +353,16 @@ class PandaHub:
         project_collection.find_one_and_update({"_id": _id}, {"$set": {"settings": new_settings}})
         self.active_project["settings"] = new_settings
 
+    def set_project_settings_value(self, parameter, value, project_id=None):
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        self.check_permission("write")
+        _id = self.active_project["_id"]
+        project_collection = self.mongo_client["user_management"]["projects"]
+        setting_string = "settings.{}".format(parameter)
+        project_collection.find_one_and_update({"_id": _id}, {"$set": {setting_string: value}})
+        self.active_project["settings"][parameter] = value
+
     def get_project_metadata(self, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
