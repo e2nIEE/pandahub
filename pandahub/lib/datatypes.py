@@ -78,7 +78,7 @@ datatypes = {
         "x0x_min": float,
         "r0x0_max": float,
         "r0x0_min": float,
-
+        "controllable": bool
     },
     "line": {
         "name": str,
