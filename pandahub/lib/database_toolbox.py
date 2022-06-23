@@ -1,13 +1,7 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Feb  2 11:32:07 2021
 
-@author: julffers
-"""
 import numpy as np
 import pandas as pd
-import pandapower as pp
-import pandapipes as pps
 from pandahub.api.internal import settings
 import base64
 import hashlib
@@ -246,6 +240,7 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
                 df["object"] = df["object"].apply(object_to_json)
             df["index"] = df.index
             df["net_id"] = _id
+            load_geojsons(df)
             dataframes[key] = df.to_dict(orient="records")
         else:
             try:
@@ -255,6 +250,24 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
             else:
                 other_parameters[key] = data
     return dataframes, other_parameters, types
+
+def load_geojsons(df):
+    for column in df.columns:
+        if column == "geo" or column.endswith("_geo"):
+            df[column] = df[column].apply(lambda a: json.loads(a) if isinstance(a, str) else a)
+
+def convert_geojsons(df, geo_mode="string"):
+    if geo_mode == "dict":
+        return
+    for column in df.columns:
+        if column == "geo" or column.endswith("_geo"):
+            if geo_mode == "string":
+                df[column] = df[column].apply(lambda a: json.dumps(a) if isinstance(a, dict) else a)
+            elif geo_mode == "shapely":
+                from shapely.geometry import shape
+                df[column] = df[column].apply(lambda a: shape(a) if isinstance(a, dict) else a)
+            else:
+                raise NotImplementedError("Unknown geo_mode {}".format(geo_mode))
 
 def json_to_object(js):
     _module = importlib.import_module(js["_module"])

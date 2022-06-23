@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 import pandapower as pp
 import pandapipes as pps
-from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts, decompress_timeseries_data
+from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts, decompress_timeseries_data, convert_geojsons
 from pandahub.lib.datatypes import datatypes
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, convert_dataframes_to_dicts, json_to_object
 from pandahub.api.internal import settings
-from pymongo import MongoClient, ReplaceOne, DESCENDING
+from pymongo import MongoClient, ReplaceOne, DESCENDING, GEOSPHERE
 from pandapower.io_utils import JSONSerializableClass
 from pandapower.std_types import load_std_type
 from bson.objectid import ObjectId
@@ -480,7 +480,8 @@ class PandaHub:
     # Net handling
     # -------------------------
 
-    def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None):
+    def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None, 
+                        geo_mode="string"):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
@@ -488,14 +489,16 @@ class PandaHub:
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_net_from_db_by_id(_id, include_results, only_tables)
+        return self.get_net_from_db_by_id(_id, include_results, only_tables, geo_mode=geo_mode)
 
-    def get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True):
+    def get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
+                              geo_mode="string"):
         self.check_permission("read")
-        return self._get_net_from_db_by_id(id, include_results, only_tables, convert=convert)
+        return self._get_net_from_db_by_id(id, include_results, only_tables, convert=convert,
+                                           geo_mode=geo_mode)
 
-    def get_subnet_from_db(self, name, bus_filter=None, bus_geodata_filter=None,
-                           include_results=True, add_edge_branches=True):
+    def get_subnet_from_db(self, name, bus_filter=None, include_results=True,
+                           add_edge_branches=True, geo_mode="string"):
         self.check_permission("read")
         db = self._get_project_database()
         _id = self._get_id_from_name(name, db)
@@ -506,13 +509,9 @@ class PandaHub:
 
         net = pp.create_empty_network()
 
-        if bus_geodata_filter is not None:
-            self._add_element_from_collection(net, db, "bus_geodata", _id, bus_geodata_filter)
-            self._add_element_from_collection(net, db, "bus", _id, {"index": {"$in": net.bus_geodata.index.tolist()}})
-
         # Add buses with filter
         if bus_filter is not None:
-            self._add_element_from_collection(net, db, "bus", _id, bus_filter)
+            self._add_element_from_collection(net, db, "bus", _id, bus_filter, geo_mode=geo_mode)
         buses = net.bus.index.tolist()
 
         branch_operator = "$or" if add_edge_branches else "$and"
@@ -520,16 +519,16 @@ class PandaHub:
         self._add_element_from_collection(net, db, "line", _id,
                                           {branch_operator: [
                                               {"from_bus": {"$in": buses}},
-                                              {"to_bus": {"$in": buses}}]})
+                                              {"to_bus": {"$in": buses}}]}, geo_mode=geo_mode)
         self._add_element_from_collection(net, db,  "trafo", _id,
                                           {branch_operator: [
                                               {"hv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]})
+                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode)
         self._add_element_from_collection(net, db, "trafo3w", _id,
                                           {branch_operator: [
                                               {"hv_bus": {"$in": buses}},
                                               {"mv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]})
+                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode)
 
         self._add_element_from_collection(net, db, "switch", _id,
                                           {"$and": [
@@ -539,7 +538,7 @@ class PandaHub:
                                                   {"element": {"$in": buses}}
                                                ]}
                                               ]
-                                           })
+                                           }, geo_mode=geo_mode)
         if add_edge_branches:
             # Add buses on the other side of the branches
             branch_buses = set(net.trafo.hv_bus.values) | set(net.trafo.lv_bus.values) | \
@@ -547,8 +546,8 @@ class PandaHub:
                     set(net.trafo3w.hv_bus.values) | set(net.trafo3w.mv_bus.values) | \
                     set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
             branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
-            self._add_element_from_collection(net, db, "bus", _id,
-                                              {"index": {"$in": branch_buses_outside}})
+            self._add_element_from_collection(net, db, "bus", _id, geo_mode=geo_mode,
+                                              filter={"index": {"$in": branch_buses_outside}})
             buses = net.bus.index.tolist()
 
         switch_filter = {"$or": [
@@ -569,7 +568,7 @@ class PandaHub:
                                 }
                             ]
                         }
-        self._add_element_from_collection(net, db,"switch", _id, switch_filter)
+        self._add_element_from_collection(net, db,"switch", _id, switch_filter, geo_mode=geo_mode)
 
         #add node elements
         node_elements = ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor", "storage"]
@@ -580,7 +579,7 @@ class PandaHub:
         for element in node_elements:
             filter = {"bus": {"$in": buses}}
             self._add_element_from_collection(net, db, element, _id,
-                                              filter=filter,
+                                              filter=filter, geo_mode=geo_mode,
                                               include_results=include_results)
 
         #add all other collections
@@ -599,7 +598,7 @@ class PandaHub:
                 #all other tables (e.g. std_types) are loaded without filter
                 filter = None
             self._add_element_from_collection(net, db, table_name, _id,
-                                              filter=filter,
+                                              filter=filter, geo_mode=geo_mode,
                                               include_results=include_results)
         net.update(meta["data"])
         return net
@@ -644,12 +643,13 @@ class PandaHub:
     def _write_net_collections_to_db(self, db, collections):
         for key, item in collections.items():
             if len(item) > 0:
+                collection_name = self._collection_name_of_element(key)
                 try:
-                    db[self._collection_name_of_element(key)].insert_many(item, ordered=True)
-                    db[self._collection_name_of_element(key)].create_index([("net_id", DESCENDING)])
-                except Exception as e:
+                    db[collection_name].insert_many(item, ordered=True)
+                    db[collection_name].create_index([("net_id", DESCENDING)])
+                except:
                     traceback.print_exc()
-                    print(f"\nFAILED TO WRITE TABLE '{key}' TO DATABASE! (details above)")
+                    print(f"\nFAILED TO WRITE TABLE '{key}' TO DATABASE! (details above)")                        
 
     def delete_net_from_db(self, name):
         self.check_permission("write")
@@ -693,7 +693,8 @@ class PandaHub:
         all_collection_names = db.list_collection_names()
         return [name for name in all_collection_names if self._element_name_of_collection(name)]
 
-    def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True):
+    def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True, 
+                               geo_mode="string"):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id)
         if meta["net_type"] == "power":
@@ -704,7 +705,7 @@ class PandaHub:
         for collection_name in collection_names:
             el =  self._element_name_of_collection(collection_name)
             self._add_element_from_collection(net, db, el, id, include_results=include_results,
-                                              only_tables=only_tables)
+                                              only_tables=only_tables, geo_mode=geo_mode)
         net.update(meta["data"])
         if convert:
             pp.convert_format(net)
@@ -715,7 +716,7 @@ class PandaHub:
 
     def _add_element_from_collection(self, net, db, element, net_id,
                                      filter=None, include_results=True,
-                                     only_tables=None):
+                                     only_tables=None, geo_mode="geojson"):
         if only_tables is not None and not element in only_tables:
             return
         if not include_results and element.startswith("res_"):
@@ -736,6 +737,7 @@ class PandaHub:
         df.index.name = None
         df.drop(columns=["_id", "net_id"], inplace=True)
         df.sort_index(inplace=True)
+        convert_geojsons(df, geo_mode)
         if "object" in df.columns:
             df["object"] = df["object"].apply(json_to_object)
         if not element in net or net[element].empty:
