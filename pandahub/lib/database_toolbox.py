@@ -9,6 +9,7 @@ import logging
 import json
 import importlib
 logger = logging.getLogger(__name__)
+from pandapower.io_utils import PPJSONEncoder
 
 
 def get_document_hash(task):
@@ -111,7 +112,7 @@ def convert_timeseries_to_subdocuments(timeseries):
 def compress_timeseries_data(timeseries_data, ts_format):
     import blosc
     if ts_format == "timestamp_value":
-        timeseries_data = np.array([timeseries_data.index.astype(int), 
+        timeseries_data = np.array([timeseries_data.index.astype(int),
                                     timeseries_data.values])
         return blosc.compress(timeseries_data.tobytes(),
                               shuffle=blosc.SHUFFLE,
@@ -125,17 +126,17 @@ def compress_timeseries_data(timeseries_data, ts_format):
 def decompress_timeseries_data(timeseries_data, ts_format):
     import blosc
     if ts_format == "timestamp_value":
-        data = np.frombuffer(blosc.decompress(timeseries_data), 
-                             dtype=np.float64).reshape((35040,2), 
+        data = np.frombuffer(blosc.decompress(timeseries_data),
+                             dtype=np.float64).reshape((35040,2),
                                                        order="F")
         return pd.Series(data[:,1], index=pd.to_datetime(data[:,0]))
     elif ts_format == "array":
-        return np.frombuffer(blosc.decompress(timeseries_data), 
+        return np.frombuffer(blosc.decompress(timeseries_data),
                              dtype=np.float64)
-        
 
-def create_timeseries_document(timeseries, 
-                               data_type, 
+
+def create_timeseries_document(timeseries,
+                               data_type,
                                ts_format="timestamp_value",
                                compress_ts_data=False,
                                **kwargs):
@@ -185,14 +186,14 @@ def create_timeseries_document(timeseries,
     if not "_id" in document: # IDs set by users will not be overwritten
         document["_id"] = get_document_hash(document)
     if compress_ts_data:
-        document["timeseries_data"] = compress_timeseries_data(timeseries, 
+        document["timeseries_data"] = compress_timeseries_data(timeseries,
                                                                ts_format)
     else:
         if ts_format == "timestamp_value":
             document["timeseries_data"] = convert_timeseries_to_subdocuments(timeseries)
         elif ts_format == "array":
             document["timeseries_data"] = list(timeseries.values)
-    
+
     return document
 
 def convert_dataframes_to_dicts(net, _id, datatypes=None):
@@ -244,7 +245,7 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
             dataframes[key] = df.to_dict(orient="records")
         else:
             try:
-                json.dumps(data)
+                data = json.dumps(data, cls=PPJSONEncoder)
             except:
                 print("Data in net[{}] is not JSON serializable and was therefore omitted on import".format(key))
             else:
