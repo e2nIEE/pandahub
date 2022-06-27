@@ -2,6 +2,11 @@ import pandapower.networks as nw
 from pandahub import PandaHubError, PandaHub
 import pandapower as pp
 import pytest
+import pandapipes as pps
+from pandapipes import networks as nws
+from pandapipes.toolbox import nets_equal
+from pandapipes.properties.fluids import FluidPropertyConstant
+
 
 
 def test_network_io(ph):
@@ -112,6 +117,18 @@ def test_access_and_set_single_values(ph):
         ph.get_net_value_from_db(name, element, index, parameter)
     net = ph.get_net_from_db(name)
     assert index not in net[element].index
+
+
+def test_pandapipes(ph):
+    ph.set_active_project('pytest')
+    net = pp.networks.mv_oberrhein()
+    net.fluid['STANET_fluid'].add_property('molar_mass', FluidPropertyConstant(0.1))
+    ph.write_network_to_db(net, 'versatility')
+    net2= ph.get_net_from_db('versatility')
+    pps.pipeflow(net)
+    pps.pipeflow(net2)
+    print(nets_equal(net, net2, check_only_results=True))
+
 
 
 if __name__ == '__main__':
