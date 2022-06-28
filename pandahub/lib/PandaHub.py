@@ -2,6 +2,7 @@
 
 import builtins
 import importlib
+import json
 import logging
 import traceback
 from inspect import signature, _empty
@@ -14,9 +15,9 @@ from pydantic.types import UUID4
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 
 import pandapipes as pps
-import pandapower as pp
-from pandapower import from_json_string as from_json_pp
 from pandapipes import from_json_string as from_json_pps
+import pandapower as pp
+import pandapower.io_utils as io_pp
 from pandahub.api.internal import settings
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, \
     convert_dataframes_to_dicts, json_to_object
@@ -708,7 +709,7 @@ class PandaHub:
             self._add_element_from_collection(net, db, el, id, include_results=include_results,
                                               only_tables=only_tables, geo_mode=geo_mode)
         if convert and meta["net_type"] == "power":
-            data = dict((k, from_json_pp(v)) for k, v in meta['data'].items())
+            data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
             net.update(data)
             pp.convert_format(net)
         elif convert and meta["net_type"] == "pipe":
@@ -768,10 +769,10 @@ class PandaHub:
         elements = list(db[collection].find({"index": element_index, "net_id": _id}))
         if len(elements) == 0:
             raise PandaHubError("Element doesn't exist", 404)
+        dtypes = self._datatypes.get(element)
         element = elements[0]
         if parameter not in element:
             raise PandaHubError("Parameter doesn't exist", 404)
-        dtypes = self._datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             return dtypes[parameter](element[parameter])
         else:
@@ -1254,10 +1255,10 @@ class PandaHub:
                                                                                   "cond": {"$and": [{"$gte": [
                                                                                       "$$timeseries_data.timestamp",
                                                                                       timestamp_range[0]]},
-                                                                                                    {"$lt": [
-                                                                                                        "$$timeseries_data.timestamp",
-                                                                                                        timestamp_range[
-                                                                                                            1]]}]}}}}})
+                                                                                      {"$lt": [
+                                                                                          "$$timeseries_data.timestamp",
+                                                                                          timestamp_range[
+                                                                                              1]]}]}}}}})
                 pipeline.append({"$addFields": {"timestamps": "$timeseries_data.timestamp",
                                                 "values": "$timeseries_data.value"}})
                 if include_metadata:
