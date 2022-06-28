@@ -258,17 +258,45 @@ def load_geojsons(df):
             df[column] = df[column].apply(lambda a: json.loads(a) if isinstance(a, str) else a)
 
 def convert_geojsons(df, geo_mode="string"):
+
+    def to_dict(geo):
+        if isinstance(geo, dict):
+            return geo
+        elif isinstance(geo, str):
+            return json.loads(geo)
+        elif hasattr(geo, "coords"):
+            return {"type": geo.type, "coordinates": geo.coords}
+
+    def to_string(geo):
+        if isinstance(geo, str):
+            return geo
+        elif isinstance(geo, dict):
+            return json.dumps(geo)
+        elif hasattr(geo, "coords"):
+            return json.dumps({"type": geo.type, "coordinates": geo.coords})
+
+    def to_shapely(geo):
+        from shapely.geometry import shape
+        if hasattr(geo, "coords"):
+            return geo
+        elif isinstance(geo, str):
+            return shape(json.loads(geo))
+        elif isinstance(geo, dict):
+            return shape(geo)
+
+    conv_func = None
     if geo_mode == "dict":
-        return
+        conv_func = to_dict
+    elif geo_mode == "string":
+        conv_func = to_string
+    elif geo_mode == "shapely":
+        conv_func = to_shapely
+    else:
+        raise NotImplementedError("Unknown geo_mode {}".format(geo_mode))
+
     for column in df.columns:
         if column == "geo" or column.endswith("_geo"):
-            if geo_mode == "string":
-                df[column] = df[column].apply(lambda a: json.dumps(a) if isinstance(a, dict) else a)
-            elif geo_mode == "shapely":
-                from shapely.geometry import shape
-                df[column] = df[column].apply(lambda a: shape(a) if isinstance(a, dict) else a)
-            else:
-                raise NotImplementedError("Unknown geo_mode {}".format(geo_mode))
+            df[column] = df[column].apply(conv_func)
 
 def json_to_object(js):
     _module = importlib.import_module(js["_module"])
