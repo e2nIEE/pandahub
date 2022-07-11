@@ -602,7 +602,8 @@ class PandaHub:
             self._add_element_from_collection(net, db, table_name, _id,
                                               filter=filter, geo_mode=geo_mode,
                                               include_results=include_results)
-        net.update(meta["data"])
+        data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
+        net.update(data)
         return net
 
     def _collection_name_of_element(self, element):
