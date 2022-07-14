@@ -869,7 +869,7 @@ class PandaHub:
             std_type = element_data["std_type"]
             net_doc = db["_networks"].find_one({"_id": net_id})
             if net_doc is not None:
-                std_types = net_doc["data"]["std_types"][element_type]
+                std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
                 if std_type in std_types:
                     element_data.update(std_types[std_type])
 
