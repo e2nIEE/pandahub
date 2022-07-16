@@ -143,9 +143,14 @@ if __name__ == '__main__':
     from pandahub import PandaHub
 
     ph = PandaHub(connection_url="mongodb://localhost:27017")
-
-    test_network_io(ph)
-    0 / 0
+    ph.create_project('Awesome')
+    net = nw_pps.gas_versatility()
+    ph.write_network_to_db(net, 'versatility')
+    net2 = ph.get_net_from_db('versatility')
+    pps.pipeflow(net)
+    pps.pipeflow(net2)
+    # test_network_io(ph)
+    # 0 / 0
     # project_name = "pytest"
 
     # if ph.project_exists(project_name):
@@ -153,8 +158,8 @@ if __name__ == '__main__':
     #     ph.delete_project(i_know_this_action_is_final=True)
 
     # ph.create_project(project_name)
-    ph.set_active_project("pytest")
-    net = ph.get_net_from_db("oberrhein_network")
+    # ph.set_active_project("pytest")
+    # net = ph.get_net_from_db("oberrhein_network")
     # name = "oberrhein_network"
 
     # net = nw.mv_oberrhein()

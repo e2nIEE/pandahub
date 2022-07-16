@@ -790,7 +790,6 @@ class PandaHub:
 
     def set_net_value_in_db(self, net_name, element, element_index,
                             parameter, value, project_id=None):
-        print("SET", net_name, element, element_index, parameter, value)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -807,7 +806,6 @@ class PandaHub:
                              parameter, value, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
-        print("SET OBJECT", net_name, element, element_index, parameter, value)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
