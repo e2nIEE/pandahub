@@ -27,8 +27,6 @@ def login():
     _login(url, email, password, cert_path, key_path)
 
 def _login(url, email, password, cert_path=None, key_path=None):
-    print("Logging into pandbase at {}".format(url))
-    print("pandahub API URL {}".format(url))
     path = url + "/auth/login"
 
     cert = None
@@ -39,9 +37,7 @@ def _login(url, email, password, cert_path=None, key_path=None):
 
     if r.status_code == 200:
         token = r.json()["access_token"]
-        print("Writing access token to config file...")
         write_config(url, token, cert_path, key_path)
-        print("Login succesfull.")
     elif r.status_code == 400:
         if "required SSL certificate" in r.text:
             print("Login failed - no client certificate provided")
