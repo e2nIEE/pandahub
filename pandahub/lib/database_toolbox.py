@@ -81,8 +81,8 @@ def add_timestamp_info_to_document(document, timeseries, ts_format):
         document["first_timestamp"] = timeseries.index[0]
         document["last_timestamp"] = timeseries.index[-1]
     document["num_timestamps"] = len(timeseries.index)
-    document["max_value"] = timeseries.max().item()
-    document["min_value"] = timeseries.min().item()
+    document["max_value"] = timeseries.max()
+    document["min_value"] = timeseries.min()
     return document
 
 
