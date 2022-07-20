@@ -1042,6 +1042,9 @@ class PandaHub:
             upsert=True
         )
         logger.debug("document with _id {document['_id']} added to database")
+        if kwargs.get("return_id"):
+            return document["_id"]
+        return None
 
     def bulk_write_timeseries_to_db(self, timeseries, data_type,
                                     meta_frame=None,
