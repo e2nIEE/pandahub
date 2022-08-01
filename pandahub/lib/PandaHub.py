@@ -482,7 +482,7 @@ class PandaHub:
     # Net handling
     # -------------------------
 
-    def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None,
+    def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None, convert=True,
                         geo_mode="string"):
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -491,7 +491,7 @@ class PandaHub:
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_net_from_db_by_id(_id, include_results, only_tables, geo_mode=geo_mode)
+        return self.get_net_from_db_by_id(_id, include_results, only_tables, convert=convert, geo_mode=geo_mode)
 
     def get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
                               geo_mode="string"):
@@ -709,14 +709,14 @@ class PandaHub:
             el = self._element_name_of_collection(collection_name)
             self._add_element_from_collection(net, db, el, id, include_results=include_results,
                                               only_tables=only_tables, geo_mode=geo_mode)
-        if convert and meta["net_type"] == "power":
+        if meta["net_type"] == "power":
             data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
             net.update(data)
-            pp.convert_format(net)
-        elif convert and meta["net_type"] == "pipe":
+            if convert: pp.convert_format(net)
+        elif meta["net_type"] == "pipe":
             data = dict((k, from_json_pps(v)) for k, v in meta['data'].items())
             net.update(data)
-            pps.convert_format(net)
+            if convert: pps.convert_format(net)
         return net
 
     def _get_network_metadata(self, db, net_id):
