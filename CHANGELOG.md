@@ -1,6 +1,6 @@
 # Change Log
 
-## [0.2.3]- 2022-05-20
+## [0.2.3]- 2022-08-04
 
     - ADDED version property in project data
     - ADDED method to migrate projects to latest version
