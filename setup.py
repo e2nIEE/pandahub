@@ -3,8 +3,8 @@ from setuptools import setup, find_packages
 with open('README.md') as readme_file:
     readme = readme_file.read()
 
-with open('CHANGELOG.md', 'rb') as f:
-    changelog = f.read().decode('utf-8')
+with open('CHANGELOG.md') as change_file:
+    changelog = change_file.read()
 
 with open('requirements.txt') as req_file:
     requirements = req_file.read()
