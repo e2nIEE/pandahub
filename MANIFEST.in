@@ -1,8 +1,8 @@
 include CONTRIBUTING.rst
 include HISTORY.rst
 include LICENSE
-include README.rst
-include CHANGELOG.rst
+include README.md
+include CHANGELOG.md
 include requirements.txt
 
 recursive-include tests *
