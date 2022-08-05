@@ -30,7 +30,7 @@ jobs:
         pip install -r requirements_dev.txt
         pip uninstall -y pandapower
         pip uninstall -y pandapipes
-        pip install pandapower==${{ matrix.pandatools-version.pandapower }} pandapipes==${{ matrix.pandapower-version.pandapipes }}
+        pip install pandapower==${{ matrix.pandatools-version.pp }} pandapipes==${{ matrix.pandapower-version.pps }}
         pip install .["all"]
     - name: List of installed packages
       run: |
