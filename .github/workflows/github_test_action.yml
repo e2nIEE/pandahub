@@ -10,9 +10,8 @@ jobs:
         python-version: [ '3.6', '3.7', '3.8', '3.9', '3.10' ]
         os: [macos-latest, ubuntu-latest, windows-latest]
         panda-family: [e2nIEE/pandapower.git, e2nIEE/pandapipes.git]
-        pandapower-version: &pp ['2.10.1', '2.10.0']
-        pandapipes-version: &pps ['0.7.0', '0.6.0']
-        panda-version: [*pp, *pps]
+        pandapower-version: ['2.10.1', '2.10.0']
+        pandapipes-version: ['0.7.0', '0.6.0']
     runs-on: ${{ matrix.version }}
     services:
       mongodb:
@@ -26,7 +25,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
         repository: ${{ matrix.panda-family}}
-        ref: ${{matrix.panda-version}}
+        ref: ${{[matrix.pandapower-version, matrix.pandapipes-version]}}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
