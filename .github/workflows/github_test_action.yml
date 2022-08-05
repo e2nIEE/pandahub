@@ -31,7 +31,7 @@ jobs:
         pip uninstall -y pandapower
         pip uninstall -y pandapipes
         pip install pandapower==${{ matrix.pandapower-version }}
-        pip install pandapower==${{ matrix.pandapipes-version }}
+        pip install pandapipes==${{ matrix.pandapipes-version }}
         pip install .["all"]
     - name: List of installed packages
       run: |
