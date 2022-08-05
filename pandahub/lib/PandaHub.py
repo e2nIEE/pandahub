@@ -1187,8 +1187,7 @@ class PandaHub:
             document = {}
             document["timeseries_data"] = {"$each": convert_timeseries_to_subdocuments(new_ts_content[col])}
             documents.append(document)
-        self.bulk_update_in_db(documents, document_ids, project=project,
-                               collection_name="timeseries", global_database=global_database)
+        self.bulk_update_in_db(documents, document_ids, collection_name="timeseries", global_database=global_database)
 
         # logger.debug(f"{len(documents)} documents added to database")
 
