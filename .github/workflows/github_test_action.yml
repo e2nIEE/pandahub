@@ -23,17 +23,19 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Set up pandapower ${{matrix.pandapower-version}}
-      uses: actions/e2nIEE/pandapower.git@${{matrix.pandapower-version}}
-    - name: Set up pandapipes ${{matrix.pandapower-version}}
-      uses: actions/e2nIEE/pandapipes.git@${{matrix.pandapipes-version}}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         python -m pip install pytest
         pip install -r requirements.txt
         pip install -r requirements_dev.txt
+        pip uninstall pandapower
+        pip uninstall pandapipes
         pip install .["all"]
+    - name: Set up pandapower ${{matrix.pandapower-version}}
+      uses: actions/e2nIEE/pandapower.git@ ${{matrix.pandapower-version}}
+    - name: Set up pandapipes ${{matrix.pandapower-version}}
+      uses: actions/e2nIEE/pandapipes.git@ ${{matrix.pandapipes-version}}
     - name: List of installed packages
       run: |
         pip list
