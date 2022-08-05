@@ -30,10 +30,9 @@ jobs:
         pip install -r requirements_dev.txt
         pip uninstall pandapower
         pip uninstall pandapipes
+        pip install pandapower==${{ matrix.pandapower-version }}
+        pip install pandapower==${{ matrix.pandapipes-version }}
         pip install .["all"]
-    - name: Set up pandapower ${{ matrix.pandapower-version }}
-      uses: actions/e2nIEE/pandapower.git@v2.10.0
-    - name: Set up pandapipes ${{ matrix.pandapower-version }}
       uses: actions/e2nIEE/pandapipes.git@v0.7.0
     - name: List of installed packages
       run: |
@@ -46,3 +45,7 @@ jobs:
       with:
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
+      #- name: Check out my other private repo
+      #  uses: actions/checkout@master
+      #  with:
+      #    repository: orgname/reponame
