@@ -33,7 +33,6 @@ jobs:
         pip install pandapower==${{ matrix.pandapower-version }}
         pip install pandapower==${{ matrix.pandapipes-version }}
         pip install .["all"]
-      uses: actions/e2nIEE/pandapipes.git@v0.7.0
     - name: List of installed packages
       run: |
         pip list
