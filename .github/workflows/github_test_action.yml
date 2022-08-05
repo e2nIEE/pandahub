@@ -33,9 +33,9 @@ jobs:
         pip uninstall pandapipes
         pip install .["all"]
     - name: Set up pandapower ${{matrix.pandapower-version}}
-      uses: actions/e2nIEE/pandapower.git@ ${{matrix.pandapower-version}}
+      uses: actions/e2nIEE/pandapower.git@ ${{ matrix.pandapower-version }}
     - name: Set up pandapipes ${{matrix.pandapower-version}}
-      uses: actions/e2nIEE/pandapipes.git@ ${{matrix.pandapipes-version}}
+      uses: actions/e2nIEE/pandapipes.git@ ${{ matrix.pandapipes-version }}
     - name: List of installed packages
       run: |
         pip list
