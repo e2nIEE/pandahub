@@ -9,7 +9,7 @@ jobs:
       matrix:
         python-version: [ '3.6', '3.7', '3.8', '3.9', '3.10' ]
         os: [macos-latest, ubuntu-latest, windows-latest]
-        panda-family: [e2nIEE/pandapower.git, e2nIEE/pandapipes.git]
+        panda-family: e2nIEE/pandapower.git
         pandapower-version: ['2.10.1', '2.10.0']
         pandapipes-version: ['0.7.0', '0.6.0']
     runs-on: ${{ matrix.version }}
@@ -24,8 +24,8 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
-        repository: ${{ matrix.panda-family}}
-        ref: ${{[matrix.pandapower-version, matrix.pandapipes-version]}}
+        repository: e2nIEE/pandapower.git
+        ref: ${{matrix.pandapower-version}}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
