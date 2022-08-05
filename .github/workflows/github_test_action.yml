@@ -8,8 +8,7 @@ jobs:
     strategy:
       matrix:
         python-version: [ '3.7', '3.8', '3.9', '3.10' ]
-        pandapower-pandapipes-version: [{'v2.10.1', 'v0.7.0'}, {'v2.10.1', 'v0.7.0'}]
-        pandapipes-version: ['v0.7.0', 'v0.6.0']
+        pandapower-pandapipes-version: [{'v2.10.1', 'v0.7.0'}, {'v2.10.0', 'v0.7.0'}]
     runs-on: ubuntu-latest
     services:
       mongodb:
@@ -30,8 +29,7 @@ jobs:
         pip install -r requirements_dev.txt
         pip uninstall -y pandapower
         pip uninstall -y pandapipes
-        pip install pandapower==${{ matrix.pandapower-version }}
-        pip install pandapipes==${{ matrix.pandapipes-version }}
+        pip install pandapower==${{ matrix.pandapower-version[0] }} pandapipes==${{ matrix.pandapower-version[1] }}
         pip install .["all"]
     - name: List of installed packages
       run: |
