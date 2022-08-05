@@ -11,7 +11,7 @@ jobs:
         os: [macos-latest, ubuntu-latest, windows-latest]
         pandapower-version: ['v2.10.1', 'v2.10.0']
         pandapipes-version: ['v0.7.0', 'v0.6.0']
-    runs-on: ${{ matrix.version }}
+    runs-on: ${{ matrix.os }}
     services:
       mongodb:
         image: mongo:latest
