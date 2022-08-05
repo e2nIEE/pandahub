@@ -8,10 +8,9 @@ jobs:
     strategy:
       matrix:
         python-version: [ '3.6', '3.7', '3.8', '3.9', '3.10' ]
-        os: [macos-latest, ubuntu-latest, windows-latest]
         pandapower-version: ['v2.10.1', 'v2.10.0']
         pandapipes-version: ['v0.7.0', 'v0.6.0']
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     services:
       mongodb:
         image: mongo:latest
@@ -33,9 +32,9 @@ jobs:
         pip uninstall pandapipes
         pip install .["all"]
     - name: Set up pandapower ${{ matrix.pandapower-version }}
-      uses: actions/e2nIEE/pandapower.git@ ${{ matrix.pandapower-version }}
+      uses: actions/e2nIEE/pandapower.git@$v2.10.0
     - name: Set up pandapipes ${{ matrix.pandapower-version }}
-      uses: actions/e2nIEE/pandapipes.git@ ${{ matrix.pandapipes-version }}
+      uses: actions/e2nIEE/pandapipes.git@$v0.7.0
     - name: List of installed packages
       run: |
         pip list
