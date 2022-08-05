@@ -21,9 +21,9 @@ jobs:
     - uses: actions/checkout@v2
     - name: Set up Python ${{ matrix.python-version }}
       uses: |
-        actions/setup-python@v2
-        actions/e2nIEE/pandapower.git@{{matrix.pandapower-version}}
-        actions/e2nIEE/pandapipes.git@{{matrix.pandapipes-version}}
+        - actions/setup-python@v2
+        - actions/e2nIEE/pandapower.git@{{matrix.pandapower-version}}
+        - actions/e2nIEE/pandapipes.git@{{matrix.pandapipes-version}}
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
