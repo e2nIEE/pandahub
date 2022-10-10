@@ -786,27 +786,26 @@ class PandaHub:
         else:
             return element[parameter]
 
-    def delete_net_element(self, net_name, element, element_index, project_id=None):
+    def delete_net_element(self, net_id, element, element_index, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
         collection = self._collection_name_of_element(element)
-        db[collection].delete_one({"index": element_index, "net_id": _id})
+        db[collection].delete_one({"index": element_index, "net_id": int(net_id)})
 
-    def set_net_value_in_db(self, net_name, element, element_index,
+    def set_net_value_in_db(self, net_id, element, element_index,
                             parameter, value, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
+#         _id = self._get_id_from_name(net_name, db)
         dtypes = self._datatypes.get(element)
         if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element)
-        db[collection].find_one_and_update({"index": element_index, "net_id": _id},
+        db[collection].find_one_and_update({"index": element_index, "net_id": int(net_id)},
                                            {"$set": {parameter: value}})
 
     def set_object_attribute(self, net_name, element, element_index,
