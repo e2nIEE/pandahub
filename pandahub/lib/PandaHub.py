@@ -684,7 +684,7 @@ class PandaHub:
         proj = {"net": 0}
         if not load_area:
             proj["area_geojson"] = 0
-        nets = pd.DataFrame(list(db.find(fi, rojection=proj)))
+        nets = pd.DataFrame(list(db.find(fi, projection=proj)))
         return nets
 
     def _get_metadata_from_name(self, name, db):
@@ -740,6 +740,7 @@ class PandaHub:
         filter_dict = {"net_id": net_id}
         if filter is not None:
             filter_dict = {**filter_dict, **filter}
+
         data = list(db[self._collection_name_of_element(element)].find(filter_dict))
         if len(data) == 0:
             return
@@ -836,7 +837,7 @@ class PandaHub:
         self._add_missing_defaults(db, net_id, element, element_data)
         self._ensure_dtypes(element, element_data)
         collection = self._collection_name_of_element(element)
-        db[collection].insert_one(element_data)
+        return db[collection].insert_one(element_data)
 
     def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list, project_id=None):
         if project_id:
