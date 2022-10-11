@@ -516,6 +516,9 @@ class PandaHub:
 
         net = pp.create_empty_network()
 
+        if db[self._collection_name_of_element("bus")].find().count() == 0:
+            net["empty"] = True
+
         # Add buses with filter
         if bus_filter is not None:
             self._add_element_from_collection(net, db, "bus", id, bus_filter, geo_mode=geo_mode)
@@ -617,18 +620,15 @@ class PandaHub:
     def _element_name_of_collection(self, collection):
         return collection[4:]  # remove "net_" prefix
 
-    def write_network_to_db(self, net, name, overwrite=True, project_id=None, metadata=None):
+    def write_network_to_db(self, net, name, sector="power", overwrite=True, project_id=None, metadata=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
 
-        if isinstance(net, pp.pandapowerNet):
-            net_type = "power"
-        elif isinstance(net, pps.pandapipesNet):
-            net_type = "pipe"
-        else:
-            raise PandaHubError("net must be a pandapower or pandapipes object")
+#         if not isinstance(net, pp.pandapowerNet) and not isinstance(net, pps.pandapipesNet):
+#             raise PandaHubError("net must be a pandapower or pandapipes object")
+
         if self._network_with_name_exists(name, db):
             if overwrite:
                 self.delete_net_from_db(name)
@@ -644,7 +644,7 @@ class PandaHub:
         net_dict = {"_id": _id,
                     "name": name,
                     "dtypes": types,
-                    "net_type": net_type,
+                    "sector": sector,
                     "data": other_parameters}
         if metadata is not None:
             net_dict.update(metadata)
@@ -707,23 +707,24 @@ class PandaHub:
                                geo_mode="string"):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id)
-        if meta["net_type"] == "power":
+        if meta["sector"] == "power":
             net = pp.create_empty_network()
-        elif meta["net_type"] == "pipe":
+        else:
             net = pps.create_empty_network()
         collection_names = self._get_net_collections(db)
         for collection_name in collection_names:
             el = self._element_name_of_collection(collection_name)
             self._add_element_from_collection(net, db, el, id, include_results=include_results,
                                               only_tables=only_tables, geo_mode=geo_mode)
-        if convert and meta["net_type"] == "power":
-            data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
-            net.update(data)
-            pp.convert_format(net)
-        elif convert and meta["net_type"] == "pipe":
-            data = dict((k, from_json_pps(v)) for k, v in meta['data'].items())
-            net.update(data)
-            pps.convert_format(net)
+        if convert:
+            if meta["sector"] == "power":
+                data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
+                net.update(data)
+                pp.convert_format(net)
+            else:
+                data = dict((k, from_json_pps(v)) for k, v in meta['data'].items())
+                net.update(data)
+                pps.convert_format(net)
         return net
 
     def _get_network_metadata(self, db, net_id):
@@ -825,14 +826,14 @@ class PandaHub:
         db[collection].find_one_and_update({"index": element_index, "net_id": _id},
                                            {"$set": {"object._object": obj.to_json()}})
 
-    def create_element_in_db(self, net_name, element, element_index, data, project_id=None):
+    def create_element_in_db(self, net_id, element, element_index, data, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
-        element_data = {**data, **{"index": element_index, "net_id": _id}}
-        self._add_missing_defaults(db, _id, element, element_data)
+#         _id = self._get_id_from_name(net_name, db)
+        element_data = {**data, **{"index": element_index, "net_id": int(net_id)}}
+        self._add_missing_defaults(db, net_id, element, element_data)
         self._ensure_dtypes(element, element_data)
         collection = self._collection_name_of_element(element)
         db[collection].insert_one(element_data)
