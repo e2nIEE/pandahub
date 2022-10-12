@@ -620,7 +620,7 @@ class PandaHub:
     def _element_name_of_collection(self, collection):
         return collection[4:]  # remove "net_" prefix
 
-    def write_network_to_db(self, net, name, sector="power", overwrite=True, project_id=None, metadata=None):
+    def write_network_to_db(self, net, name, overwrite=True, project_id=None, metadata=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -644,7 +644,6 @@ class PandaHub:
         net_dict = {"_id": _id,
                     "name": name,
                     "dtypes": types,
-                    "sector": sector,
                     "data": other_parameters}
         if metadata is not None:
             net_dict.update(metadata)
