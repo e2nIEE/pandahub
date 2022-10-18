@@ -829,7 +829,7 @@ class PandaHub:
         self._add_missing_defaults(db, _id, element, element_data)
         self._ensure_dtypes(element, element_data)
         collection = self._collection_name_of_element(element)
-        db[collection].insert_one(element_data)
+        return db[collection].insert_one(element_data)
 
     def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list, project_id=None):
         if project_id:
@@ -843,7 +843,7 @@ class PandaHub:
             self._ensure_dtypes(element_type, elm_data)
             data.append({**elm_data, **{"net_id": _id}})
         collection = self._collection_name_of_element(element_type)
-        db[collection].insert_many(data)
+        return db[collection].insert_many(data)
 
     def _add_missing_defaults(self, db, net_id, element_type, element_data):
         func_str = f"create_{element_type}"
