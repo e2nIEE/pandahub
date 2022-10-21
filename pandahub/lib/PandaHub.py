@@ -506,7 +506,7 @@ class PandaHub:
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_subnet_from_db_by_id(self, id, bus_filter=bus_filter, include_results=include_results,
+        return self.get_subnet_from_db_by_id(_id, bus_filter=bus_filter, include_results=include_results,
                                              add_edge_branches=add_edge_branches, geo_mode=geo_mode)
 
     def get_subnet_from_db_by_id(self, id, bus_filter=None, include_results=True,
@@ -700,7 +700,7 @@ class PandaHub:
 
     def _get_net_collections(self, db):
         all_collection_names = db.list_collection_names()
-        return [name for name in all_collection_names if self._element_name_of_collection(name)]
+        return [name for name in all_collection_names if name.startswith("net_")]
 
     def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
                                geo_mode="string"):
