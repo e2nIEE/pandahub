@@ -774,14 +774,20 @@ class PandaHub:
     # -------------------------
 
     def get_net_value_from_db(self, net_name, element, element_index,
-                              parameter, project_id=None):
+                              parameter, variant=None, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         collection = self._collection_name_of_element(element)
-        elements = list(db[collection].find({"index": element_index, "net_id": _id}))
+
+        variant_filter = None
+        if variant is None:
+            variant_filter = base_variant_filter
+        else:
+            variant_filter = {"variants": variant}
+        elements = list(db[collection].find({"index": element_index, "net_id": _id, **variant_filter}))
         if len(elements) == 0:
             raise PandaHubError("Element doesn't exist", 404)
         dtypes = self._datatypes.get(element)
