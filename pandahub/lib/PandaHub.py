@@ -701,8 +701,7 @@ class PandaHub:
         return self._get_id_from_name(name, db) is not None
 
     def _get_net_collections(self, db):
-        all_collection_names = db.list_collection_names()
-        return [name for name in all_collection_names if name.startswith("net_")]
+        return db.list_collection_names(filter={'name': {'$regex': '^net_'}})
 
     def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
                                geo_mode="string", variant=None):
@@ -984,16 +983,24 @@ class PandaHub:
         db = self._get_project_database()
         var_count = db[self._collection_name_of_element("variant")].find({"net_id": net_id}).count()
         self.create_element_in_db(net_id, "variant", index, data)
-        all_collection_names = db.list_collection_names()
-        for coll in all_collection_names:
-            if "net_" not in coll:
-                continue
+        collection_names = [coll for coll in self._get_net_collections(db) if coll != "net_variant"]
+        for coll in collection_names:
             update = None
             if var_count == 0:
                 update = {"$addToSet": {"variants": {"$each": [-1, index]}}}
             else:
                 update = {"$addToSet": {"variants": index}}
             db[coll].update_many({}, update)
+    def delete_variant(self, index):
+        db = self._get_project_database()
+        collection_names = self._get_net_collections(db)
+        for coll in collection_names:
+            print(coll)
+            if coll == "net_variant":
+                db[coll].delete_one({"index": index})
+            else:
+                db[coll].delete_many({"variants": [index]})
+                db[coll].update_many({}, {"$pull": {"variants": index}})
 
     # -------------------------
     # Bulk operations
