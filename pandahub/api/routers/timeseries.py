@@ -51,6 +51,22 @@ def multi_get_timeseries_from_db(data: MultiGetTimeSeriesModel, ph=Depends(panda
     return ts
 
 
+class GetTimeseriesMetadataModel(BaseModel):
+    project_id: str
+    filter_document: Optional[dict] = {}
+    global_database: Optional[bool] = False
+
+@router.post("/get_timeseries_metadata")
+def get_timeseries_metadata(data: GetTimeseriesMetadataModel, ph=Depends(pandahub)):
+    ph.set_active_project_by_id(data.project_id)
+    ts = ph.get_timeseries_metadata(
+        filter_document=data.filter_document,
+        global_database=data.global_database
+    )
+    ts = json.loads(ts.to_json(orient="index"))
+    return ts
+
+
 class WriteTimeSeriesModel(BaseModel):
     timeseries: str
     project_id: Optional[str] = None
