@@ -983,18 +983,24 @@ class PandaHub:
     # Variants
     # -------------------------
 
-    def create_variant(self, net_id, index, data):
+    def create_variant(self, data):
         db = self._get_project_database()
-        var_count = db[self._collection_name_of_element("variant")].find({"net_id": net_id}).count()
-        self.create_element_in_db(net_id, "variant", index, data)
+        index = int(data["index"])
+        variants_db = [int(var["index"]) for var in db[self._collection_name_of_element("variant")].find({}, {"index": 1})]
+        if index == -1:
+            raise PandaHubError("Variant creation failed: index can not be -1")
+        if index in variants_db:
+            raise PandaHubError("Variant creation failed: variant with index {} already exists in db".format(index))
+        db[self._collection_name_of_element("variant")].insert_one(data)
         collection_names = [coll for coll in self._get_net_collections(db) if coll != "net_variant"]
         for coll in collection_names:
             update = None
-            if var_count == 0:
+            if not variants_db:
                 update = {"$addToSet": {"variants": {"$each": [-1, index]}}}
             else:
-                update = {"$addToSet": {"variants": index}}
+                update = {"$addToSet": {"variants": [index]}}
             db[coll].update_many({}, update)
+
     def delete_variant(self, index):
         db = self._get_project_database()
         collection_names = self._get_net_collections(db)
