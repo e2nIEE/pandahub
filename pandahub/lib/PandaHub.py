@@ -983,10 +983,10 @@ class PandaHub:
     # Variants
     # -------------------------
 
-    def create_variant(self, data):
+    def create_variant(self, data, index=None):
         db = self._get_project_database()
-        index = int(data["index"]) if data["index"] else None
         variants_db = [int(var["index"]) for var in db[self._collection_name_of_element("variant")].find({}, {"index": 1})]
+
         if not index:
             if not variants_db:
                 index = 1
@@ -997,7 +997,13 @@ class PandaHub:
             raise PandaHubError("Variant creation failed: index can not be -1")
         elif index in variants_db:
             raise PandaHubError("Variant creation failed: variant with index {} already exists in db".format(index))
+
+        if data.get("default_name") is not None and data.get("name") is None:
+            data["name"] = data.pop("default_name") + " " + str(index)
+
         db[self._collection_name_of_element("variant")].insert_one(data)
+        del data["_id"]
+
         collection_names = [coll for coll in self._get_net_collections(db) if coll != "net_variant"]
         for coll in collection_names:
             update = None
@@ -1006,18 +1012,22 @@ class PandaHub:
             else:
                 update = {"$addToSet": {"variants": index}}
             db[coll].update_many({}, update)
+
         return data
 
     def delete_variant(self, index):
         db = self._get_project_database()
         collection_names = self._get_net_collections(db)
         for coll in collection_names:
-            print(coll)
             if coll == "net_variant":
                 db[coll].delete_one({"index": index})
             else:
                 db[coll].delete_many({"variants": [index]})
                 db[coll].update_many({}, {"$pull": {"variants": index}})
+
+    def update_variant(self, index, data):
+        db = self._get_project_database()
+        db["net_variant"].update_one({"index": index}, {"$set": data})
 
     # -------------------------
     # Bulk operations
