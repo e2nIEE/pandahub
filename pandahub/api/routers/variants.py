@@ -42,10 +42,4 @@ def create_variant(data: CreateVariantModel, ph=Depends(pandahub)):
     project_id = data.project_id
     ph.set_active_project_by_id(project_id)
     db = ph._get_project_database()
-    if not data.index:
-        idx_var_db = db["net_variant"].find({}, {"_id": 0, "index": 1}).sort("index", -1).limit(1)
-        if idx_var_db.count() == 0:
-            data.index = 0
-        else:
-            data.index = idx_var_db[0]["index"] + 1
-    ph.create_variant(data.dict())
+    return {"variant": ph.create_variant(data.dict())}
