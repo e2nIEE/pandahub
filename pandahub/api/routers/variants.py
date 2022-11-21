@@ -41,5 +41,4 @@ def get_variants(data: GetVariantsModel, ph=Depends(pandahub)):
 def create_variant(data: CreateVariantModel, ph=Depends(pandahub)):
     project_id = data.project_id
     ph.set_active_project_by_id(project_id)
-    db = ph._get_project_database()
-    return {"variant": ph.create_variant(data.dict())}
+    return ph.create_variant(data.dict())

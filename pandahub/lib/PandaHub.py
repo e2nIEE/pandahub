@@ -997,7 +997,7 @@ class PandaHub:
             raise PandaHubError("Variant creation failed: index can not be -1")
         elif index in variants_db:
             raise PandaHubError("Variant creation failed: variant with index {} already exists in db".format(index))
-        db[self._collection_name_of_element("variant")].insert_one(dict(data, index = index))
+        db[self._collection_name_of_element("variant")].insert_one(data)
         collection_names = [coll for coll in self._get_net_collections(db) if coll != "net_variant"]
         for coll in collection_names:
             update = None
@@ -1006,7 +1006,7 @@ class PandaHub:
             else:
                 update = {"$addToSet": {"variants": index}}
             db[coll].update_many({}, update)
-        return index
+        return data
 
     def delete_variant(self, index):
         db = self._get_project_database()
