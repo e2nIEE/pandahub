@@ -924,19 +924,18 @@ class PandaHub:
         collection = self._collection_name_of_element(element)
         return db[collection].insert_one(element_data)
 
-    def create_elements_in_db(self, net_name: str, element_type: str, elements_data: list, project_id=None,
+    def create_elements_in_db(self, net_id: int, element_type: str, elements_data: list, project_id=None,
                               variant=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
         variant = [int(variant) if variant else -1]
         data = []
         for elm_data in elements_data:
-            self._add_missing_defaults(db, _id, element_type, elm_data)
+            self._add_missing_defaults(db, net_id, element_type, elm_data)
             self._ensure_dtypes(element_type, elm_data)
-            data.append({**elm_data, **{"net_id": _id, "variants": variant}})
+            data.append({**elm_data, **{"net_id": net_id, "variants": variant}})
         collection = self._collection_name_of_element(element_type)
         db[collection].insert_many(data)
 
