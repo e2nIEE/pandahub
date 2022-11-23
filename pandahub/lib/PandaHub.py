@@ -1006,11 +1006,14 @@ class PandaHub:
         collection_names = [coll for coll in self._get_net_collections(db) if coll != "net_variant"]
         for coll in collection_names:
             update = None
+            filter = None
             if not variants_db:
+                filter = {}
                 update = {"$addToSet": {"variants": {"$each": [-1, index]}}}
             else:
+                filter = {"variants": -1}
                 update = {"$addToSet": {"variants": index}}
-            db[coll].update_many({}, update)
+            db[coll].update_many(filter, update)
 
         return data
 
