@@ -658,7 +658,7 @@ class PandaHub:
             if len(item) > 0:
                 collection_name = self._collection_name_of_element(key)
                 try:
-                    db[collection_name].insert_many(item, ordered=True)
+                    db[collection_name].insert_many(item, ordered=False)
                     db[collection_name].create_index([("net_id", DESCENDING)])
                 except:
                     traceback.print_exc()
