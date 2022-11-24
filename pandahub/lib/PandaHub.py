@@ -749,7 +749,13 @@ class PandaHub:
         else:
             filter_dict["variants"] = variant
         if filter is not None:
-            filter_dict = {**filter_dict, **filter}
+            if "$or" in filter_dict.keys() and "$or" in filter.keys():
+                # if 'or' is in both filters create 'and' with
+                # both to avoid override during filter merge
+                filter_and = {"$and": [{"$or": filter_dict.pop("$or")}, {"$or": filter.pop("$or")}]}
+                filter_dict = {**filter_dict, **filter, **filter_and}
+            else:
+                filter_dict = {**filter_dict, **filter}
 
         data = list(db[self._collection_name_of_element(element)].find(filter_dict))
         if len(data) == 0:
