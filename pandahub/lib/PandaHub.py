@@ -702,8 +702,12 @@ class PandaHub:
     def _network_with_name_exists(self, name, db):
         return self._get_id_from_name(name, db) is not None
 
-    def _get_net_collections(self, db):
-        return db.list_collection_names(filter={'name': {'$regex': '^net_'}})
+    def _get_net_collections(self, db, with_areas=True):
+        if with_areas:
+            collection_filter = {'name': {'$regex': '^net_'}}
+        else:
+            collection_filter = {'name': {'$regex': '^net_.*(?<!area)$'}}
+        return db.list_collection_names(collection_filter)
 
     def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
                                geo_mode="string", variant=None):
@@ -984,7 +988,7 @@ class PandaHub:
 
     def create_variant(self, data, index=None):
         db = self._get_project_database()
-        variants_db = [int(var["index"]) for var in db[self._collection_name_of_element("variant")].find({}, {"index": 1})]
+        variants_db = [int(var["index"]) for var in db["variant"].find({}, {"index": 1})]
 
         if not index:
             if not variants_db:
@@ -1000,10 +1004,10 @@ class PandaHub:
         if data.get("default_name") is not None and data.get("name") is None:
             data["name"] = data.pop("default_name") + " " + str(index)
 
-        db[self._collection_name_of_element("variant")].insert_one(data)
+        db["variant"].insert_one(data)
         del data["_id"]
 
-        collection_names = [coll for coll in self._get_net_collections(db) if coll != "net_variant"]
+        collection_names = [coll for coll in self._get_net_collections(db)]
         for coll in collection_names:
             update = None
             filter = None
@@ -1021,15 +1025,13 @@ class PandaHub:
         db = self._get_project_database()
         collection_names = self._get_net_collections(db)
         for coll in collection_names:
-            if coll == "net_variant":
-                db[coll].delete_one({"index": index})
-            else:
-                db[coll].delete_many({"variants": [index]})
-                db[coll].update_many({}, {"$pull": {"variants": index}})
+            db[coll].delete_many({"variants": [index]})
+            db[coll].update_many({}, {"$pull": {"variants": index}})
+        db["variant"].delete_one({"index": index})
 
     def update_variant(self, index, data):
         db = self._get_project_database()
-        db["net_variant"].update_one({"index": index}, {"$set": data})
+        db["variant"].update_one({"index": index}, {"$set": data})
 
     # -------------------------
     # Bulk operations
