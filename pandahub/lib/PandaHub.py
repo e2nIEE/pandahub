@@ -707,7 +707,7 @@ class PandaHub:
             collection_filter = {'name': {'$regex': '^net_'}}
         else:
             collection_filter = {'name': {'$regex': '^net_.*(?<!area)$'}}
-        return db.list_collection_names(collection_filter)
+        return db.list_collection_names(filter=collection_filter)
 
     def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
                                geo_mode="string", variant=None):
