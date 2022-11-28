@@ -64,6 +64,13 @@ class PandaHub:
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
+        self.base_variant_filter = {
+            "$or": [
+                {"variants": {"$exists": False}},
+                {"variants": {"$size": 0}},
+                {"variants": -1}
+            ]
+        }
         if check_server_available:
             self.server_is_available()
 
@@ -791,7 +798,7 @@ class PandaHub:
 
         variant_filter = None
         if variant is None:
-            variant_filter = base_variant_filter
+            variant_filter = self.base_variant_filter
         else:
             variant_filter = {"variants": variant}
         elements = list(db[collection].find({"index": element_index, "net_id": _id, **variant_filter}))
@@ -816,7 +823,7 @@ class PandaHub:
         filter = {"index": element_index, "net_id": int(net_id)}
 
         if variant is None:
-            db[collection].delete_one({**filter, **base_variant_filter})
+            db[collection].delete_one({**filter, **self.base_variant_filter})
         else:
             present_variants = db[collection].find_one(
                 {**filter, "variants": variant}, projection={"_id": 1, "variants": 1}
@@ -848,7 +855,7 @@ class PandaHub:
         filter = {"index": element_index, "net_id": int(net_id)}
 
         if variant is None:
-            db[collection].update_one({**filter, **base_variant_filter}, {"$set": {parameter: value}})
+            db[collection].update_one({**filter, **self.base_variant_filter}, {"$set": {parameter: value}})
         else:
             document = db[collection].find_one({**filter, "variants": variant})
             if document:
@@ -891,11 +898,11 @@ class PandaHub:
         filter = {"index": element_index, "net_id": int(net_id)}
 
         if variant is None:
-            document = db[collection].find_one({**filter, **base_variant_filter})
+            document = db[collection].find_one({**filter, **self.base_variant_filter})
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             db[collection].find_one_and_update(
-                {**filter, **base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
+                {**filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
             )
         else:
             document = db[collection].find_one({**filter, "variants": variant})
@@ -1036,20 +1043,14 @@ class PandaHub:
         db["variant"].update_one({"index": index}, {"$set": data})
 
     def get_variant_filter(self, variants):
-        base_variant_filter = {
-            "$or": [
-                {"variants": {"$exists": False}},
-                {"variants": {"$size": 0}},
-                {"variants": -1}
-            ]
-        }
         if len(variants) == 0:
-            return base_variant_filter
+            return self.base_variant_filter
         elif len(variants) == 1:
             variant = int(variants[0])
             return {"variants": variant}
         else:
-            return {"$or": [{"variants": int(var) for var in variants}]}
+            return {"$or": [{"$and": [{"variants": varidx} for varidx in variants]},
+                            {"$or": [{"variants": [varidx]} for varidx in variants]}]}
 
     # -------------------------
     # Bulk operations
