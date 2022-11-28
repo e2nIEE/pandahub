@@ -26,7 +26,6 @@ from pandahub.lib.database_toolbox import decompress_timeseries_data, convert_ge
 logger = logging.getLogger(__name__)
 from pandahub import __version__
 
-base_variant_filter = {"$or": [{"variants": {"$exists": False}}, {"variants": {"$size": 0}}, {"variants": -1}]}
 
 
 # -------------------------
@@ -485,7 +484,7 @@ class PandaHub:
     # -------------------------
 
     def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None,
-                        geo_mode="string", variant=None):
+                        geo_mode="string", variants=[]):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
@@ -493,26 +492,26 @@ class PandaHub:
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_net_from_db_by_id(_id, include_results, only_tables, geo_mode=geo_mode, variant=variant)
+        return self.get_net_from_db_by_id(_id, include_results, only_tables, geo_mode=geo_mode, variants=variants)
 
     def get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
-                              geo_mode="string", variant=None):
+                              geo_mode="string", variants=[]):
         self.check_permission("read")
         return self._get_net_from_db_by_id(id, include_results, only_tables, convert=convert,
-                                           geo_mode=geo_mode, variant=variant)
+                                           geo_mode=geo_mode, variants=variants)
 
     def get_subnet_from_db(self, name, bus_filter=None, include_results=True,
-                           add_edge_branches=True, geo_mode="string", variant=None):
+                           add_edge_branches=True, geo_mode="string", variants=[]):
         self.check_permission("read")
         db = self._get_project_database()
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
         return self.get_subnet_from_db_by_id(_id, bus_filter=bus_filter, include_results=include_results,
-                                             add_edge_branches=add_edge_branches, geo_mode=geo_mode, variant=variant)
+                                             add_edge_branches=add_edge_branches, geo_mode=geo_mode, variants=variants)
 
     def get_subnet_from_db_by_id(self, id, bus_filter=None, include_results=True,
-                           add_edge_branches=True, geo_mode="string", variant=None):
+                           add_edge_branches=True, geo_mode="string", variants=[]):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id)
 
@@ -710,7 +709,7 @@ class PandaHub:
         return db.list_collection_names(filter=collection_filter)
 
     def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
-                               geo_mode="string", variant=None):
+                               geo_mode="string", variants=[]):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id)
         if meta["sector"] == "power":
@@ -721,7 +720,7 @@ class PandaHub:
         for collection_name in collection_names:
             el = self._element_name_of_collection(collection_name)
             self._add_element_from_collection(net, db, el, id, include_results=include_results,
-                                              only_tables=only_tables, geo_mode=geo_mode, variant=variant)
+                                              only_tables=only_tables, geo_mode=geo_mode, variants=variants)
         if convert:
             if meta["sector"] == "power":
                 data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
@@ -738,16 +737,13 @@ class PandaHub:
 
     def _add_element_from_collection(self, net, db, element, net_id,
                                      filter=None, include_results=True,
-                                     only_tables=None, geo_mode="geojson", variant=None):
+                                     only_tables=None, geo_mode="geojson", variants=[]):
         if only_tables is not None and not element in only_tables:
             return
         if not include_results and element.startswith("res_"):
             return
-        filter_dict = {"net_id": net_id}
-        if variant is None:
-            filter_dict.update(base_variant_filter)
-        else:
-            filter_dict["variants"] = variant
+        variants_filter = self.get_variant_filter(variants)
+        filter_dict = {"net_id": net_id, **variants_filter}
         if filter is not None:
             if "$or" in filter_dict.keys() and "$or" in filter.keys():
                 # if 'or' is in both filters create 'and' with
@@ -1038,6 +1034,22 @@ class PandaHub:
     def update_variant(self, index, data):
         db = self._get_project_database()
         db["variant"].update_one({"index": index}, {"$set": data})
+
+    def get_variant_filter(self, variants):
+        base_variant_filter = {
+            "$or": [
+                {"variants": {"$exists": False}},
+                {"variants": {"$size": 0}},
+                {"variants": -1}
+            ]
+        }
+        if len(variants) == 0:
+            return base_variant_filter
+        elif len(variants) == 1:
+            variant = int(variants[0])
+            return {"variants": variant}
+        else:
+            return {"$or": [{"variants": int(var) for var in variants}]}
 
     # -------------------------
     # Bulk operations
