@@ -26,7 +26,6 @@ from pandahub.lib.database_toolbox import decompress_timeseries_data, convert_ge
 logger = logging.getLogger(__name__)
 from pandahub import __version__
 
-base_variant_filter = {"$or": [{"variants": {"$exists": False}}, {"variants": {"$size": 0}}, {"variants": -1}]}
 
 
 # -------------------------
@@ -65,6 +64,13 @@ class PandaHub:
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
+        self.base_variant_filter = {
+            "$or": [
+                {"variants": {"$exists": False}},
+                {"variants": {"$size": 0}},
+                {"variants": -1}
+            ]
+        }
         if check_server_available:
             self.server_is_available()
 
@@ -485,7 +491,7 @@ class PandaHub:
     # -------------------------
 
     def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None,
-                        geo_mode="string", variant=None):
+                        geo_mode="string", variants=[]):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
@@ -493,26 +499,26 @@ class PandaHub:
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_net_from_db_by_id(_id, include_results, only_tables, geo_mode=geo_mode, variant=variant)
+        return self.get_net_from_db_by_id(_id, include_results, only_tables, geo_mode=geo_mode, variants=variants)
 
     def get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
-                              geo_mode="string", variant=None):
+                              geo_mode="string", variants=[]):
         self.check_permission("read")
         return self._get_net_from_db_by_id(id, include_results, only_tables, convert=convert,
-                                           geo_mode=geo_mode, variant=variant)
+                                           geo_mode=geo_mode, variants=variants)
 
     def get_subnet_from_db(self, name, bus_filter=None, include_results=True,
-                           add_edge_branches=True, geo_mode="string", variant=None):
+                           add_edge_branches=True, geo_mode="string", variants=[]):
         self.check_permission("read")
         db = self._get_project_database()
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
         return self.get_subnet_from_db_by_id(_id, bus_filter=bus_filter, include_results=include_results,
-                                             add_edge_branches=add_edge_branches, geo_mode=geo_mode, variant=variant)
+                                             add_edge_branches=add_edge_branches, geo_mode=geo_mode, variants=variants)
 
     def get_subnet_from_db_by_id(self, id, bus_filter=None, include_results=True,
-                           add_edge_branches=True, geo_mode="string", variant=None):
+                           add_edge_branches=True, geo_mode="string", variants=[]):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id)
 
@@ -523,7 +529,7 @@ class PandaHub:
 
         # Add buses with filter
         if bus_filter is not None:
-            self._add_element_from_collection(net, db, "bus", id, bus_filter, geo_mode=geo_mode, variant=variant)
+            self._add_element_from_collection(net, db, "bus", id, bus_filter, geo_mode=geo_mode, variants=variants)
         buses = net.bus.index.tolist()
 
         branch_operator = "$or" if add_edge_branches else "$and"
@@ -531,16 +537,16 @@ class PandaHub:
         self._add_element_from_collection(net, db, "line", id,
                                           {branch_operator: [
                                               {"from_bus": {"$in": buses}},
-                                              {"to_bus": {"$in": buses}}]}, geo_mode=geo_mode, variant=variant)
+                                              {"to_bus": {"$in": buses}}]}, geo_mode=geo_mode, variants=variants)
         self._add_element_from_collection(net, db, "trafo", id,
                                           {branch_operator: [
                                               {"hv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode, variant=variant)
+                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode, variants=variants)
         self._add_element_from_collection(net, db, "trafo3w", id,
                                           {branch_operator: [
                                               {"hv_bus": {"$in": buses}},
                                               {"mv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode, variant=variant)
+                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode, variants=variants)
 
         self._add_element_from_collection(net, db, "switch", id,
                                           {"$and": [
@@ -550,7 +556,7 @@ class PandaHub:
                                                   {"element": {"$in": buses}}
                                               ]}
                                           ]
-                                          }, geo_mode=geo_mode, variant=variant)
+                                          }, geo_mode=geo_mode, variants=variants)
         if add_edge_branches:
             # Add buses on the other side of the branches
             branch_buses = set(net.trafo.hv_bus.values) | set(net.trafo.lv_bus.values) | \
@@ -558,7 +564,7 @@ class PandaHub:
                            set(net.trafo3w.hv_bus.values) | set(net.trafo3w.mv_bus.values) | \
                            set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
             branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
-            self._add_element_from_collection(net, db, "bus", id, geo_mode=geo_mode, variant=variant,
+            self._add_element_from_collection(net, db, "bus", id, geo_mode=geo_mode, variants=variants,
                                               filter={"index": {"$in": branch_buses_outside}})
             buses = net.bus.index.tolist()
 
@@ -580,7 +586,7 @@ class PandaHub:
             }
         ]
         }
-        self._add_element_from_collection(net, db, "switch", id, switch_filter, geo_mode=geo_mode, variant=variant)
+        self._add_element_from_collection(net, db, "switch", id, switch_filter, geo_mode=geo_mode, variants=variants)
 
         # add node elements
         node_elements = ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor", "storage"]
@@ -593,7 +599,7 @@ class PandaHub:
             self._add_element_from_collection(net, db, element, id,
                                               filter=filter, geo_mode=geo_mode,
                                               include_results=include_results,
-                                              variant=variant)
+                                              variants=variants)
 
         # add all other collections
         collection_names = self._get_net_collections(db)
@@ -613,7 +619,7 @@ class PandaHub:
             self._add_element_from_collection(net, db, table_name, id,
                                               filter=filter, geo_mode=geo_mode,
                                               include_results=include_results,
-                                              variant=variant)
+                                              variants=variants)
         data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
         net.update(data)
         return net
@@ -710,7 +716,7 @@ class PandaHub:
         return db.list_collection_names(filter=collection_filter)
 
     def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
-                               geo_mode="string", variant=None):
+                               geo_mode="string", variants=[]):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id)
         if meta["sector"] == "power":
@@ -721,7 +727,7 @@ class PandaHub:
         for collection_name in collection_names:
             el = self._element_name_of_collection(collection_name)
             self._add_element_from_collection(net, db, el, id, include_results=include_results,
-                                              only_tables=only_tables, geo_mode=geo_mode, variant=variant)
+                                              only_tables=only_tables, geo_mode=geo_mode, variants=variants)
         if convert:
             if meta["sector"] == "power":
                 data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
@@ -738,16 +744,13 @@ class PandaHub:
 
     def _add_element_from_collection(self, net, db, element, net_id,
                                      filter=None, include_results=True,
-                                     only_tables=None, geo_mode="geojson", variant=None):
+                                     only_tables=None, geo_mode="geojson", variants=[]):
         if only_tables is not None and not element in only_tables:
             return
         if not include_results and element.startswith("res_"):
             return
-        filter_dict = {"net_id": net_id}
-        if variant is None:
-            filter_dict.update(base_variant_filter)
-        else:
-            filter_dict["variants"] = variant
+        variants_filter = self.get_variant_filter(variants)
+        filter_dict = {"net_id": net_id, **variants_filter}
         if filter is not None:
             if "$or" in filter_dict.keys() and "$or" in filter.keys():
                 # if 'or' is in both filters create 'and' with
@@ -795,7 +798,7 @@ class PandaHub:
 
         variant_filter = None
         if variant is None:
-            variant_filter = base_variant_filter
+            variant_filter = self.base_variant_filter
         else:
             variant_filter = {"variants": variant}
         elements = list(db[collection].find({"index": element_index, "net_id": _id, **variant_filter}))
@@ -820,7 +823,7 @@ class PandaHub:
         filter = {"index": element_index, "net_id": int(net_id)}
 
         if variant is None:
-            db[collection].delete_one({**filter, **base_variant_filter})
+            db[collection].delete_one({**filter, **self.base_variant_filter})
         else:
             present_variants = db[collection].find_one(
                 {**filter, "variants": variant}, projection={"_id": 1, "variants": 1}
@@ -852,7 +855,7 @@ class PandaHub:
         filter = {"index": element_index, "net_id": int(net_id)}
 
         if variant is None:
-            db[collection].update_one({**filter, **base_variant_filter}, {"$set": {parameter: value}})
+            db[collection].update_one({**filter, **self.base_variant_filter}, {"$set": {parameter: value}})
         else:
             document = db[collection].find_one({**filter, "variants": variant})
             if document:
@@ -895,11 +898,11 @@ class PandaHub:
         filter = {"index": element_index, "net_id": int(net_id)}
 
         if variant is None:
-            document = db[collection].find_one({**filter, **base_variant_filter})
+            document = db[collection].find_one({**filter, **self.base_variant_filter})
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             db[collection].find_one_and_update(
-                {**filter, **base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
+                {**filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
             )
         else:
             document = db[collection].find_one({**filter, "variants": variant})
@@ -1038,6 +1041,16 @@ class PandaHub:
     def update_variant(self, index, data):
         db = self._get_project_database()
         db["variant"].update_one({"index": index}, {"$set": data})
+
+    def get_variant_filter(self, variants):
+        if len(variants) == 0:
+            return self.base_variant_filter
+        elif len(variants) == 1:
+            variant = int(variants[0])
+            return {"variants": variant}
+        else:
+            return {"$or": [{"$and": [{"variants": varidx} for varidx in variants]},
+                            {"$or": [{"variants": [varidx]} for varidx in variants]}]}
 
     # -------------------------
     # Bulk operations
