@@ -1049,8 +1049,8 @@ class PandaHub:
             variant = int(variants[0])
             return {"variants": variant}
         else:
-            return {"$or": [{"$and": [{"variants": varidx} for varidx in variants]},
-                            {"$or": [{"variants": [varidx]} for varidx in variants]}]}
+            return {"$or": [{"$and": [{"variants": int(varidx)} for varidx in variants]},
+                            {"$or": [{"variants": [int(varidx)]} for varidx in variants]}]}
 
     # -------------------------
     # Bulk operations
