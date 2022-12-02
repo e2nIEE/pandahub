@@ -245,11 +245,11 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
             dataframes[key] = df.to_dict(orient="records")
         else:
             try:
-                data = json.dumps(data, cls=PPJSONEncoder)
+                json.dumps(data)
             except:
-                print("Data in net[{}] is not JSON serializable and was therefore omitted on import".format(key))
-            else:
-                other_parameters[key] = data
+                data = json.dumps(data, cls=PPJSONEncoder)
+                key = f"serialized_{key}"
+            other_parameters[key] = data
     return dataframes, other_parameters, types
 
 def load_geojsons(df):
