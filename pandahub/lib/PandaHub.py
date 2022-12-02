@@ -507,6 +507,40 @@ class PandaHub:
         return self._get_net_from_db_by_id(id, include_results, only_tables, convert=convert,
                                            geo_mode=geo_mode, variants=variants)
 
+    def _get_net_from_db_by_id(self, id_, include_results=True, only_tables=None, convert=True,
+                               geo_mode="string", variants=[]):
+        db = self._get_project_database()
+        meta = self._get_network_metadata(db, id_)
+
+        if meta.get("sector", "power") == "power":
+            package = pp
+            loadfun = lambda value: json.loads(value, cls=io_pp.PPJSONDecoder)
+        else:
+            package = pps
+            loadfun = from_json_pps
+
+        net = package.create_empty_network()
+
+        # add all elements (dataframes)
+        collection_names = self._get_net_collections(db)
+        for collection_name in collection_names:
+            el = self._element_name_of_collection(collection_name)
+            self._add_element_from_collection(net, db, el, id_, include_results=include_results,
+                                              only_tables=only_tables, geo_mode=geo_mode,
+                                              variants=variants)
+        # add data that is not stored in dataframes
+        for key, value in meta["data"].items():
+            try:
+                value = loadfun(value)   # this is only to load data in the old format
+            except:
+                pass
+
+            net[key if not key.startswith("serialized_") else key[11:]] = value
+
+        if convert:
+            package.convert_format(net)
+        return net
+
     def get_subnet_from_db(self, name, bus_filter=None, include_results=True,
                            add_edge_branches=True, geo_mode="string", variants=[]):
         self.check_permission("read")
@@ -715,40 +749,6 @@ class PandaHub:
         else:
             collection_filter = {'name': {'$regex': '^net_.*(?<!area)$'}}
         return db.list_collection_names(filter=collection_filter)
-
-    def _get_net_from_db_by_id(self, id_, include_results=True, only_tables=None, convert=True,
-                               geo_mode="string", variants=[]):
-        db = self._get_project_database()
-        meta = self._get_network_metadata(db, id_)
-
-        if meta.get("sector", "power") == "power":
-            package = pp
-            loadfun = lambda value: json.loads(value, cls=io_pp.PPJSONDecoder)
-        else:
-            package = pps
-            loadfun = from_json_pps
-
-        net = package.create_empty_network()
-
-        # add all elements (dataframes)
-        collection_names = self._get_net_collections(db)
-        for collection_name in collection_names:
-            el = self._element_name_of_collection(collection_name)
-            self._add_element_from_collection(net, db, el, id_, include_results=include_results,
-                                              only_tables=only_tables, geo_mode=geo_mode,
-                                              variants=variants)
-        # add data that is not stored in dataframes
-        for key, value in meta["data"].items():
-            try:
-                value = loadfun(value)   # this is only to load data in the old format
-            except:
-                pass
-
-            net[key if not key.startswith("serialized_") else key[11:]] = value
-
-        if convert:
-            package.convert_format(net)
-        return net
 
     def _get_network_metadata(self, db, net_id):
         return db["_networks"].find_one({"_id": net_id})
