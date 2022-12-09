@@ -60,7 +60,7 @@ class PandaHub:
             connection_url = settings.MONGODB_URL
         if not connection_url.startswith('mongodb://'):
             raise PandaHubError("Connection URL needs to point to a mongodb instance: 'mongodb://..'")
-        self.mongo_client = MongoClient(host=connection_url, uuidRepresentation="standard")
+        self.mongo_client = MongoClient(host=connection_url, uuidRepresentation="standard", connect=False)
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
