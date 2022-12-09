@@ -782,7 +782,7 @@ class PandaHub:
         else:
             new_rows = set(df.index) - set(net[element].index)
             if new_rows:
-                net[element] = pd.concat([net[element], df.loc[new_rows]])
+                net[element] = pd.concat([net[element], df.loc[list(new_rows)]])
 
     # -------------------------
     # Net element handling
