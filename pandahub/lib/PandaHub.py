@@ -25,6 +25,7 @@ from pandahub.lib.database_toolbox import decompress_timeseries_data, convert_ge
 
 logger = logging.getLogger(__name__)
 from pandahub import __version__
+from packaging import version
 
 
 
@@ -320,13 +321,12 @@ class PandaHub:
         return self.active_project.get("version", "0.2.2")
 
     def upgrade_project_to_latest_version(self):
-        from packaging import version
-
+        from pandapower.io_utils import PPJSONEncoder
         # TODO check that user has right to write user_management
         # TODO these operations should be encapsulated in a transaction in order to avoid
         #      inconsistent Database states in case of occuring errors
 
-        if version.parse(self.get_project_version()) <= version.parse("0.2.2"):
+        if version.parse(self.get_project_version()) < version.parse("0.2.3"):
             db = self._get_project_database()
             all_collection_names = db.list_collection_names()
             old_net_collections = [name for name in all_collection_names if
@@ -336,12 +336,32 @@ class PandaHub:
             for element in old_net_collections:
                 db[element].rename(self._collection_name_of_element(element))
 
-            project_collection = self.mongo_client["user_management"].projects
-            project_collection.find_one_and_update({"_id": self.active_project["_id"]},
-                                                   {"$set": {"version": __version__}})
-            logger.info(f"upgraded projekt '{self.active_project['name']}' from version"
-                        f" {self.get_project_version()} to version {__version__}")
-            self.active_project["version"] = __version__
+        if version.parse(self.get_project_version()) < version.parse("0.2.4"):
+            db = self._get_project_database()
+            # for all networks
+            for d in list(db["_networks"].find({}, projection={"sector":1, "data":1})):
+                # load old format
+                if d.get("sector", "power") == "power":
+                    data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in d['data'].items())
+                else:
+                    data = dict((k, from_json_pps(v)) for k, v in d['data'].items())
+                # save new format
+                for key, dat in data.items():
+                    try:
+                        json.dumps(dat)
+                    except:
+                        dat = f"serialized_{json.dumps(data, cls=PPJSONEncoder)}"
+                    data[key] = dat
+
+                db["_networks"].find_one_and_update({"_id":d["_id"]},
+                                                    {"$set": {"data": data}})
+
+        project_collection = self.mongo_client["user_management"].projects
+        project_collection.find_one_and_update({"_id": self.active_project["_id"]},
+                                               {"$set": {"version": __version__}})
+        logger.info(f"upgraded projekt '{self.active_project['name']}' from version"
+                    f" {self.get_project_version()} to version {__version__}")
+        self.active_project["version"] = __version__
 
     # -------------------------
     # Project settings and metadata
@@ -507,6 +527,43 @@ class PandaHub:
         return self._get_net_from_db_by_id(id, include_results, only_tables, convert=convert,
                                            geo_mode=geo_mode, variants=variants)
 
+    def _get_net_from_db_by_id(self, id_, include_results=True, only_tables=None, convert=True,
+                               geo_mode="string", variants=[]):
+        db = self._get_project_database()
+        meta = self._get_network_metadata(db, id_)
+
+        package = pp if meta.get("sector", "power") == "power" else pps
+        net = package.create_empty_network()
+
+        # add all elements that are stored as dataframes
+        collection_names = self._get_net_collections(db)
+        for collection_name in collection_names:
+            el = self._element_name_of_collection(collection_name)
+            self._add_element_from_collection(net, db, el, id_, include_results=include_results,
+                                              only_tables=only_tables, geo_mode=geo_mode,
+                                              variants=variants)
+        # add data that is not stored in dataframes
+        self.deserialize_and_update_data(net, meta)
+
+        if convert:
+            package.convert_format(net)
+
+        return net
+
+    def deserialize_and_update_data(self, net, meta):
+        if version.parse(self.get_project_version()) <= version.parse("0.2.3"):
+            if meta.get("sector", "power") == "power":
+                data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
+                net.update(data)
+            else:
+                data = dict((k, from_json_pps(v)) for k, v in meta['data'].items())
+                net.update(data)
+        else:
+            for key, value in meta["data"].items():
+                if type(value) == str and value.startswith("serialized_"):
+                    value = json.loads(value[11:], cls=io_pp.PPJSONDecoder)
+                net[key] = value
+
     def get_subnet_from_db(self, name, bus_filter=None, include_results=True,
                            add_edge_branches=True, geo_mode="string", variants=[]):
         self.check_permission("read")
@@ -620,8 +677,7 @@ class PandaHub:
                                               filter=filter, geo_mode=geo_mode,
                                               include_results=include_results,
                                               variants=variants)
-        data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
-        net.update(data)
+        self.deserialize_and_update_data(net, meta)
         return net
 
     def _collection_name_of_element(self, element):
@@ -630,7 +686,8 @@ class PandaHub:
     def _element_name_of_collection(self, collection):
         return collection[4:]  # remove "net_" prefix
 
-    def write_network_to_db(self, net, name, sector="power", overwrite=True, project_id=None, metadata=None):
+    def write_network_to_db(self, net, name, sector="power", overwrite=True, project_id=None,
+                            metadata=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -647,15 +704,17 @@ class PandaHub:
         max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
         _id = 0 if max_id_network is None else max_id_network["_id"] + 1
 
-        dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, self._datatypes)
-
-        self._write_net_collections_to_db(db, dataframes)
+        dfs, data, types = convert_dataframes_to_dicts(net, _id,
+                                                       version.parse(self.get_project_version()),
+                                                       self._datatypes)
+        self._write_net_collections_to_db(db, dfs)
 
         net_dict = {"_id": _id,
                     "name": name,
                     "sector": sector,
                     "dtypes": types,
-                    "data": other_parameters}
+                    "data": data}
+
         if metadata is not None:
             net_dict.update(metadata)
         db["_networks"].insert_one(net_dict)
@@ -716,29 +775,6 @@ class PandaHub:
             collection_filter = {'name': {'$regex': '^net_.*(?<!area)$'}}
         return db.list_collection_names(filter=collection_filter)
 
-    def _get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
-                               geo_mode="string", variants=[]):
-        db = self._get_project_database()
-        meta = self._get_network_metadata(db, id)
-        if meta["sector"] == "power":
-            net = pp.create_empty_network()
-        else:
-            net = pps.create_empty_network()
-        collection_names = self._get_net_collections(db)
-        for collection_name in collection_names:
-            el = self._element_name_of_collection(collection_name)
-            self._add_element_from_collection(net, db, el, id, include_results=include_results,
-                                              only_tables=only_tables, geo_mode=geo_mode, variants=variants)
-        if convert:
-            if meta["sector"] == "power":
-                data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
-                net.update(data)
-                pp.convert_format(net)
-            else:
-                data = dict((k, from_json_pps(v)) for k, v in meta['data'].items())
-                net.update(data)
-                pps.convert_format(net)
-        return net
 
     def _get_network_metadata(self, db, net_id):
         return db["_networks"].find_one({"_id": net_id})

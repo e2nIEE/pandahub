@@ -10,6 +10,7 @@ import json
 import importlib
 logger = logging.getLogger(__name__)
 from pandapower.io_utils import PPJSONEncoder
+from packaging import version
 
 
 def get_document_hash(task):
@@ -196,7 +197,7 @@ def create_timeseries_document(timeseries,
 
     return document
 
-def convert_dataframes_to_dicts(net, _id, datatypes=None):
+def convert_dataframes_to_dicts(net, _id, version_,datatypes=None):
     if datatypes is None:
         datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
 
@@ -244,11 +245,18 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
             load_geojsons(df)
             dataframes[key] = df.to_dict(orient="records")
         else:
-            try:
-                data = json.dumps(data, cls=PPJSONEncoder)
-            except:
-                print("Data in net[{}] is not JSON serializable and was therefore omitted on import".format(key))
+            if version_ <= version.parse("0.2.3"):
+                try:
+                    data = json.dumps(data, cls=PPJSONEncoder)
+                except:
+                    print("Data in net[{}] is not JSON serializable and was therefore omitted on import".format(key))
+                else:
+                    other_parameters[key] = data
             else:
+                try:
+                    json.dumps(data)
+                except:
+                    data = f"serialized_{json.dumps(data, cls=PPJSONEncoder)}"
                 other_parameters[key] = data
     return dataframes, other_parameters, types
 
