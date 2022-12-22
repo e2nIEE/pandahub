@@ -100,7 +100,7 @@ Contribute from a feature branch
 
     git checkout develop
 
-#. Update your local copy to the most recent version of the pandpower develop branch: ::
+#. Update your local copy to the most recent version of the pandahub develop branch: ::
 
     git pull
 
@@ -156,27 +156,3 @@ Adding Tests for new functionality
 -----------------------------------
 
 If you have added new functionality, you should also add a new function that tests this functionality. pytest automatically detects all functions in the pandahub/test folder that start with 'test' and are located in a file that also starts with 'test' as relevant test cases.
-
-
-Say you have added a new function that for some doubles the rated power of a grid and added it to pandahub/toolbox.py: ::
-
-    def double_rated_power(net):
-       net.sn_kva *= 2 
-
-You would then add a new test to the test suite. In this case test/api/test_toolbox.py is the file that contains the tests for the toolbox functions. You then add a new test function to this file: ::
-
-    def test_double_rated_power():
-       init_sn_kva = 100
-       net = ph.create_empty_network(sn_kva=init_sn_kva)
-       assert net.sn_kva == init_sn_kva
-       ph.double_rated_power(net)
-       assert net.sn_kva == init_sn_kva*2
-       
-This function is now automatically detected by pytest as part of the test suite and will be tested by Travis CI in all Python versions. If someone later changes your new toolbox function and introduces a bug like this: ::
-
-    def double_rated_power(net):
-       net.sn_kva *= 3
-       
-The introduced test will fail. If this change would be submitted, the pull request would not be accepted, as it leads to failing tests in Travis CI. In that way, tests ensure the continuing integrity of the development and ensure that no functionality is inadvertently broken. 
-
-Tests with pytest can be more complex than the simple example above. For how to handle e.g. pytest fixtures, xfailing tests etc. refer to the documentation of pytest.
