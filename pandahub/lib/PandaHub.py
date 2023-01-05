@@ -853,9 +853,16 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         collection = self._collection_name_of_element(element)
-        element_filter = {"index": element_index, "net_id": int(net_id)}
-        variant_filter = self.get_variant_filter(variant)
-        db[collection].delete_one({**element_filter, **variant_filter})
+        element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
+
+        if variant:
+            target = db[collection].find_one(element_filter,
+                                             {"var_type": 1})
+            if target["var_type"] == "base":
+                db[collection].update_one(element_filter,
+                                          {"$addToSet": {"not_in_var": variant}})
+        else:
+            db[collection].delete_one(element_filter)
 
     def set_net_value_in_db(self, net_id, element, element_index,
                             parameter, value, variant=None, project_id=None):
