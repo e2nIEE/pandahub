@@ -897,11 +897,14 @@ class PandaHub:
                 base_variant_id = document.pop("_id")
                 db[collection].update_one({"_id": base_variant_id},
                                           {"$addToSet": {"not_in_var": variant}})
-                document.update(var_type="change", variant=variant)
+                document.update(var_type="change", variant=variant, changed_fields=[parameter])
                 db[collection].insert_one(document)
             else:
+                update_dict = {"$set": {parameter: value}, "$unset": {"not_in_var": ""}}
+                if document["var_type"] == "change":
+                    update_dict["$addToSet"] = {"changed_fields": parameter}
                 db[collection].update_one({"_id": document["_id"]},
-                                          {"$set": {parameter: value}})
+                                          update_dict)
 
     def set_object_attribute(self, net_id, element, element_index,
                              parameter, value, variant=None, project_id=None):
