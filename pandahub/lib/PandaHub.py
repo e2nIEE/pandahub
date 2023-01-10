@@ -865,7 +865,7 @@ class PandaHub:
 
     def set_net_value_in_db(self, net_id, element, element_index,
                             parameter, value, variant=None, project_id=None):
-        logger.debug(f"Setting  {parameter} = {value} in {element} with index {element_index} and variant {variant}")
+        logger.info(f"Setting  {parameter} = {value} in {element} with index {element_index} and variant {variant}")
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -882,7 +882,7 @@ class PandaHub:
 
         old_value = document[parameter]
         if old_value == value:
-            logger.debug(f'Value "{value}" for "{parameter}" identical to database element - no change applied')
+            logger.warning(f'Value "{value}" for "{parameter}" identical to database element - no change applied')
             return None
         if "." in parameter:
             key, subkey = parameter.split(".")
@@ -953,7 +953,7 @@ class PandaHub:
                                           {"$set": {"object._object": obj}})
 
     def create_element_in_db(self, net_id, element, element_index, data, variant=None, project_id=None):
-        logger.debug(f"Creating element {element} with index {element_index} and variant {variant}, data: {data}")
+        logger.info(f"Creating element {element} with index {element_index} and variant {variant}, data: {data}")
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
