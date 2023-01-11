@@ -856,11 +856,11 @@ class PandaHub:
         element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
 
         target = db[collection].find_one(element_filter)
-        if target["var_type"] == "base":
-            db[collection].update_one({"id": target["_id"]},
+        if variant and target["var_type"] == "base":
+            db[collection].update_one({"_id": target["_id"]},
                                       {"$addToSet": {"not_in_var": variant}})
         else:
-            db[collection].delete_one({"id": target["_id"]})
+            db[collection].delete_one({"_id": target["_id"]})
         return target
 
     def set_net_value_in_db(self, net_id, element, element_index,
