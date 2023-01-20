@@ -880,7 +880,7 @@ class PandaHub:
         if not document:
             raise UserWarning(f"No element '{element}' to change with index '{element_index}' in this variant")
 
-        old_value = document[parameter]
+        old_value = document.get(parameter, None)
         if old_value == value:
             logger.warning(f'Value "{value}" for "{parameter}" identical to database element - no change applied')
             return None
