@@ -900,7 +900,7 @@ class PandaHub:
                                           {"$addToSet": {"not_in_var": variant}})
                 document.update(var_type="change", variant=variant, changed_fields=[parameter])
                 insert_result = db[collection].insert_one(document)
-                document["_id"] = insert_result.insertedId
+                document["_id"] = insert_result.inserted_id
             else:
                 update_dict = {"$set": {parameter: value}, "$unset": {"not_in_var": ""}}
                 if document["var_type"] == "change":
