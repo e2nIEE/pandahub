@@ -1067,7 +1067,7 @@ class PandaHub:
     # Variants
     # -------------------------
 
-    def create_variant(self, data, dummy):
+    def create_variant(self, data):
         db = self._get_project_database()
         max_index = list(db["variant"].find(projection={"_id": 0, "index": 1}).sort("index", -1).limit(1))
         if not max_index:
