@@ -824,6 +824,8 @@ class PandaHub:
 
     def get_net_value_from_db(self, net_name, element, element_index,
                               parameter, variant=None, project_id=None):
+        if variant is not None:
+            variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -848,6 +850,8 @@ class PandaHub:
             return element[parameter]
 
     def delete_net_element(self, net_id, element, element_index, variant=None, project_id=None):
+        if variant is not None:
+            variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -866,6 +870,8 @@ class PandaHub:
     def set_net_value_in_db(self, net_id, element, element_index,
                             parameter, value, variant=None, project_id=None):
         logger.info(f"Setting  {parameter} = {value} in {element} with index {element_index} and variant {variant}")
+        if variant is not None:
+            variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -935,6 +941,7 @@ class PandaHub:
                 {**filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
             )
         else:
+            variant = int(variant)
             element_filter = {**element_filter, **self.get_variant_filter(variant)}
             document = db[collection].find_one({**element_filter})
             if not document:
@@ -962,7 +969,7 @@ class PandaHub:
         if not variant:
             element_data.update(var_type="base", not_in_var=[])
         else:
-            element_data.update(var_type="addition", variant=variant)
+            element_data.update(var_type="addition", variant=int(variant))
         self._add_missing_defaults(db, net_id, element, element_data)
         self._ensure_dtypes(element, element_data)
         collection = self._collection_name_of_element(element)
@@ -979,7 +986,7 @@ class PandaHub:
         if not variant:
             var_data = {"var_type": "base", "not_in_var": []}
         else:
-            var_data = {"var_type": "addition", "variant": variant}
+            var_data = {"var_type": "addition", "variant": int(variant)}
         data = []
         for elm_data in elements_data:
             self._add_missing_defaults(db, net_id, element_type, elm_data)
@@ -1011,7 +1018,8 @@ class PandaHub:
             std_type = element_data["std_type"]
             net_doc = db["_networks"].find_one({"_id": net_id})
             if net_doc is not None:
-                std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
+#                 std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
+                std_types = net_doc["data"]["std_types"]
                 if std_type in std_types:
                     element_data.update(std_types[std_type])
 
@@ -1056,6 +1064,7 @@ class PandaHub:
         return data
 
     def delete_variant(self, index):
+        index = int(index)
         db = self._get_project_database()
         collection_names = self._get_net_collections(db)
         for coll in collection_names:
@@ -1070,7 +1079,7 @@ class PandaHub:
 
     def update_variant(self, index, data):
         db = self._get_project_database()
-        db["variant"].update_one({"index": index}, {"$set": data})
+        db["variant"].update_one({"index": int(index)}, {"$set": data})
 
     def get_variant_filter(self, variants):
         """
@@ -1088,11 +1097,13 @@ class PandaHub:
         """
         if type(variants) is list and variants:
             if len(variants) > 1:
+                variants = [int(var) for var in variants] # make sure variants are of type int
                 return {"$or": [{"var_type": "base", "not_in_var": {"$nin": variants}},
                                 {"var_type": {"$in": ["change", "addition"]}, "variant": {"$in": variants}}]}
             else:
                 variants = variants[0]
         if variants:
+            variants = int(variants)
             return {"$or": [{"var_type": "base", "not_in_var": {"$ne": variants}},
                             {"var_type": {"$in": ["change", "addition"]}, "variant": variants}]}
         else:
