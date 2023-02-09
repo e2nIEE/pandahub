@@ -1069,10 +1069,10 @@ class PandaHub:
         collection_names = self._get_net_collections(db)
         for coll in collection_names:
             # remove references to deleted objects
-            db[coll].update_many({"variant_type": "base", "not_in_var": index},
+            db[coll].update_many({"var_type": "base", "not_in_var": index},
                                  {"$pull": {"not_in_var": index}})
             # remove changes and additions
-            db[coll].delete_many({"variant_type": {"$in": ["change", "addition"]},
+            db[coll].delete_many({"var_type": {"$in": ["change", "addition"]},
                                   "variant": index})
         # delete variant
         db["variant"].delete_one({"index": index})
