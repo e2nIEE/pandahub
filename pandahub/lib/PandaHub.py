@@ -231,6 +231,7 @@ class PandaHub:
             self.active_project = self._get_project_document({"_id": ObjectId(project_id)})
         except:
             self.active_project = self._get_project_document({"_id": project_id})
+        self.upgrade_project_to_latest_version()
 
     def rename_project(self, project_name):
         self.has_permission("write")
