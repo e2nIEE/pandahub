@@ -320,12 +320,26 @@ class PandaHub:
         return self.active_project.get("version", "0.2.2")
 
     def upgrade_project_to_latest_version(self):
-        from pandapower.io_utils import PPJSONEncoder
         # TODO check that user has right to write user_management
         # TODO these operations should be encapsulated in a transaction in order to avoid
         #      inconsistent Database states in case of occuring errors
+        def _set_project_version(ph_version):
+            project_collection = self.mongo_client["user_management"].projects
+            project_collection.find_one_and_update({"_id": self.active_project["_id"]},
+                                                   {"$set": {"version": ph_version}})
+            logger.info(f"upgraded projekt '{self.active_project['name']}' from version"
+                        f" {self.get_project_version()} to version {ph_version}")
+            self.active_project["version"] = ph_version
 
-        if version.parse(self.get_project_version()) < version.parse("0.2.3"):
+        project_version = self.get_project_version()
+        # we are up-to-date - nothing to do
+        if project_version == __version__:
+            return
+
+        # apply migrations sequentially:
+
+        # upgrade from < 0.2.3 to 0.2.3
+        if version.parse(project_version) < version.parse("0.2.3"):
             db = self._get_project_database()
             all_collection_names = db.list_collection_names()
             old_net_collections = [name for name in all_collection_names if
@@ -334,11 +348,13 @@ class PandaHub:
 
             for element in old_net_collections:
                 db[element].rename(self._collection_name_of_element(element))
+            _set_project_version("0.2.3")
 
-        if version.parse(self.get_project_version()) < version.parse("0.2.4"):
+        # upgrade from 0.2.3 to 0.2.4
+        if self.active_project["version"] == "0.2.3":
             db = self._get_project_database()
             # for all networks
-            for d in list(db["_networks"].find({}, projection={"sector":1, "data":1})):
+            for d in list(db["_networks"].find({}, projection={"sector": 1, "data": 1})):
                 # load old format
                 if d.get("sector", "power") == "power":
                     data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in d['data'].items())
@@ -349,18 +365,16 @@ class PandaHub:
                     try:
                         json.dumps(dat)
                     except:
-                        dat = f"serialized_{json.dumps(data, cls=PPJSONEncoder)}"
+                        dat = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
                     data[key] = dat
 
                 db["_networks"].find_one_and_update({"_id":d["_id"]},
                                                     {"$set": {"data": data}})
 
-        project_collection = self.mongo_client["user_management"].projects
-        project_collection.find_one_and_update({"_id": self.active_project["_id"]},
-                                               {"$set": {"version": __version__}})
-        logger.info(f"upgraded projekt '{self.active_project['name']}' from version"
-                    f" {self.get_project_version()} to version {__version__}")
-        self.active_project["version"] = __version__
+        # !! when adding new migrations, explicitly add _set_project_version() on the previous migration
+
+        # no further actions required, set project to current ph version
+        _set_project_version(__version__)
 
     # -------------------------
     # Project settings and metadata
