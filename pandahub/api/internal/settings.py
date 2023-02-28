@@ -34,3 +34,4 @@ REGISTRATION_ENABLED = settings_bool("REGISTRATION_ENABLED", default=True)
 REGISTRATION_ADMIN_APPROVAL = settings_bool("REGISTRATION_ADMIN_APPROVAL", default=False)
 
 DATATYPES_MODULE = os.getenv("DATATYPES_MODULE") or "pandahub.lib.datatypes"
+APPLY_PROJECT_UPGRADES = settings_bool("APPLY_PROJECT_UPGRADES", default=False)

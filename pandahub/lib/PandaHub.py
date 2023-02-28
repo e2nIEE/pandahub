@@ -215,7 +215,7 @@ class PandaHub:
             "permissions": self.get_permissions_by_role(p.get("users").get(self.user_id)) if self.user_id else None
         } for p in projects]
 
-    def set_active_project(self, project_name, realm=None, apply_upgrades=False):
+    def set_active_project(self, project_name, realm=None, apply_upgrades=settings.APPLY_PROJECT_UPGRADES):
         projects = self.get_projects()
         active_projects = [project for project in projects if project["name"] == project_name]
         if len(active_projects) == 0:
@@ -226,7 +226,7 @@ class PandaHub:
             project_id = active_projects[0]["id"]
             self.set_active_project_by_id(project_id, apply_upgrades)
 
-    def set_active_project_by_id(self, project_id, apply_upgrades=False):
+    def set_active_project_by_id(self, project_id, apply_upgrades=settings.APPLY_PROJECT_UPGRADES):
         try:
             self.active_project = self._get_project_document({"_id": ObjectId(project_id)})
         except:
@@ -320,7 +320,7 @@ class PandaHub:
     def get_project_version(self):
         return self.active_project.get("version", "0.2.2")
 
-    def check_project_db_compatability(self, apply_upgrades=False):
+    def check_project_db_compatability(self, apply_upgrades=settings.APPLY_PROJECT_UPGRADES):
         """
         Ensures that the active project is compatible with the current pandahub version.
 
