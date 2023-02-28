@@ -215,7 +215,7 @@ class PandaHub:
             "permissions": self.get_permissions_by_role(p.get("users").get(self.user_id)) if self.user_id else None
         } for p in projects]
 
-    def set_active_project(self, project_name, realm=None):
+    def set_active_project(self, project_name, realm=None, apply_upgrades=False):
         projects = self.get_projects()
         active_projects = [project for project in projects if project["name"] == project_name]
         if len(active_projects) == 0:
@@ -224,14 +224,14 @@ class PandaHub:
             raise PandaHubError("Multiple projects found!")
         else:
             project_id = active_projects[0]["id"]
-            self.set_active_project_by_id(project_id)
+            self.set_active_project_by_id(project_id, apply_upgrades)
 
-    def set_active_project_by_id(self, project_id):
+    def set_active_project_by_id(self, project_id, apply_upgrades=False):
         try:
             self.active_project = self._get_project_document({"_id": ObjectId(project_id)})
         except:
             self.active_project = self._get_project_document({"_id": project_id})
-        self.upgrade_project_to_latest_version()
+        self.check_project_db_compatability(apply_upgrades)
 
     def rename_project(self, project_name):
         self.has_permission("write")
@@ -320,27 +320,65 @@ class PandaHub:
     def get_project_version(self):
         return self.active_project.get("version", "0.2.2")
 
-    def upgrade_project_to_latest_version(self):
+    def check_project_db_compatability(self, apply_upgrades=False):
+        """
+        Ensures that the active project is compatible with the current pandahub version.
+
+        Projects are versioned with the latest pandahub release which included schema changes.
+
+        If the project had schema migrations from later pandahub versions applied, this function will disable the
+        project and log an error asking the user to update pandahub.
+
+        If the project database needs migrations in order to work with the current pandahub version, they will be
+        applied if apply_upgrades is True, otherwise the project is deactivated and an error logged to the user.
+
+
+        Parameters
+        ----------
+        apply_upgrades : bool
+            Apply any required schema migrations if true, deactivate the project and log an error if False.
+
+        Returns
+        -------
+        None
+
+        """
         # TODO check that user has right to write user_management
         # TODO these operations should be encapsulated in a transaction in order to avoid
         #      inconsistent Database states in case of occuring errors
-        def _set_project_version(ph_version):
+        def _set_project_version(project_version):
             project_collection = self.mongo_client["user_management"].projects
             project_collection.find_one_and_update({"_id": self.active_project["_id"]},
-                                                   {"$set": {"version": ph_version}})
-            logger.info(f"upgraded projekt '{self.active_project['name']}' from version"
-                        f" {self.get_project_version()} to version {ph_version}")
-            self.active_project["version"] = ph_version
+                                                   {"$set": {"version": project_version}})
+            logger.info(f"upgraded project '{self.active_project['name']}' from version"
+                        f" {self.get_project_version()} to version {project_version}")
+            print(f"upgraded project '{self.active_project['name']}' from version"
+                           f" {self.get_project_version()} to version {project_version}")
+            self.active_project["version"] = project_version
+        def _abort_upgrade():
+            logger.error(f"Project '{self.active_project['name']}' could not be activated because the project's "
+                           f"version ({self.get_project_version()}) is incompatible with pandahub {__version__}. "
+                           f"Activate the project with 'upgrade=True' in order to upgrade the project database.")
+            self.active_project = None
 
         project_version = self.get_project_version()
+
         # we are up-to-date - nothing to do
         if project_version == __version__:
             return
 
-        # apply migrations sequentially:
+        # current pandahub version is too old to work with this project version - ask to update pandahub
+        elif version.parse(project_version) > version.parse(__version__):
+            logger.error(f"Project '{self.active_project['name']}' could not be activated because the project's "
+                           f"version ({self.get_project_version()}) is incompatible with pandahub {__version__}. Update"
+                           f"pandahub to at least {self.get_project_version()} in order to activate the project.")
+            self.active_project = None
 
         # upgrade from < 0.2.3 to 0.2.3
         if version.parse(project_version) < version.parse("0.2.3"):
+            if not apply_upgrades:
+                _abort_upgrade()
+                return
             db = self._get_project_database()
             all_collection_names = db.list_collection_names()
             old_net_collections = [name for name in all_collection_names if
@@ -353,6 +391,9 @@ class PandaHub:
 
         # upgrade from 0.2.3 to 0.2.4
         if self.active_project["version"] == "0.2.3":
+            if not apply_upgrades:
+                _abort_upgrade()
+                return
             db = self._get_project_database()
             # for all networks
             for d in list(db["_networks"].find({}, projection={"sector": 1, "data": 1})):
@@ -369,13 +410,18 @@ class PandaHub:
                         dat = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
                     data[key] = dat
 
-                db["_networks"].find_one_and_update({"_id":d["_id"]},
+                db["_networks"].find_one_and_update({"_id": d["_id"]},
                                                     {"$set": {"data": data}})
+                _set_project_version("0.2.4")
 
-        # !! when adding new migrations, explicitly add _set_project_version() on the previous migration
+        ## template for adding new migrations
+        # if version.parse(project_version) < version.parse("version_with_breaking_change"):
+        #     if not apply_upgrades:
+        #         _abort_upgrade()
+        #         return
+        #      <apply migrations here>
+        #     _set_project_version("version_with_breaking_change")
 
-        # no further actions required, set project to current ph version
-        _set_project_version(__version__)
 
     # -------------------------
     # Project settings and metadata
