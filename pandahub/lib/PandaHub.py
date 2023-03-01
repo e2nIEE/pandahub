@@ -573,11 +573,12 @@ class PandaHub:
         return self.get_subnet_from_db_by_id(_id, bus_filter=bus_filter, include_results=include_results,
                                              add_edge_branches=add_edge_branches, geo_mode=geo_mode, variants=variants)
 
-    def get_subnet_from_db_by_id(self, id, bus_filter=None, include_results=True,
+    def get_subnet_from_db_by_id(self, net_id, bus_filter=None, include_results=True,
                            add_edge_branches=True, geo_mode="string", variants=[],
                            ignore_elements=[]):
         db = self._get_project_database()
-        meta = self._get_network_metadata(db, id)
+        meta = self._get_network_metadata(db, net_id)
+        dtypes = db["_networks"].find_one({"_id": net_id}, projection={"dtypes"})
 
         net = pp.create_empty_network()
 
@@ -586,26 +587,30 @@ class PandaHub:
 
         # Add buses with filter
         if bus_filter is not None:
-            self._add_element_from_collection(net, db, "bus", id, bus_filter, geo_mode=geo_mode, variants=variants)
+            self._add_element_from_collection(net, db, "bus", net_id, bus_filter, geo_mode=geo_mode,
+                                              variants=variants, dtypes=dtypes)
         buses = net.bus.index.tolist()
 
         branch_operator = "$or" if add_edge_branches else "$and"
         # Add branch elements connected to at least one bus
-        self._add_element_from_collection(net, db, "line", id,
+        self._add_element_from_collection(net, db, "line", net_id,
                                           {branch_operator: [
                                               {"from_bus": {"$in": buses}},
-                                              {"to_bus": {"$in": buses}}]}, geo_mode=geo_mode, variants=variants)
-        self._add_element_from_collection(net, db, "trafo", id,
+                                              {"to_bus": {"$in": buses}}]}, geo_mode=geo_mode,
+                                          variants=variants, dtypes=dtypes)
+        self._add_element_from_collection(net, db, "trafo", net_id,
                                           {branch_operator: [
                                               {"hv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode, variants=variants)
-        self._add_element_from_collection(net, db, "trafo3w", id,
+                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode,
+                                          variants=variants, dtypes=dtypes)
+        self._add_element_from_collection(net, db, "trafo3w", net_id,
                                           {branch_operator: [
                                               {"hv_bus": {"$in": buses}},
                                               {"mv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode, variants=variants)
+                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode,
+                                          variants=variants, dtypes=dtypes)
 
-        self._add_element_from_collection(net, db, "switch", id,
+        self._add_element_from_collection(net, db, "switch", net_id,
                                           {"$and": [
                                               {"et": "b"},
                                               {branch_operator: [
@@ -613,7 +618,7 @@ class PandaHub:
                                                   {"element": {"$in": buses}}
                                               ]}
                                           ]
-                                          }, geo_mode=geo_mode, variants=variants)
+                                          }, geo_mode=geo_mode, variants=variants, dtypes=dtypes)
         if add_edge_branches:
             # Add buses on the other side of the branches
             branch_buses = set(net.trafo.hv_bus.values) | set(net.trafo.lv_bus.values) | \
@@ -621,8 +626,9 @@ class PandaHub:
                             set(net.trafo3w.hv_bus.values) | set(net.trafo3w.mv_bus.values) | \
                             set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
             branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
-            self._add_element_from_collection(net, db, "bus", id, geo_mode=geo_mode, variants=variants,
-                                              filter={"index": {"$in": branch_buses_outside}})
+            self._add_element_from_collection(net, db, "bus", net_id, geo_mode=geo_mode, variants=variants,
+                                              filter={"index": {"$in": branch_buses_outside}},
+                                              dtypes=dtypes)
             buses = net.bus.index.tolist()
 
         switch_filter = {"$or": [
@@ -643,7 +649,8 @@ class PandaHub:
             }
         ]
         }
-        self._add_element_from_collection(net, db, "switch", id, switch_filter, geo_mode=geo_mode, variants=variants)
+        self._add_element_from_collection(net, db, "switch", net_id, switch_filter,
+                                          geo_mode=geo_mode, variants=variants, dtypes=dtypes)
 
         # add node elements
         node_elements = ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor", "storage"]
@@ -654,10 +661,10 @@ class PandaHub:
         # add all node elements that are connected to buses within the network
         for element in node_elements:
             filter = {"bus": {"$in": buses}}
-            self._add_element_from_collection(net, db, element, id,
+            self._add_element_from_collection(net, db, element, net_id,
                                               filter=filter, geo_mode=geo_mode,
                                               include_results=include_results,
-                                              variants=variants)
+                                              variants=variants, dtypes=dtypes)
 
         # add all other collections
         collection_names = self._get_net_collections(db)
@@ -674,10 +681,10 @@ class PandaHub:
             else:
                 # all other tables (e.g. std_types) are loaded without filter
                 filter = None
-            self._add_element_from_collection(net, db, table_name, id,
+            self._add_element_from_collection(net, db, table_name, net_id,
                                               filter=filter, geo_mode=geo_mode,
                                               include_results=include_results,
-                                              variants=variants)
+                                              variants=variants, dtypes=dtypes)
         self.deserialize_and_update_data(net, meta)
         return net
 
@@ -782,7 +789,7 @@ class PandaHub:
 
     def _add_element_from_collection(self, net, db, element, net_id,
                                      filter=None, include_results=True,
-                                     only_tables=None, geo_mode="string", variants=[]):
+                                     only_tables=None, geo_mode="string", variants=[], dtypes=None):
         if only_tables is not None and not element in only_tables:
             return
         if not include_results and element.startswith("res_"):
@@ -800,7 +807,8 @@ class PandaHub:
         data = list(db[self._collection_name_of_element(element)].find(filter_dict))
         if len(data) == 0:
             return
-        dtypes = db["_networks"].find_one({"_id": net_id})["dtypes"]
+        if dtypes is None:
+            dtypes = db["_networks"].find_one({"_id": net_id}, projection={"dtypes"})
         df = pd.DataFrame.from_records(data, index="index")
         if element in dtypes:
             dtypes_found_columns = {
