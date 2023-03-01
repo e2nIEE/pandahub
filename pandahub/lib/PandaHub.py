@@ -574,7 +574,8 @@ class PandaHub:
                                              add_edge_branches=add_edge_branches, geo_mode=geo_mode, variants=variants)
 
     def get_subnet_from_db_by_id(self, id, bus_filter=None, include_results=True,
-                           add_edge_branches=True, geo_mode="string", variants=[]):
+                           add_edge_branches=True, geo_mode="string", variants=[],
+                           ignore_elements=[]):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id)
 
@@ -616,9 +617,9 @@ class PandaHub:
         if add_edge_branches:
             # Add buses on the other side of the branches
             branch_buses = set(net.trafo.hv_bus.values) | set(net.trafo.lv_bus.values) | \
-                           set(net.line.from_bus) | set(net.line.to_bus) | \
-                           set(net.trafo3w.hv_bus.values) | set(net.trafo3w.mv_bus.values) | \
-                           set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
+                            set(net.line.from_bus) | set(net.line.to_bus) | \
+                            set(net.trafo3w.hv_bus.values) | set(net.trafo3w.mv_bus.values) | \
+                            set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
             branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
             self._add_element_from_collection(net, db, "bus", id, geo_mode=geo_mode, variants=variants,
                                               filter={"index": {"$in": branch_buses_outside}})
@@ -648,6 +649,7 @@ class PandaHub:
         node_elements = ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor", "storage"]
         branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
         all_elements = node_elements + branch_elements + ["bus"]
+        all_elements = list(set(all_elements) - set(ignore_elements))
 
         # add all node elements that are connected to buses within the network
         for element in node_elements:
@@ -662,7 +664,7 @@ class PandaHub:
         for collection in collection_names:
             table_name = self._element_name_of_collection(collection)
             # skip all element tables that we have already added
-            if table_name in all_elements:
+            if table_name in all_elements or table_name in ignore_elements:
                 continue
             # for tables that share an index with an element (e.g. load->res_load) load only relevant entries
             for element in all_elements:
@@ -780,7 +782,7 @@ class PandaHub:
 
     def _add_element_from_collection(self, net, db, element, net_id,
                                      filter=None, include_results=True,
-                                     only_tables=None, geo_mode="geojson", variants=[]):
+                                     only_tables=None, geo_mode="string", variants=[]):
         if only_tables is not None and not element in only_tables:
             return
         if not include_results and element.startswith("res_"):
