@@ -67,9 +67,8 @@ class PandaHub:
         self.user_id = user_id
         self.base_variant_filter = {
             "$or": [
-                {"variants": {"$exists": False}},
-                {"variants": {"$size": 0}},
-                {"variants": -1}
+                {"var_type": {"$exists": False}},
+                {"var_type": "base"}
             ]
         }
         if check_server_available:
@@ -821,7 +820,6 @@ class PandaHub:
                 filter_dict = {**filter_dict, **filter, **filter_and}
             else:
                 filter_dict = {**filter_dict, **filter}
-
         data = list(db[self._collection_name_of_element(element)].find(filter_dict))
         if len(data) == 0:
             return
@@ -852,23 +850,24 @@ class PandaHub:
 
     def get_net_value_from_db(self, net_name, element, element_index,
                               parameter, variant=None, project_id=None):
+        if variant is not None:
+            variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         collection = self._collection_name_of_element(element)
-
-        variant_filter = None
-        if variant is None:
-            variant_filter = self.base_variant_filter
-        else:
-            variant_filter = {"variants": variant}
+        variant_filter = self.get_variant_filter(variant)
         elements = list(db[collection].find({"index": element_index, "net_id": _id, **variant_filter}))
-        if len(elements) == 0:
-            raise PandaHubError("Element doesn't exist", 404)
+        if len(elements) == 1:
+            element = elements[0]
+        else:
+            if len(elements) == 0:
+                raise PandaHubError("Element doesn't exist", 404)
+            else:
+                raise PandaHubError("Multiple elements found", 404)
         dtypes = self._datatypes.get(element)
-        element = elements[0]
         if parameter not in element:
             raise PandaHubError("Parameter doesn't exist", 404)
         if dtypes is not None and parameter in dtypes:
@@ -877,69 +876,70 @@ class PandaHub:
             return element[parameter]
 
     def delete_net_element(self, net_id, element, element_index, variant=None, project_id=None):
+        if variant is not None:
+            variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
         collection = self._collection_name_of_element(element)
+        element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
 
-        filter = {"index": element_index, "net_id": int(net_id)}
-
-        if variant is None:
-            db[collection].delete_one({**filter, **self.base_variant_filter})
+        target = db[collection].find_one(element_filter)
+        if variant and target["var_type"] == "base":
+            db[collection].update_one({"_id": target["_id"]},
+                                      {"$addToSet": {"not_in_var": variant}})
         else:
-            present_variants = db[collection].find_one(
-                {**filter, "variants": variant}, projection={"_id": 1, "variants": 1}
-            )
-            if present_variants:
-                if -1 in present_variants["variants"] and variant in present_variants["variants"]:
-                    db[collection].update_one(
-                        {**filter, "variants": variant}, {"$pull": {"variants": variant}}
-                    )
-                else:
-                    db[collection].delete_one({"_id": present_variants["_id"]})
-            else:
-                raise UserWarning(
-                    f"No element '{element}' to delete with index '{element_index}' in this variant"
-                )
+            db[collection].delete_one({"_id": target["_id"]})
+        return target
 
     def set_net_value_in_db(self, net_id, element, element_index,
                             parameter, value, variant=None, project_id=None):
+        logger.info(f"Setting  {parameter} = {value} in {element} with index {element_index} and variant {variant}")
+        if variant is not None:
+            variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-#         _id = self._get_id_from_name(net_name, db)
         dtypes = self._datatypes.get(element)
         if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element)
 
-        filter = {"index": element_index, "net_id": int(net_id)}
+        element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
+        document = db[collection].find_one({**element_filter})
+        if not document:
+            raise UserWarning(f"No element '{element}' to change with index '{element_index}' in this variant")
+
+        old_value = document.get(parameter, None)
+        if old_value == value:
+            logger.warning(f'Value "{value}" for "{parameter}" identical to database element - no change applied')
+            return None
+        if "." in parameter:
+            key, subkey = parameter.split(".")
+            document[key][subkey] = value
+        else:
+            document[parameter] = value
 
         if variant is None:
-            db[collection].update_one({**filter, **self.base_variant_filter}, {"$set": {parameter: value}})
+            db[collection].update_one({**element_filter, **self.base_variant_filter},
+                                      {"$set": {parameter: value}})
         else:
-            document = db[collection].find_one({**filter, "variants": variant})
-            if document:
-                if -1 in document["variants"] and variant in document["variants"]:
-                    base_variant_id = document.pop("_id")
-                    db[collection].update_one(
-                        {"_id": base_variant_id}, {"$pull": {"variants": variant}}
-                    )
-                    if "." in parameter:
-                        key, subkey = parameter.split(".")
-                        document[key][subkey] = value
-                    else:
-                        document[parameter] = value
-                    document["variants"] = [variant]
-                    db[collection].insert_one(document)
-                else:
-                    db[collection].update_one({"_id": document["_id"]}, {"$set": {parameter: value}})
+            if document["var_type"] == "base":
+                base_variant_id = document.pop("_id")
+                db[collection].update_one({"_id": base_variant_id},
+                                          {"$addToSet": {"not_in_var": variant}})
+                document.update(var_type="change", variant=variant, changed_fields=[parameter])
+                insert_result = db[collection].insert_one(document)
+                document["_id"] = insert_result.inserted_id
             else:
-                raise UserWarning(
-                    f"No element '{element}' to change with index '{element_index}' in this variant"
-                )
+                update_dict = {"$set": {parameter: value}, "$unset": {"not_in_var": ""}}
+                if document["var_type"] == "change":
+                    update_dict["$addToSet"] = {"changed_fields": parameter}
+                db[collection].update_one({"_id": document["_id"]},
+                                          update_dict)
+        return {"document": document, parameter: {"previous": old_value, "current": value}}
 
     def set_object_attribute(self, net_id, element, element_index,
                              parameter, value, variant=None, project_id=None):
@@ -947,58 +947,61 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-#         _id = self._get_id_from_name(net_name, db)
         dtypes = self._datatypes.get(element)
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element)
-        js = list(db[collection].find({"index": element_index, "net_id": _id}))[0]
+        js = list(db[collection].find({"index": element_index, "net_id": net_id}))[0]
         obj = json_to_object(js["object"])
         setattr(obj, parameter, value)
-        db[collection].find_one_and_update({"index": element_index, "net_id": _id},
+        db[collection].find_one_and_update({"index": element_index, "net_id": net_id},
                                            {"$set": {"object._object": obj.to_json()}})
 
-        filter = {"index": element_index, "net_id": int(net_id)}
+        element_filter = {"index": element_index, "net_id": int(net_id)}
 
         if variant is None:
-            document = db[collection].find_one({**filter, **self.base_variant_filter})
+            document = db[collection].find_one({**element_filter, **self.base_variant_filter})
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             db[collection].find_one_and_update(
                 {**filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
             )
         else:
-            document = db[collection].find_one({**filter, "variants": variant})
+            variant = int(variant)
+            element_filter = {**element_filter, **self.get_variant_filter(variant)}
+            document = db[collection].find_one({**element_filter})
+            if not document:
+                raise UserWarning(f"No element '{element}' to change with index '{element_index}' in this variant")
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
-            if document:
-                if -1 in document["variants"] and variant in document["variants"]:
-                    base_variant_id = document.pop("_id")
-                    db[collection].update_one(
-                        {"_id": base_variant_id}, {"$pull": {"variants": variant}}
-                    )
-                    document["object"]["_object"] = obj
-                    document["variants"] = [variant]
-                    db[collection].insert_one(document)
-                else:
-                    db[collection].update_one({"_id": document["_id"]}, {"$set": {"object._object": obj}})
+            if document["var_type"] == "base":
+                base_variant_id = document.pop("_id")
+                db[collection].update_one({"_id": base_variant_id},
+                                          {"$addToSet": {"not_in_var": variant}})
+                document["object"]["_object"] = obj
+                document["var_type"] = "change"
+                db[collection].insert_one(document)
             else:
-                raise UserWarning(
-                    f"No element '{element}' to change with index '{element_index}' in this variant"
-                )
+                db[collection].update_one({"_id": document["_id"]},
+                                          {"$set": {"object._object": obj}})
 
     def create_element_in_db(self, net_id, element, element_index, data, variant=None, project_id=None):
+        logger.info(f"Creating element {element} with index {element_index} and variant {variant}, data: {data}")
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-#         _id = self._get_id_from_name(net_name, db)
         element_data = {**data, **{"index": element_index, "net_id": int(net_id)}}
-        element_data["variants"] = [variant] if variant is not None else [-1]
+        if not variant:
+            element_data.update(var_type="base", not_in_var=[])
+        else:
+            element_data.update(var_type="addition", variant=int(variant))
         self._add_missing_defaults(db, net_id, element, element_data)
         self._ensure_dtypes(element, element_data)
         collection = self._collection_name_of_element(element)
-        return db[collection].insert_one(element_data)
+        insert_result = db[collection].insert_one(element_data)
+        element_data["_id"] = insert_result.inserted_id
+        return element_data
 
     def create_elements_in_db(self, net_id: int, element_type: str, elements_data: list, project_id=None,
                               variant=None):
@@ -1006,14 +1009,18 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        variant = [int(variant) if variant else -1]
+        if not variant:
+            var_data = {"var_type": "base", "not_in_var": []}
+        else:
+            var_data = {"var_type": "addition", "variant": int(variant)}
         data = []
         for elm_data in elements_data:
             self._add_missing_defaults(db, net_id, element_type, elm_data)
             self._ensure_dtypes(element_type, elm_data)
-            data.append({**elm_data, **{"net_id": net_id, "variants": variant}})
+            data.append({**elm_data, **var_data, "net_id": net_id})
         collection = self._collection_name_of_element(element_type)
-        db[collection].insert_many(data)
+        insert_result = db[collection].insert_many(data)
+        return [[z[0].update(_id=z[1]) for z in zip(data, insert_result.inserted_ids)]]
 
     def _add_missing_defaults(self, db, net_id, element_type, element_data):
         func_str = f"create_{element_type}"
@@ -1037,7 +1044,8 @@ class PandaHub:
             std_type = element_data["std_type"]
             net_doc = db["_networks"].find_one({"_id": net_id})
             if net_doc is not None:
-                std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
+#                 std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
+                std_types = net_doc["data"]["std_types"]
                 if std_type in std_types:
                     element_data.update(std_types[std_type])
 
@@ -1058,20 +1066,20 @@ class PandaHub:
     # Variants
     # -------------------------
 
-    def create_variant(self, data, index=None):
+    def create_variant(self, data, dummy):
         db = self._get_project_database()
-        variants_db = [int(var["index"]) for var in db["variant"].find({}, {"index": 1})]
+        max_index = list(db["variant"].find(projection={"_id": 0, "index": 1}).sort("index", -1).limit(1))
+        if not max_index:
+            index = 1
+            for coll in self._get_net_collections(db):
+                update = {"$set": {"var_type": "base",
+                                   "not_in_var": []}}
+                db[coll].update_many({}, update)
 
-        if not index:
-            if not variants_db:
-                index = 1
-            else:
-                index = max(variants_db) + 1
-            data["index"] = index
-        elif index == -1:
-            raise PandaHubError("Variant creation failed: index can not be -1")
-        elif index in variants_db:
-            raise PandaHubError("Variant creation failed: variant with index {} already exists in db".format(index))
+        else:
+            index = int(max_index[0]["index"]) + 1
+
+        data["index"] = index
 
         if data.get("default_name") is not None and data.get("name") is None:
             data["name"] = data.pop("default_name") + " " + str(index)
@@ -1079,41 +1087,53 @@ class PandaHub:
         db["variant"].insert_one(data)
         del data["_id"]
 
-        collection_names = [coll for coll in self._get_net_collections(db)]
-        for coll in collection_names:
-            update = None
-            filter = None
-            if not variants_db:
-                filter = {}
-                update = {"$addToSet": {"variants": {"$each": [-1, index]}}}
-            else:
-                filter = {"variants": -1}
-                update = {"$addToSet": {"variants": index}}
-            db[coll].update_many(filter, update)
-
         return data
 
     def delete_variant(self, index):
+        index = int(index)
         db = self._get_project_database()
         collection_names = self._get_net_collections(db)
         for coll in collection_names:
-            db[coll].delete_many({"variants": [index]})
-            db[coll].update_many({}, {"$pull": {"variants": index}})
+            # remove references to deleted objects
+            db[coll].update_many({"var_type": "base", "not_in_var": index},
+                                 {"$pull": {"not_in_var": index}})
+            # remove changes and additions
+            db[coll].delete_many({"var_type": {"$in": ["change", "addition"]},
+                                  "variant": index})
+        # delete variant
         db["variant"].delete_one({"index": index})
 
     def update_variant(self, index, data):
         db = self._get_project_database()
-        db["variant"].update_one({"index": index}, {"$set": data})
+        db["variant"].update_one({"index": int(index)}, {"$set": data})
 
     def get_variant_filter(self, variants):
-        if len(variants) == 0:
-            return self.base_variant_filter
-        elif len(variants) == 1:
-            variant = int(variants[0])
-            return {"variants": variant}
+        """
+        Creates a mongodb query filter to retrieve pandapower elements for the given variant(s).
+
+        Parameters
+        ----------
+        variants : int or list of int or None
+                None or an empty list represent the base variant, ints specify variant indices.
+
+        Returns
+        -------
+        dict
+            mongodb query filter for the given variant(s)
+        """
+        if type(variants) is list and variants:
+            if len(variants) > 1:
+                variants = [int(var) for var in variants] # make sure variants are of type int
+                return {"$or": [{"var_type": "base", "not_in_var": {"$nin": variants}},
+                                {"var_type": {"$in": ["change", "addition"]}, "variant": {"$in": variants}}]}
+            else:
+                variants = variants[0]
+        if variants:
+            variants = int(variants)
+            return {"$or": [{"var_type": "base", "not_in_var": {"$ne": variants}},
+                            {"var_type": {"$in": ["change", "addition"]}, "variant": variants}]}
         else:
-            return {"$or": [{"$and": [{"variants": int(varidx)} for varidx in variants]},
-                            {"$or": [{"variants": [int(varidx)]} for varidx in variants]}]}
+            return self.base_variant_filter
 
     # -------------------------
     # Bulk operations
