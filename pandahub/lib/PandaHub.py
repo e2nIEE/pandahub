@@ -729,15 +729,31 @@ class PandaHub:
         db["_networks"].insert_one(net_dict)
 
     def _write_net_collections_to_db(self, db, collections):
-        for key, item in collections.items():
-            if len(item) > 0:
-                collection_name = self._collection_name_of_element(key)
+        existing_collections = set(db.list_collection_names())
+
+        def add_index(element, df_dict):
+            #TODO check if a compound index might make sense https://www.mongodb.com/docs/manual/core/index-compound/
+            columns = {"bus": ["index"],
+                       "line": ["from_bus", "to_bus"],
+                       "trafo": ["hv_bus", "lv_bus"],
+                       "switch": ["bus", "element", "et"],
+                       "substation": ["index"],
+                       "area": ["index", "name"]}.get(element,
+                                                      ["bus"] if "bus" in df_dict[0] else [])
+            for c in columns + ["net_id"]:
+                logger.debug(f"creating index on '{c}' in collection '{element}'")
+                db[self._collection_name_of_element(element)].create_index([(c, DESCENDING)])
+
+        for element, df_dict in collections.items():
+            if len(df_dict) > 0:
+                collection_name = self._collection_name_of_element(element)
                 try:
-                    db[collection_name].insert_many(item, ordered=False)
-                    db[collection_name].create_index([("net_id", DESCENDING)])
+                    db[collection_name].insert_many(df_dict, ordered=False)
+                    if collection_name not in existing_collections:
+                        add_index(element, df_dict)
                 except:
                     traceback.print_exc()
-                    print(f"\nFAILED TO WRITE TABLE '{key}' TO DATABASE! (details above)")
+                    print(f"\nFAILED TO WRITE TABLE '{element}' TO DATABASE! (details above)")
 
     def delete_net_from_db(self, name):
         self.check_permission("write")
