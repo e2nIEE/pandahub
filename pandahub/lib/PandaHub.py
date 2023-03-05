@@ -731,16 +731,17 @@ class PandaHub:
         existing_collections = set(db.list_collection_names())
 
         def add_index(element, df_dict):
-            #TODO check if a compound index might make sense https://www.mongodb.com/docs/manual/core/index-compound/
-            columns = {"bus": ["index"],
-                       "line": ["from_bus", "to_bus"],
-                       "trafo": ["hv_bus", "lv_bus"],
-                       "switch": ["bus", "element", "et"],
-                       "substation": ["index"],
-                       "area": ["index", "name"]}.get(element,
-                                                      ["bus"] if "bus" in df_dict[0] else [])
-            for c in columns + ["net_id"]:
-                logger.debug(f"creating index on '{c}' in collection '{element}'")
+            columns = {"bus": ["net_id", "index"],
+                       "line": ["net_id", "index", "from_bus", "to_bus"],
+                       "trafo": ["net_id", "index", "hv_bus", "lv_bus"],
+                       "switch": ["net_id", "index", "bus", "element", "et"],
+                       "substation": ["net_id", "index"],
+                       "area": ["net_id", "index", "name"]}.get(element, [])
+            if element in ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor",
+                           "storage"]:
+                columns = ["net_id", "bus"]
+            for c in columns:
+                logger.info(f"creating index on '{c}' in collection '{element}'")
                 db[self._collection_name_of_element(element)].create_index([(c, DESCENDING)])
 
         for element, df_dict in collections.items():
