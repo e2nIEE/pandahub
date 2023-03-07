@@ -887,6 +887,9 @@ class PandaHub:
         element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
 
         target = db[collection].find_one(element_filter)
+        if target is None:
+            # element does not exist in net
+            return
         if variant and target["var_type"] == "base":
             db[collection].update_one({"_id": target["_id"]},
                                       {"$addToSet": {"not_in_var": variant}})
