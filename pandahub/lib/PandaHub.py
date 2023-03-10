@@ -1072,7 +1072,9 @@ class PandaHub:
 
     def create_variant(self, data):
         db = self._get_project_database()
-        max_index = list(db["variant"].find(projection={"_id": 0, "index": 1}).sort("index", -1).limit(1))
+        net_id = int(data["net_id"])
+        max_index = list(db["variant"].find({"net_id": net_id},
+                                            projection={"_id": 0, "index": 1}).sort("index", -1).limit(1))
         if not max_index:
             index = 1
             for coll in self._get_net_collections(db):
@@ -1093,23 +1095,22 @@ class PandaHub:
 
         return data
 
-    def delete_variant(self, index):
-        index = int(index)
+    def delete_variant(self, net_id, index):
         db = self._get_project_database()
         collection_names = self._get_net_collections(db)
         for coll in collection_names:
             # remove references to deleted objects
-            db[coll].update_many({"var_type": "base", "not_in_var": index},
+            db[coll].update_many({"net_id": net_id, "var_type": "base", "not_in_var": index},
                                  {"$pull": {"not_in_var": index}})
             # remove changes and additions
-            db[coll].delete_many({"var_type": {"$in": ["change", "addition"]},
+            db[coll].delete_many({"net_id": net_id, "var_type": {"$in": ["change", "addition"]},
                                   "variant": index})
         # delete variant
-        db["variant"].delete_one({"index": index})
+        db["variant"].delete_one({"net_id": net_id, "index": index})
 
-    def update_variant(self, index, data):
+    def update_variant(self, net_id, index, data):
         db = self._get_project_database()
-        db["variant"].update_one({"index": int(index)}, {"$set": data})
+        db["variant"].update_one({"net_id": net_id, "index": index}, {"$set": data})
 
     def get_variant_filter(self, variants):
         """
