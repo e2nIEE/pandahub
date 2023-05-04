@@ -728,7 +728,7 @@ class PandaHub:
 
             else:
                 element_data = serialize_object_data(element, element_data, version_)
-                if data:
+                if element_data:
                     data[element] = element_data
 
         # write network metadata
