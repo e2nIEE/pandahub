@@ -986,7 +986,7 @@ class PandaHub:
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             db[collection].find_one_and_update(
-                {**filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
+                {**element_filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
             )
         else:
             variant = int(variant)
