@@ -56,12 +56,10 @@ class PandaHub:
     # Initialization
     # -------------------------
 
-    def __init__(self, connection_url=None, check_server_available=False, user_id=None):
-        if connection_url is None:
-            connection_url = settings.MONGODB_URL
-        if not connection_url.startswith('mongodb://'):
-            raise PandaHubError("Connection URL needs to point to a mongodb instance: 'mongodb://..'")
-        self.mongo_client = MongoClient(host=connection_url, uuidRepresentation="standard", connect=False)
+    def __init__(self, connection_url=settings.MONGODB_URL, connection_user = settings.MONGODB_USER,
+                 connection_password=settings.MONGODB_PASSWORD, check_server_available=False, user_id=None):
+        self.mongo_client = MongoClient(host=connection_url, username=connection_user, password=connection_password,
+                                        uuidRepresentation="standard", connect=False)
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
@@ -307,9 +305,11 @@ class PandaHub:
         return self.mongo_client[str(self.active_project["_id"])]
 
     def _get_global_database(self):
-        if self.mongo_client_global_db is None and not settings.MONGODB_URL_GLOBAL_DATABASE is None:
+        if self.mongo_client_global_db is None and settings.MONGODB_GLOBAL_DATABASE_URL is not None:
             self.mongo_client_global_db = MongoClient(
-                host=settings.MONGODB_URL_GLOBAL_DATABASE, uuidRepresentation="standard"
+                host=settings.MONGODB_GLOBAL_DATABASE_URL, username=settings.MONGODB_GLOBAL_DATABASE_USER,
+                password=settings.MONGODB_GLOBAL_DATABASE_PASSWORD,
+                uuidRepresentation="standard"
             )
         if self.mongo_client_global_db is None:
             return self.mongo_client["global_data"]
