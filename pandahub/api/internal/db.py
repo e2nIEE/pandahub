@@ -8,7 +8,8 @@ from pandahub.api.internal import settings
 from pandahub.api.internal.models import AccessToken, UserDB
 
 client = motor.motor_asyncio.AsyncIOMotorClient(
-    settings.MONGODB_URL, uuidRepresentation="standard"
+    host=settings.MONGODB_URL, username=settings.MONGODB_USER, password=settings.MONGODB_PASSWORD,
+    uuidRepresentation="standard"
 )
 
 client.get_io_loop = asyncio.get_event_loop
