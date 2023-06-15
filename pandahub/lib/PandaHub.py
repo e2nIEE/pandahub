@@ -58,8 +58,11 @@ class PandaHub:
 
     def __init__(self, connection_url=settings.MONGODB_URL, connection_user = settings.MONGODB_USER,
                  connection_password=settings.MONGODB_PASSWORD, check_server_available=False, user_id=None):
-        self.mongo_client = MongoClient(host=connection_url, username=connection_user, password=connection_password,
-                                        uuidRepresentation="standard", connect=False)
+
+        mongo_client_args = {"host": connection_url, "uuidRepresentation": "standard", "connect":False}
+        if connection_user:
+            mongo_client_args |= {"username": connection_user, "password": connection_password}
+        self.mongo_client = MongoClient(**mongo_client_args)
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
