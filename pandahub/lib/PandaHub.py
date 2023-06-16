@@ -582,7 +582,7 @@ class PandaHub:
 
         net = pp.create_empty_network()
 
-        if db[self._collection_name_of_element("bus")].find().count() == 0:
+        if db[self._collection_name_of_element("bus")].count_documents({}) == 0:
             net["empty"] = True
 
         # Add buses with filter
