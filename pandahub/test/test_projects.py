@@ -87,7 +87,7 @@ def test_upgrade_project():
     # convert the db to latest version
     ph = pandahub.PandaHub(connection_url="mongodb://localhost:27017")
     ph.set_active_project("pytest")
-    ph.upgrade_project_to_latest_version()
+    ph.check_project_db_compatability()
     # and test if everything went fine
     net2 = ph.get_net_from_db("simple_network")
     assert pp.nets_equal(net, net2)
