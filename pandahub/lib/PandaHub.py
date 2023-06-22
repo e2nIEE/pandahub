@@ -20,7 +20,7 @@ import pandapower as pp
 import pandapower.io_utils as io_pp
 from pandahub.api.internal import settings
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, \
-    convert_dataframes_to_dicts, json_to_object
+    convert_element_to_dict, json_to_object, serialize_object_data, get_dtypes
 from pandahub.lib.database_toolbox import decompress_timeseries_data, convert_geojsons
 
 logger = logging.getLogger(__name__)
@@ -323,7 +323,6 @@ class PandaHub:
         return self.active_project.get("version", "0.2.2")
 
     def upgrade_project_to_latest_version(self):
-        from pandapower.io_utils import PPJSONEncoder
         # TODO check that user has right to write user_management
         # TODO these operations should be encapsulated in a transaction in order to avoid
         #      inconsistent Database states in case of occuring errors
@@ -352,7 +351,7 @@ class PandaHub:
                     try:
                         json.dumps(dat)
                     except:
-                        dat = f"serialized_{json.dumps(data, cls=PPJSONEncoder)}"
+                        dat = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
                     data[key] = dat
 
                 db["_networks"].find_one_and_update({"_id":d["_id"]},
@@ -715,15 +714,31 @@ class PandaHub:
         max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
         _id = 0 if max_id_network is None else max_id_network["_id"] + 1
 
-        dfs, data, types = convert_dataframes_to_dicts(net, _id,
-                                                       version.parse(self.get_project_version()),
-                                                       self._datatypes)
-        self._write_net_collections_to_db(db, dfs)
+        data = {}
+        dtypes = {}
+        version_ = version.parse(self.get_project_version())
+        for element, element_data in net.items():
+            if element.startswith("_") or element.startswith("res"):
+                continue
+            if isinstance(element_data, pd.core.frame.DataFrame):
+                # create type lookup
+                dtypes[element] = get_dtypes(element_data, self._datatypes.get(element))
+                if element_data.empty:
+                    continue
+                # convert pandapower dataframe object to dict and save to db
+                element_data = convert_element_to_dict(element_data.copy(deep=True), _id, self._datatypes.get(element))
+                self._write_element_to_db(db, element, element_data)
 
+            else:
+                element_data = serialize_object_data(element, element_data, version_)
+                if element_data:
+                    data[element] = element_data
+
+        # write network metadata
         net_dict = {"_id": _id,
                     "name": name,
                     "sector": sector,
-                    "dtypes": types,
+                    "dtypes": dtypes,
                     "data": data}
 
         if metadata is not None:
@@ -731,9 +746,12 @@ class PandaHub:
         db["_networks"].insert_one(net_dict)
 
     def _write_net_collections_to_db(self, db, collections):
-        existing_collections = set(db.list_collection_names())
+        for element, element_data in collections.items():
+            self._write_element_to_db(db, element, element_data)
 
-        def add_index(element, df_dict):
+    def _write_element_to_db(self, db, element, element_data):
+        existing_collections = set(db.list_collection_names())
+        def add_index(element):
             columns = {"bus": ["net_id", "index"],
                        "line": ["net_id", "index", "from_bus", "to_bus"],
                        "trafo": ["net_id", "index", "hv_bus", "lv_bus"],
@@ -747,16 +765,16 @@ class PandaHub:
                 logger.info(f"creating index on '{c}' in collection '{element}'")
                 db[self._collection_name_of_element(element)].create_index([(c, DESCENDING)])
 
-        for element, df_dict in collections.items():
-            if len(df_dict) > 0:
-                collection_name = self._collection_name_of_element(element)
-                try:
-                    db[collection_name].insert_many(df_dict, ordered=False)
-                    if collection_name not in existing_collections:
-                        add_index(element, df_dict)
-                except:
-                    traceback.print_exc()
-                    print(f"\nFAILED TO WRITE TABLE '{element}' TO DATABASE! (details above)")
+
+        collection_name = self._collection_name_of_element(element)
+        if len(element_data) > 0:
+            try:
+                db[collection_name].insert_many(element_data, ordered=False)
+                if collection_name not in existing_collections:
+                    add_index(element)
+            except:
+                traceback.print_exc()
+                print(f"\nFAILED TO WRITE TABLE '{element}' TO DATABASE! (details above)")
 
     def delete_net_from_db(self, name):
         self.check_permission("write")
@@ -971,7 +989,7 @@ class PandaHub:
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             db[collection].find_one_and_update(
-                {**filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
+                {**element_filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
             )
         else:
             variant = int(variant)
