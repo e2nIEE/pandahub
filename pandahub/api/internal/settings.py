@@ -48,3 +48,4 @@ REGISTRATION_ENABLED = settings_bool("REGISTRATION_ENABLED", default=True)
 REGISTRATION_ADMIN_APPROVAL = settings_bool("REGISTRATION_ADMIN_APPROVAL", default=False)
 
 DATATYPES_MODULE = os.getenv("DATATYPES_MODULE") or "pandahub.lib.datatypes"
+COSMOSDB_COMPAT = settings_bool("COSMOSDB_COMPAT", default=False)
