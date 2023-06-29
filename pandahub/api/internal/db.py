@@ -43,7 +43,7 @@ class MongoDBUserDatabaseCosmos(MongoDBUserDatabase):
 
     async def _initialize(self):
         if not self.initialized:
-            if "email_1" not in self.collection.index_information():
+            if "email_1" not in await self.collection.index_information():
                 await self.collection.create_index("id", unique=True)
                 await self.collection.create_index("email", unique=True)
         self.initialized = True
