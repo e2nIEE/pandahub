@@ -20,7 +20,7 @@ import pandapower as pp
 import pandapower.io_utils as io_pp
 from pandahub.api.internal import settings
 from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, \
-    convert_dataframes_to_dicts, json_to_object
+    convert_element_to_dict, json_to_object, serialize_object_data, get_dtypes
 from pandahub.lib.database_toolbox import decompress_timeseries_data, convert_geojsons
 
 logger = logging.getLogger(__name__)
@@ -56,12 +56,13 @@ class PandaHub:
     # Initialization
     # -------------------------
 
-    def __init__(self, connection_url=None, check_server_available=False, user_id=None):
-        if connection_url is None:
-            connection_url = settings.MONGODB_URL
-        if not connection_url.startswith('mongodb://'):
-            raise PandaHubError("Connection URL needs to point to a mongodb instance: 'mongodb://..'")
-        self.mongo_client = MongoClient(host=connection_url, uuidRepresentation="standard", connect=False)
+    def __init__(self, connection_url=settings.MONGODB_URL, connection_user = settings.MONGODB_USER,
+                 connection_password=settings.MONGODB_PASSWORD, check_server_available=False, user_id=None):
+
+        mongo_client_args = {"host": connection_url, "uuidRepresentation": "standard", "connect":False}
+        if connection_user:
+            mongo_client_args |= {"username": connection_user, "password": connection_password}
+        self.mongo_client = MongoClient(**mongo_client_args)
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
@@ -227,10 +228,9 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
 
     def set_active_project_by_id(self, project_id):
-        try:
-            self.active_project = self._get_project_document({"_id": ObjectId(project_id)})
-        except:
-            self.active_project = self._get_project_document({"_id": project_id})
+        if not isinstance(project_id, ObjectId):
+            project_id = ObjectId(project_id)
+        self.active_project = self._get_project_document({"_id": project_id})
 
     def rename_project(self, project_name):
         self.has_permission("write")
@@ -307,9 +307,11 @@ class PandaHub:
         return self.mongo_client[str(self.active_project["_id"])]
 
     def _get_global_database(self):
-        if self.mongo_client_global_db is None and not settings.MONGODB_URL_GLOBAL_DATABASE is None:
+        if self.mongo_client_global_db is None and settings.MONGODB_GLOBAL_DATABASE_URL is not None:
             self.mongo_client_global_db = MongoClient(
-                host=settings.MONGODB_URL_GLOBAL_DATABASE, uuidRepresentation="standard"
+                host=settings.MONGODB_GLOBAL_DATABASE_URL, username=settings.MONGODB_GLOBAL_DATABASE_USER,
+                password=settings.MONGODB_GLOBAL_DATABASE_PASSWORD,
+                uuidRepresentation="standard"
             )
         if self.mongo_client_global_db is None:
             return self.mongo_client["global_data"]
@@ -320,7 +322,6 @@ class PandaHub:
         return self.active_project.get("version", "0.2.2")
 
     def upgrade_project_to_latest_version(self):
-        from pandapower.io_utils import PPJSONEncoder
         # TODO check that user has right to write user_management
         # TODO these operations should be encapsulated in a transaction in order to avoid
         #      inconsistent Database states in case of occuring errors
@@ -349,7 +350,7 @@ class PandaHub:
                     try:
                         json.dumps(dat)
                     except:
-                        dat = f"serialized_{json.dumps(data, cls=PPJSONEncoder)}"
+                        dat = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
                     data[key] = dat
 
                 db["_networks"].find_one_and_update({"_id":d["_id"]},
@@ -582,7 +583,7 @@ class PandaHub:
 
         net = pp.create_empty_network()
 
-        if db[self._collection_name_of_element("bus")].find().count() == 0:
+        if db[self._collection_name_of_element("bus")].count_documents({}) == 0:
             net["empty"] = True
 
         # Add buses with filter
@@ -712,15 +713,31 @@ class PandaHub:
         max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
         _id = 0 if max_id_network is None else max_id_network["_id"] + 1
 
-        dfs, data, types = convert_dataframes_to_dicts(net, _id,
-                                                       version.parse(self.get_project_version()),
-                                                       self._datatypes)
-        self._write_net_collections_to_db(db, dfs)
+        data = {}
+        dtypes = {}
+        version_ = version.parse(self.get_project_version())
+        for element, element_data in net.items():
+            if element.startswith("_") or element.startswith("res"):
+                continue
+            if isinstance(element_data, pd.core.frame.DataFrame):
+                # create type lookup
+                dtypes[element] = get_dtypes(element_data, self._datatypes.get(element))
+                if element_data.empty:
+                    continue
+                # convert pandapower dataframe object to dict and save to db
+                element_data = convert_element_to_dict(element_data.copy(deep=True), _id, self._datatypes.get(element))
+                self._write_element_to_db(db, element, element_data)
 
+            else:
+                element_data = serialize_object_data(element, element_data, version_)
+                if element_data:
+                    data[element] = element_data
+
+        # write network metadata
         net_dict = {"_id": _id,
                     "name": name,
                     "sector": sector,
-                    "dtypes": types,
+                    "dtypes": dtypes,
                     "data": data}
 
         if metadata is not None:
@@ -728,9 +745,12 @@ class PandaHub:
         db["_networks"].insert_one(net_dict)
 
     def _write_net_collections_to_db(self, db, collections):
-        existing_collections = set(db.list_collection_names())
+        for element, element_data in collections.items():
+            self._write_element_to_db(db, element, element_data)
 
-        def add_index(element, df_dict):
+    def _write_element_to_db(self, db, element, element_data):
+        existing_collections = set(db.list_collection_names())
+        def add_index(element):
             columns = {"bus": ["net_id", "index"],
                        "line": ["net_id", "index", "from_bus", "to_bus"],
                        "trafo": ["net_id", "index", "hv_bus", "lv_bus"],
@@ -744,16 +764,16 @@ class PandaHub:
                 logger.info(f"creating index on '{c}' in collection '{element}'")
                 db[self._collection_name_of_element(element)].create_index([(c, DESCENDING)])
 
-        for element, df_dict in collections.items():
-            if len(df_dict) > 0:
-                collection_name = self._collection_name_of_element(element)
-                try:
-                    db[collection_name].insert_many(df_dict, ordered=False)
-                    if collection_name not in existing_collections:
-                        add_index(element, df_dict)
-                except:
-                    traceback.print_exc()
-                    print(f"\nFAILED TO WRITE TABLE '{element}' TO DATABASE! (details above)")
+
+        collection_name = self._collection_name_of_element(element)
+        if len(element_data) > 0:
+            try:
+                db[collection_name].insert_many(element_data, ordered=False)
+                if collection_name not in existing_collections:
+                    add_index(element)
+            except:
+                traceback.print_exc()
+                print(f"\nFAILED TO WRITE TABLE '{element}' TO DATABASE! (details above)")
 
     def delete_net_from_db(self, name):
         self.check_permission("write")
@@ -887,6 +907,9 @@ class PandaHub:
         element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
 
         target = db[collection].find_one(element_filter)
+        if target is None:
+            # element does not exist in net
+            return
         if variant and target["var_type"] == "base":
             db[collection].update_one({"_id": target["_id"]},
                                       {"$addToSet": {"not_in_var": variant}})
@@ -965,7 +988,7 @@ class PandaHub:
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             db[collection].find_one_and_update(
-                {**filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
+                {**element_filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
             )
         else:
             variant = int(variant)
@@ -1067,9 +1090,11 @@ class PandaHub:
     # Variants
     # -------------------------
 
-    def create_variant(self, data, dummy):
+    def create_variant(self, data):
         db = self._get_project_database()
-        max_index = list(db["variant"].find(projection={"_id": 0, "index": 1}).sort("index", -1).limit(1))
+        net_id = int(data["net_id"])
+        max_index = list(db["variant"].find({"net_id": net_id},
+                                            projection={"_id": 0, "index": 1}).sort("index", -1).limit(1))
         if not max_index:
             index = 1
             for coll in self._get_net_collections(db):
@@ -1090,23 +1115,22 @@ class PandaHub:
 
         return data
 
-    def delete_variant(self, index):
-        index = int(index)
+    def delete_variant(self, net_id, index):
         db = self._get_project_database()
         collection_names = self._get_net_collections(db)
         for coll in collection_names:
             # remove references to deleted objects
-            db[coll].update_many({"var_type": "base", "not_in_var": index},
+            db[coll].update_many({"net_id": net_id, "var_type": "base", "not_in_var": index},
                                  {"$pull": {"not_in_var": index}})
             # remove changes and additions
-            db[coll].delete_many({"var_type": {"$in": ["change", "addition"]},
+            db[coll].delete_many({"net_id": net_id, "var_type": {"$in": ["change", "addition"]},
                                   "variant": index})
         # delete variant
-        db["variant"].delete_one({"index": index})
+        db["variant"].delete_one({"net_id": net_id, "index": index})
 
-    def update_variant(self, index, data):
+    def update_variant(self, net_id, index, data):
         db = self._get_project_database()
-        db["variant"].update_one({"index": int(index)}, {"$set": data})
+        db["variant"].update_one({"net_id": net_id, "index": index}, {"$set": data})
 
     def get_variant_filter(self, variants):
         """
