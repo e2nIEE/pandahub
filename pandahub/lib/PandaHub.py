@@ -228,9 +228,10 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
 
     def set_active_project_by_id(self, project_id):
-        if not isinstance(project_id, ObjectId):
-            project_id = ObjectId(project_id)
-        self.active_project = self._get_project_document({"_id": project_id})
+        try:
+            self.active_project = self._get_project_document({"_id": ObjectId(project_id)})
+        except:
+            self.active_project = self._get_project_document({"_id": project_id})
 
     def rename_project(self, project_name):
         self.has_permission("write")
