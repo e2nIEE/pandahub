@@ -10,6 +10,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+from bson.errors import InvalidId
 from bson.objectid import ObjectId
 from pydantic.types import UUID4
 from pymongo import MongoClient, ReplaceOne, DESCENDING
@@ -229,9 +230,10 @@ class PandaHub:
 
     def set_active_project_by_id(self, project_id):
         try:
-            self.active_project = self._get_project_document({"_id": ObjectId(project_id)})
-        except:
-            self.active_project = self._get_project_document({"_id": project_id})
+            project_id = ObjectId(project_id)
+        except InvalidId:
+            pass
+        self.active_project = self._get_project_document({"_id": project_id})
 
     def rename_project(self, project_name):
         self.has_permission("write")
