@@ -311,11 +311,11 @@ class PandaHub:
 
     def _get_global_database(self):
         if self.mongo_client_global_db is None and settings.MONGODB_GLOBAL_DATABASE_URL is not None:
-            self.mongo_client_global_db = MongoClient(
-                host=settings.MONGODB_GLOBAL_DATABASE_URL, username=settings.MONGODB_GLOBAL_DATABASE_USER,
-                password=settings.MONGODB_GLOBAL_DATABASE_PASSWORD,
-                uuidRepresentation="standard"
-            )
+            mongo_client_args = {"host": settings.MONGODB_GLOBAL_DATABASE_URL, "uuidRepresentation": "standard"}
+            if settings.MONGODB_GLOBAL_DATABASE_USER:
+                mongo_client_args |= {"username": settings.MONGODB_GLOBAL_DATABASE_USER,
+                                      "password": settings.MONGODB_GLOBAL_DATABASE_PASSWORD}
+            self.mongo_client_global_db = MongoClient(**mongo_client_args)
         if self.mongo_client_global_db is None:
             return self.mongo_client["global_data"]
         else:
