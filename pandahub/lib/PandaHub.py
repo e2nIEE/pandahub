@@ -70,7 +70,8 @@ class PandaHub:
         self.base_variant_filter = {
             "$or": [
                 {"var_type": {"$exists": False}},
-                {"var_type": "base"}
+                {"var_type": "base"},
+                {"var_type": np.nan},
             ]
         }
         if check_server_available:
