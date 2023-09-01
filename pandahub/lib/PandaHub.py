@@ -883,22 +883,23 @@ class PandaHub:
         db = self._get_project_database()
         _id = self._get_id_from_name(net_name, db)
         collection = self._collection_name_of_element(element)
+        dtypes = self._datatypes.get(element)
+
         variant_filter = self.get_variant_filter(variant)
-        elements = list(db[collection].find({"index": element_index, "net_id": _id, **variant_filter}))
-        if len(elements) == 1:
-            element = elements[0]
+        documents = list(db[collection].find({"index": element_index, "net_id": _id, **variant_filter}))
+        if len(documents) == 1:
+            document = documents[0]
         else:
-            if len(elements) == 0:
+            if len(documents) == 0:
                 raise PandaHubError("Element doesn't exist", 404)
             else:
                 raise PandaHubError("Multiple elements found", 404)
-        dtypes = self._datatypes.get(element)
-        if parameter not in element:
+        if parameter not in document:
             raise PandaHubError("Parameter doesn't exist", 404)
         if dtypes is not None and parameter in dtypes:
-            return dtypes[parameter](element[parameter])
+            return dtypes[parameter](document[parameter])
         else:
-            return element[parameter]
+            return document[parameter]
 
     def delete_net_element(self, net_id, element, element_index, variant=None, project_id=None):
         if variant is not None:
