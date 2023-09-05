@@ -38,7 +38,6 @@ class WriteNetwork(BaseModel):
 
 @router.post("/write_network_to_db")
 def write_network_to_db(data: WriteNetwork, ph=Depends(pandahub)):
-    print("WRITING NET", data)
     params = data.dict()
     params["net"] = pp.from_json_string(params["net"])
     ph.write_network_to_db(**params)

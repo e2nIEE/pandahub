@@ -9,6 +9,8 @@ import logging
 import json
 import importlib
 logger = logging.getLogger(__name__)
+from pandapower.io_utils import PPJSONEncoder
+from packaging import version
 
 
 def get_document_hash(task):
@@ -80,8 +82,8 @@ def add_timestamp_info_to_document(document, timeseries, ts_format):
         document["first_timestamp"] = timeseries.index[0]
         document["last_timestamp"] = timeseries.index[-1]
     document["num_timestamps"] = len(timeseries.index)
-    document["max_value"] = timeseries.max().item()
-    document["min_value"] = timeseries.min().item()
+    document["max_value"] = timeseries.max()
+    document["min_value"] = timeseries.min()
     return document
 
 
@@ -111,7 +113,7 @@ def convert_timeseries_to_subdocuments(timeseries):
 def compress_timeseries_data(timeseries_data, ts_format):
     import blosc
     if ts_format == "timestamp_value":
-        timeseries_data = np.array([timeseries_data.index.astype(int), 
+        timeseries_data = np.array([timeseries_data.index.astype(int),
                                     timeseries_data.values])
         return blosc.compress(timeseries_data.tobytes(),
                               shuffle=blosc.SHUFFLE,
@@ -125,17 +127,17 @@ def compress_timeseries_data(timeseries_data, ts_format):
 def decompress_timeseries_data(timeseries_data, ts_format):
     import blosc
     if ts_format == "timestamp_value":
-        data = np.frombuffer(blosc.decompress(timeseries_data), 
-                             dtype=np.float64).reshape((35040,2), 
+        data = np.frombuffer(blosc.decompress(timeseries_data),
+                             dtype=np.float64).reshape((35040,2),
                                                        order="F")
         return pd.Series(data[:,1], index=pd.to_datetime(data[:,0]))
     elif ts_format == "array":
-        return np.frombuffer(blosc.decompress(timeseries_data), 
+        return np.frombuffer(blosc.decompress(timeseries_data),
                              dtype=np.float64)
-        
 
-def create_timeseries_document(timeseries, 
-                               data_type, 
+
+def create_timeseries_document(timeseries,
+                               data_type,
                                ts_format="timestamp_value",
                                compress_ts_data=False,
                                **kwargs):
@@ -185,17 +187,51 @@ def create_timeseries_document(timeseries,
     if not "_id" in document: # IDs set by users will not be overwritten
         document["_id"] = get_document_hash(document)
     if compress_ts_data:
-        document["timeseries_data"] = compress_timeseries_data(timeseries, 
+        document["timeseries_data"] = compress_timeseries_data(timeseries,
                                                                ts_format)
     else:
         if ts_format == "timestamp_value":
             document["timeseries_data"] = convert_timeseries_to_subdocuments(timeseries)
         elif ts_format == "array":
             document["timeseries_data"] = list(timeseries.values)
-    
+
     return document
 
-def convert_dataframes_to_dicts(net, _id, datatypes=None):
+def convert_element_to_dict(element_data, net_id, default_dtypes=None):
+    '''
+    Converts a pandapower pandas.DataFrame element into dictonary, casting columns to default dtypes.
+    * Columns of type Object are serialized to json
+    * Columns named "geo" or "*_geo" containing strings are parsed into dicts
+    * net_id and index (from element_data df index) are added as values
+
+    Parameters
+    ----------
+    element_data: pandas.DataFrame
+        pandapower element table to convert to dict
+    net_id: int
+        Network id
+    default_dtypes: dict
+        Default dtypes for columns in element_data
+
+    Returns
+    -------
+    dict
+        Record-orientated dict representation of element_data
+
+    '''
+    if default_dtypes is not None:
+        for column in element_data.columns:
+            if column in default_dtypes:
+                element_data[column] = element_data[column].astype(default_dtypes[column], errors="ignore")
+
+    if "object" in element_data.columns:
+        element_data["object"] = element_data["object"].apply(object_to_json)
+    element_data["index"] = element_data.index
+    element_data["net_id"] = net_id
+    load_geojsons(element_data)
+    return element_data.to_dict(orient="records")
+
+def convert_dataframes_to_dicts(net, net_id, version_, datatypes=None):
     if datatypes is None:
         datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
 
@@ -206,50 +242,84 @@ def convert_dataframes_to_dicts(net, _id, datatypes=None):
         if key.startswith("_") or key.startswith("res"):
             continue
         if isinstance(data, pd.core.frame.DataFrame):
-
             # ------------
             # create type lookup
-
-            types[key] = dict()
-            default_dtypes = datatypes.get(key)
-            if default_dtypes is not None:
-                types[key].update({key: dtype.__name__ for key, dtype in default_dtypes.items()})
-            types[key].update(
-                {
-                    column: str(dtype) for column, dtype in net[key].dtypes.items()
-                    if column not in types[key]
-                }
-            )
+            types[key] = get_dtypes(key, data, datatypes.get(key))
             if data.empty:
                 continue
-
             # ------------
             # convert pandapower objects in dataframes to dict
-
-            df = net[key].copy(deep=True)
-
-            # ------------
-            # cast all columns with their default datatype
-
-            if default_dtypes is not None:
-                for column in df.columns:
-                    if column in default_dtypes:
-                        df[column] = df[column].astype(default_dtypes[column], errors="ignore")
-
-            if "object" in df.columns:
-                df["object"] = df["object"].apply(object_to_json)
-            df["index"] = df.index
-            df["net_id"] = _id
-            load_geojsons(df)
-            dataframes[key] = df.to_dict(orient="records")
+            dataframes[key] = convert_element_to_dict(net[key].copy(deep=True), net_id, datatypes.get(key))
         else:
-            try:
-                json.dumps(data)
-            except:
-                print("Data in net[{}] is not JSON serializable and was therefore omitted on import".format(key))
-            else:
+            data = serialize_object_data(key, data, version_)
+            if data:
                 other_parameters[key] = data
+
     return dataframes, other_parameters, types
+
+def serialize_object_data(element, element_data, version_):
+    '''
+    Serialize a pandapower element which is not of type pandas.DataFrame into json.
+
+    Parameters
+    ----------
+    element: str
+        Name of the pandapower element
+    element_data: object
+        pandapower element data
+    version_:
+        pandahub version to target for serialization
+
+    Returns
+    -------
+    json
+        A json representation of the pandapower element
+    '''
+    if version_ <= version.parse("0.2.4"):
+        try:
+            element_data = json.dumps(element_data, cls=PPJSONEncoder)
+        except:
+            print(
+                "Data in net[{}] is not JSON serializable and was therefore omitted on import".format(element))
+        else:
+            return element_data
+    else:
+        try:
+            json.dumps(element_data)
+        except:
+            element_data = f"serialized_{json.dumps(element_data, cls=PPJSONEncoder)}"
+        return element_data
+
+
+def get_dtypes(element_data, default_dtypes):
+    '''
+    Construct data types from a pandas.DataFrame, with given defaults taking precedence.
+
+    Parameters
+    ----------
+    element_data: pandas.DataFrame
+        Input dataframe
+    default_dtypes: dict
+        Default datatypes definition
+
+    Returns
+    -------
+    dict
+        Datatypes for all columns present in element_data. Column type is taken from default_dtypes if defined,
+        otherwise directly from element_data
+
+    '''
+    types = {}
+    if default_dtypes is not None:
+        types.update({key: dtype.__name__ for key, dtype in default_dtypes.items()})
+    types.update(
+        {
+            column: str(dtype) for column, dtype in element_data.dtypes.items()
+            if column not in types
+        }
+    )
+    return types
+
 
 def load_geojsons(df):
     for column in df.columns:
@@ -257,17 +327,45 @@ def load_geojsons(df):
             df[column] = df[column].apply(lambda a: json.loads(a) if isinstance(a, str) else a)
 
 def convert_geojsons(df, geo_mode="string"):
+
+    def to_dict(geo):
+        if isinstance(geo, dict):
+            return geo
+        elif isinstance(geo, str):
+            return json.loads(geo)
+        elif hasattr(geo, "coords"):
+            return {"type": geo.type, "coordinates": geo.coords}
+
+    def to_string(geo):
+        if isinstance(geo, str):
+            return geo
+        elif isinstance(geo, dict):
+            return json.dumps(geo)
+        elif hasattr(geo, "coords"):
+            return json.dumps({"type": geo.type, "coordinates": geo.coords})
+
+    def to_shapely(geo):
+        from shapely.geometry import shape
+        if hasattr(geo, "coords"):
+            return geo
+        elif isinstance(geo, str):
+            return shape(json.loads(geo))
+        elif isinstance(geo, dict):
+            return shape(geo)
+
+    conv_func = None
     if geo_mode == "dict":
-        return
+        conv_func = to_dict
+    elif geo_mode == "string":
+        conv_func = to_string
+    elif geo_mode == "shapely":
+        conv_func = to_shapely
+    else:
+        raise NotImplementedError("Unknown geo_mode {}".format(geo_mode))
+
     for column in df.columns:
         if column == "geo" or column.endswith("_geo"):
-            if geo_mode == "string":
-                df[column] = df[column].apply(lambda a: json.dumps(a) if isinstance(a, dict) else a)
-            elif geo_mode == "shapely":
-                from shapely.geometry import shape
-                df[column] = df[column].apply(lambda a: shape(a) if isinstance(a, dict) else a)
-            else:
-                raise NotImplementedError("Unknown geo_mode {}".format(geo_mode))
+            df[column] = df[column].apply(conv_func)
 
 def json_to_object(js):
     _module = importlib.import_module(js["_module"])

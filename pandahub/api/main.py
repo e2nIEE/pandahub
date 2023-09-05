@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from pandahub.lib.PandaHub import PandaHubError
-from pandahub.api.routers import net, projects, timeseries, users, auth
+from pandahub.api.routers import net, projects, timeseries, users, auth, variants
 
 app = FastAPI()
 
@@ -25,6 +25,7 @@ app.include_router(projects.router)
 app.include_router(timeseries.router)
 app.include_router(users.router)
 app.include_router(auth.router)
+app.include_router(variants.router)
 
 
 @app.exception_handler(PandaHubError)

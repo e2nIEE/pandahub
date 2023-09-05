@@ -1,7 +1,11 @@
-import pandapower.networks as nw
-from pandahub import PandaHubError, PandaHub
-import pandapower as pp
 import pytest
+
+import pandapipes as pps
+import pandapipes.networks as nw_pps
+import pandapower as pp
+import pandapower.networks as nw_pp
+from pandahub import PandaHubError
+from pandapipes.toolbox import nets_equal
 
 
 def test_network_io(ph):
@@ -11,7 +15,7 @@ def test_network_io(ph):
     for cname in db.list_collection_names():
         db.drop_collection(cname)
 
-    net1 = nw.mv_oberrhein()
+    net1 = nw_pp.mv_oberrhein()
     name1 = "oberrhein_network"
     # for some unknown reason the format of mv_oberrhein does not match the latest pandapower format
     net1.gen.rename(columns={"qmax_mvar": "max_q_mvar", "qmin_mvar": "min_q_mvar"}, inplace=True)
@@ -20,11 +24,11 @@ def test_network_io(ph):
     del net1.impedance["x_pu"]
     del net1.dcline["cost_per_mw"]
 
-    net2 = nw.simple_four_bus_system()
-    pp.create_bus(net2, vn_kv=20, index=10) #check non-consecutive indices
+    net2 = nw_pp.simple_four_bus_system()
+    pp.create_bus(net2, vn_kv=20, index=10)  # check non-consecutive indices
     name2 = "simple_network"
 
-    #we check storing two different networks consecutively to ensure the nets are properly separated
+    # we check storing two different networks consecutively to ensure the nets are properly separated
     for net, name in [(net1, name1), (net2, name2)]:
         if ph.network_with_name_exists(name):
             ph.delete_net_from_db(name)
@@ -46,11 +50,11 @@ def test_network_io(ph):
         assert len(net3.line) == 0
         assert len(net3.load) == 0
 
-    #delete first network
+    # delete first network
     ph.delete_net_from_db(name1)
     assert ph.network_with_name_exists(name1) == False
 
-    #check that second network is still in database
+    # check that second network is still in database
     assert ph.network_with_name_exists(name2) == True
     net2_loaded = ph.get_net_from_db(name2)
     pp.runpp(net2_loaded)
@@ -62,7 +66,7 @@ def test_load_subnetwork(ph):
     name = "oberrhein_network"
 
     if not ph.network_with_name_exists(name):
-        net = nw.mv_oberrhein()
+        net = nw_pp.mv_oberrhein()
         ph.write_network_to_db(net, name)
 
     subnet = ph.get_subnet_from_db(name, bus_filter={"vn_kv": 110})
@@ -73,7 +77,7 @@ def test_load_subnetwork(ph):
         assert len(subnet["res_" + element]) == size
 
     subnet = ph.get_subnet_from_db(name, bus_filter={"vn_kv": 110},
-                    include_results=False)
+                                   include_results=False)
     for element, size in expected_sizes:
         assert len(subnet[element]) == size
         assert len(subnet["res_" + element]) == 0
@@ -91,7 +95,7 @@ def test_access_and_set_single_values(ph):
     ph.set_active_project("pytest")
     name = "oberrhein_network"
 
-    net = nw.mv_oberrhein()
+    net = nw_pp.mv_oberrhein()
     if not ph.network_with_name_exists(name):
         ph.write_network_to_db(net, name)
 
@@ -114,13 +118,39 @@ def test_access_and_set_single_values(ph):
     assert index not in net[element].index
 
 
+def test_pandapipes(ph):
+    ph.set_active_project('Awesome')
+    net = nw_pps.gas_versatility()
+    ph.write_network_to_db(net, 'versatility')
+    net2 = ph.get_net_from_db('versatility')
+    pps.pipeflow(net)
+    pps.pipeflow(net2)
+    assert nets_equal(net, net2, check_only_results=True)
+
+
+def test_get_set_single_value(ph):
+    ph.set_active_project('pytest')
+    net = nw_pp.mv_oberrhein()
+    ph.write_network_to_db(net, 'oberrhein')
+    val = ph.get_net_value_from_db('oberrhein', 'load', 0, 'p_mw')
+    assert val == net.load.at[0, 'p_mw']
+    ph.set_net_value_in_db('oberrhein', 'load', 0, 'p_mw', 0.5)
+    val = ph.get_net_value_from_db('oberrhein', 'load', 0, 'p_mw')
+    assert val == 0.5
+
+
 if __name__ == '__main__':
     from pandahub import PandaHub
 
     ph = PandaHub(connection_url="mongodb://localhost:27017")
-
-    test_network_io(ph)
-    0/0
+    ph.create_project('Awesome')
+    net = nw_pps.gas_versatility()
+    ph.write_network_to_db(net, 'versatility')
+    net2 = ph.get_net_from_db('versatility')
+    pps.pipeflow(net)
+    pps.pipeflow(net2)
+    # test_network_io(ph)
+    # 0 / 0
     # project_name = "pytest"
 
     # if ph.project_exists(project_name):
@@ -128,8 +158,8 @@ if __name__ == '__main__':
     #     ph.delete_project(i_know_this_action_is_final=True)
 
     # ph.create_project(project_name)
-    ph.set_active_project("pytest")
-    net = ph.get_net_from_db("oberrhein_network")
+    # ph.set_active_project("pytest")
+    # net = ph.get_net_from_db("oberrhein_network")
     # name = "oberrhein_network"
 
     # net = nw.mv_oberrhein()
@@ -153,5 +183,3 @@ if __name__ == '__main__':
     #     ph.get_net_value_from_db(name, element, index, parameter)
     # net = ph.get_net_from_db(name)
     # assert index not in net[element].index
-
-

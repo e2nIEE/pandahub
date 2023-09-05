@@ -29,7 +29,6 @@ class GetTimeSeriesModel(BaseModel):
 def get_timeseries_from_db(data: GetTimeSeriesModel, ph=Depends(pandahub)):
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
-    print("GETTING TIMESERIES FROM DB", data)
     ts = ph.get_timeseries_from_db(**data.dict())
     return ts.to_json(date_format="iso")
 
@@ -46,11 +45,25 @@ class MultiGetTimeSeriesModel(BaseModel):
 def multi_get_timeseries_from_db(data: MultiGetTimeSeriesModel, ph=Depends(pandahub)):
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
-    print("GETTING TS", data)
-    ts = ph.multi_get_timeseries_from_db(**data.dict())
+    ts = ph.multi_get_timeseries_from_db(**data.dict(), include_metadata=True)
     for i, data in enumerate(ts):
-        print("DATA", i, data)
         ts[i]["timeseries_data"] = data["timeseries_data"].to_json(date_format="iso")
+    return ts
+
+
+class GetTimeseriesMetadataModel(BaseModel):
+    project_id: str
+    filter_document: Optional[dict] = {}
+    global_database: Optional[bool] = False
+
+@router.post("/get_timeseries_metadata")
+def get_timeseries_metadata(data: GetTimeseriesMetadataModel, ph=Depends(pandahub)):
+    ph.set_active_project_by_id(data.project_id)
+    ts = ph.get_timeseries_metadata(
+        filter_document=data.filter_document,
+        global_database=data.global_database
+    )
+    ts = json.loads(ts.to_json(orient="index"))
     return ts
 
 
@@ -69,7 +82,6 @@ class WriteTimeSeriesModel(BaseModel):
 @router.post("/write_timeseries_to_db")
 def write_timeseries_to_db(data: WriteTimeSeriesModel, ph=Depends(pandahub)):
     data.timeseries = pd.Series(json.loads(data.timeseries))
-    print("WRITING TS", data.timeseries)
     data.timeseries.index = pd.to_datetime(data.timeseries.index)
     ph.write_timeseries_to_db(**data.dict())
     return True
