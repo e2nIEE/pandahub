@@ -330,7 +330,7 @@ class PandaHub:
         # TODO these operations should be encapsulated in a transaction in order to avoid
         #      inconsistent Database states in case of occuring errors
 
-        if version.parse(self.get_project_version()) < version.parse("0.2.3"):
+        if version.parse(self.get_project_version()) < version.parse("0.2.4"):
             db = self._get_project_database()
             all_collection_names = db.list_collection_names()
             old_net_collections = [name for name in all_collection_names if
@@ -555,7 +555,7 @@ class PandaHub:
         return net
 
     def deserialize_and_update_data(self, net, meta):
-        if version.parse(self.get_project_version()) <= version.parse("0.2.3"):
+        if version.parse(self.get_project_version()) <= version.parse("0.2.4"):
             if meta.get("sector", "power") == "power":
                 data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
                 net.update(data)

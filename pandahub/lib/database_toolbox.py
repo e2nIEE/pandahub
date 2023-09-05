@@ -275,7 +275,7 @@ def serialize_object_data(element, element_data, version_):
     json
         A json representation of the pandapower element
     '''
-    if version_ <= version.parse("0.2.3"):
+    if version_ <= version.parse("0.2.4"):
         try:
             element_data = json.dumps(element_data, cls=PPJSONEncoder)
         except:
