@@ -37,8 +37,8 @@ MAIL_USERNAME = os.getenv("MAIL_USERNAME") or "dummy@mail.de"
 MAIL_PASSWORD = os.getenv("MAIL_PASSWORD") or ""
 MAIL_PORT = os.getenv("MAIL_PORT") or 587
 MAIL_SMTP_SERVER = os.getenv("MAIL_SMTP_SERVER") or ""
-MAIL_TLS = os.getenv("MAIL_TLS") or True
-MAIL_SSL = os.getenv("MAIL_SSL") or False
+MAIL_SSL_TLS = os.getenv("MAIL_SSL_TLS") or True
+MAIL_STARTTLS = os.getenv("MAIL_STARTTLS") or False
 
 PASSWORD_RESET_URL = os.getenv("PASSWORD_RESET_URL") or ""
 EMAIL_VERIFY_URL = os.getenv("EMAIL_VERIFY_URL") or ""

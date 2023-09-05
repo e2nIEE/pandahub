@@ -3,7 +3,7 @@ import json
 import pandas as pd
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from pydantic.typing import Optional
+from typing import Optional
 
 from pandahub.api.dependencies import pandahub
 

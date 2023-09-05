@@ -15,7 +15,7 @@ from bson.errors import InvalidId
 from bson.objectid import ObjectId
 from functools import reduce
 from operator import getitem
-from pydantic.types import UUID4
+from uuid import UUID
 from pymongo import MongoClient, ReplaceOne
 from pymongo.errors import ServerSelectionTimeoutError
 
@@ -168,7 +168,7 @@ class PandaHub:
     def _get_user(self):
         user_mgmnt_db = self.mongo_client["user_management"]
         user = user_mgmnt_db["users"].find_one(
-            {"id": UUID4(self.user_id)}, projection={"_id": 0, "hashed_password": 0}
+            {"id": UUID(self.user_id)}, projection={"_id": 0, "hashed_password": 0}
         )
         return user
 
@@ -507,7 +507,7 @@ class PandaHub:
         self.check_permission("user_management")
         project_users = self.active_project["users"]
         users = self.mongo_client["user_management"]["users"].find(
-            {"id": {"$in": [UUID4(user_id) for user_id in project_users.keys()]}}
+            {"id": {"$in": [UUID(user_id) for user_id in project_users.keys()]}}
         )
         enriched_users = []
         for user in users:

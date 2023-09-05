@@ -78,7 +78,7 @@ def set_project_settings(data: SetProjectSettingsModel, ph=Depends(pandahub)):
 class SetProjectSettingsValueModel(BaseModel):
     project_id: str
     parameter: str
-    value: Any
+    value: Any = None
 
 @router.post("/set_project_settings_value")
 def set_project_settings_value(data: SetProjectSettingsValueModel, ph=Depends(pandahub)):

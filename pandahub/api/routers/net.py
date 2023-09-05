@@ -63,7 +63,7 @@ def get_net_value_from_db(data: GetNetValueModel, ph=Depends(pandahub)):
 class SetNetValueModel(BaseCRUDModel):
     element_index: int
     parameter: str
-    value: Any
+    value: Any = None
 
 @router.post("/set_net_value_in_db")
 def set_net_value_in_db(data: SetNetValueModel, ph=Depends(pandahub)):
