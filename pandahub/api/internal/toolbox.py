@@ -8,8 +8,8 @@ email_conf = ConnectionConfig(
     MAIL_FROM=settings.MAIL_USERNAME,
     MAIL_PORT=settings.MAIL_PORT,
     MAIL_SERVER=settings.MAIL_SMTP_SERVER,
-    MAIL_TLS=settings.MAIL_TLS,
-    MAIL_SSL=settings.MAIL_SSL
+    MAIL_SSL_TLS=settings.MAIL_SSL_TLS,
+    MAIL_STARTTLS=settings.MAIL_STARTTLS,
 )
 
 fast_mail = FastMail(email_conf)
