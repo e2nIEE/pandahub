@@ -6,7 +6,7 @@ import json
 import logging
 import traceback
 from inspect import signature, _empty
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -330,7 +330,7 @@ class PandaHub:
         # TODO these operations should be encapsulated in a transaction in order to avoid
         #      inconsistent Database states in case of occuring errors
 
-        if version.parse(self.get_project_version()) < version.parse("0.2.5"):
+        if version.parse(self.get_project_version()) < version.parse("0.2.3"):
             db = self._get_project_database()
             all_collection_names = db.list_collection_names()
             old_net_collections = [name for name in all_collection_names if
@@ -340,7 +340,7 @@ class PandaHub:
             for element in old_net_collections:
                 db[element].rename(self._collection_name_of_element(element))
 
-        if version.parse(self.get_project_version()) < version.parse("0.2.5"):
+        if version.parse(self.get_project_version()) < version.parse("0.2.3"):
             db = self._get_project_database()
             # for all networks
             for d in list(db["_networks"].find({}, projection={"sector":1, "data":1})):
@@ -514,6 +514,14 @@ class PandaHub:
     # Net handling
     # -------------------------
 
+    def get_all_nets_metadata_from_db(self, project_id=None):
+        if project_id:
+            self.set_active_project(project_id)
+        self.check_permission('read')
+        db = self._get_project_database()
+        return list(db['_networks'].find())
+
+
     def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None,
                         geo_mode="string", variants=[]):
         if project_id:
@@ -555,7 +563,7 @@ class PandaHub:
         return net
 
     def deserialize_and_update_data(self, net, meta):
-        if version.parse(self.get_project_version()) <= version.parse("0.2.5"):
+        if version.parse(self.get_project_version()) <= version.parse("0.2.3"):
             if meta.get("sector", "power") == "power":
                 data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
                 net.update(data)
@@ -1055,7 +1063,7 @@ class PandaHub:
         element_data["_id"] = insert_result.inserted_id
         return element_data
 
-    def create_elements_in_db(self, net: int|str, element_type: str, elements_data: list, project_id=None,
+    def create_elements_in_db(self, net: Union[int,str], element_type: str, elements_data: list, project_id=None,
                               variant=None):
         if project_id:
             self.set_active_project_by_id(project_id)
