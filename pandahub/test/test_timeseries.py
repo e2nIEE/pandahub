@@ -10,12 +10,12 @@ import simbench as sb
 code = "1-HV-urban--0--sw"
 project = "pytest"
 
-def test_from_tutorial(ph):   
+def test_from_tutorial(ph):
     ph.set_active_project(project)
     net = nw.simple_mv_open_ring_net()
     p_mw_profiles = np.random.randint(low=0, high=100, size=(35040, len(net.load))) / 100 * net.load.p_mw.values
     q_mvar_profiles = np.ones((35040, len(net.load)))
-    timestamps = pd.date_range(start="01/01/2020", end="31/12/2020", freq="15min", closed="right")
+    timestamps = pd.date_range(start="01/01/2020", end="31/12/2020", freq="15min")
     p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
     weekindex = p_mw_profiles.index[0:(7 * 96)]
     q_mvar_profiles = pd.DataFrame(q_mvar_profiles, index=timestamps)
@@ -66,7 +66,7 @@ def test_simbench_sinlge_ts(ph):
                                     data_type=data_type,
                                     collection_name=collection)
 
-    read_profile = ph.get_timeseries_from_db(netname=code, 
+    read_profile = ph.get_timeseries_from_db(netname=code,
                                                    element_index=int(i),
                                                    element_type=element_type,
                                                    data_type=data_type,
@@ -128,7 +128,7 @@ def test_del_single_ts_on_db(ph):
 
     # read again
     try:
-        ph.get_timeseries_from_db(netname=code, 
+        ph.get_timeseries_from_db(netname=code,
                                             element_index=int(i),
                                             element_type='load',
                                             data_type='p_mw',
@@ -141,10 +141,10 @@ def test_del_single_ts_on_db(ph):
 def test_bulk_ts_on_db(ph):
     ph.set_active_project(project)
     # write bulk cts to db
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(35040, 10))
-    timestamps = pd.date_range(start="01/01/2020", end="31/12/2020", freq="15min", closed="right")
+    p_mw_profiles = np.random.randint(low=0, high=100, size=(35041, 10))
+    timestamps = pd.date_range(start="01/01/2020", end="31/12/2020", freq="15min")
     p_mw_profiles_no_time = pd.DataFrame(copy.deepcopy(p_mw_profiles))
-    p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
+    p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps).convert_dtypes(int)
     ph.bulk_write_timeseries_to_db(p_mw_profiles, element_type="load", data_type="p_mw",
                             netname="bulk_write_net", collection_name="test_collection")
 
@@ -189,17 +189,17 @@ def test_bulk_ts_on_db(ph):
                                                   "element_type": "load",
                                                   }, collection_name="test_collection"
                                                  , pivot_by_column="element_index"
-                                                 
+
                                                  )
 
     assert len(del_res) == 0
 
 def test_add_metadata(ph):
     ph.set_active_project(project)
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(24, 10))
+    p_mw_profiles = np.random.randint(low=0, high=100, size=(25, 10))
     timestamps = pd.date_range(start="01/01/2020", end="01/02/2020",
-                               freq="60min", closed="right")
-    p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
+                               freq="60min")
+    p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps).convert_dtypes(int)
     ph.write_timeseries_to_db(p_mw_profiles[0],
                                     netname="test_add_metadata",
                                     element_index=0,
@@ -232,9 +232,9 @@ def test_add_metadata(ph):
 
 def test_bulk_write_with_meta(ph):
     ph.set_active_project(project)
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(96, 10))
-    timestamps = pd.date_range(start="01/01/2020", end="01/02/2020", freq="15min", closed="right")
-    p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
+    p_mw_profiles = np.random.randint(low=0, high=100, size=(97, 10))
+    timestamps = pd.date_range(start="01/01/2020", end="01/02/2020", freq="15min")
+    p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps).convert_dtypes(int)
     meta = pd.DataFrame(p_mw_profiles.max(), columns=["max"], dtype=object)
 
     ph.bulk_write_timeseries_to_db(p_mw_profiles, element_type="meta_test_load", data_type="p_mw",
@@ -256,17 +256,17 @@ def test_bulk_write_with_meta(ph):
 
 
 
-if __name__ == '__main__':  
+if __name__ == '__main__':
     from pandahub import PandaHub
 
     ph = PandaHub(connection_url="mongodb://localhost:27017")
 
     project_name = "pytest"
-    
+
     if ph.project_exists(project_name):
         ph.set_active_project(project_name)
         ph.delete_project(i_know_this_action_is_final=True)
-    
+
     ph.create_project(project_name)
     ph.set_active_project(project_name)
 
