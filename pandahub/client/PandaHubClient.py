@@ -39,7 +39,7 @@ class PandaHubClient:
                              error_on_missing_project=True):
         return self._post("/projects/delete_project", json=locals())
 
-    def project_exists(self, name):
+    def project_exists(self, project_name):
         return self._post("/projects/project_exists", json=locals()).json()
 
     def get_projects(self):
