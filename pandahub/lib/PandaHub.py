@@ -6,7 +6,7 @@ import json
 import logging
 import traceback
 from inspect import signature, _empty
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -1063,7 +1063,7 @@ class PandaHub:
         element_data["_id"] = insert_result.inserted_id
         return element_data
 
-    def create_elements_in_db(self, net: int|str, element_type: str, elements_data: list, project_id=None,
+    def create_elements_in_db(self, net: Union[int,str], element_type: str, elements_data: list, project_id=None,
                               variant=None):
         if project_id:
             self.set_active_project_by_id(project_id)
