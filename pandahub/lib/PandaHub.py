@@ -514,6 +514,14 @@ class PandaHub:
     # Net handling
     # -------------------------
 
+    def get_all_nets_metadata_from_db(self, project_id=None):
+        if project_id:
+            self.set_active_project(project_id)
+        self.check_permission('read')
+        db = self._get_project_database()
+        return list(db['_networks'].find())
+
+
     def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None,
                         geo_mode="string", variants=[]):
         if project_id:
