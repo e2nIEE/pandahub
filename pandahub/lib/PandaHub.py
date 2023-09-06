@@ -849,7 +849,7 @@ class PandaHub:
         if len(data) == 0:
             return
         if dtypes is None:
-            dtypes = db["_networks"].find_one({"_id": net_id}, projection={"dtypes"})
+            dtypes = db["_networks"].find_one({"_id": net_id}, projection={"dtypes"})['dtypes']
         df = pd.DataFrame.from_records(data, index="index")
         if element in dtypes:
             dtypes_found_columns = {
