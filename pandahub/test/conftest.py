@@ -5,7 +5,7 @@ from pandahub.client.user_management import _login
 
 @pytest.fixture(scope="session")
 def ph():
-    ph = PandaHub(connection_url="mongodb://admin:admin@localhost:27017")
+    ph = PandaHub(connection_url="mongodb://localhost:27017")
 
     project_name = "pytest"
 
@@ -23,7 +23,6 @@ def ph():
 
 @pytest.fixture(scope="session")
 def phc():
-    # _login("http://localhost:27017", 'admin', 'admin')
     phc = PandaHubClient()
 
     project_name = "pandahubclienttest"
