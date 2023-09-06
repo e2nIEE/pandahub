@@ -873,7 +873,7 @@ class PandaHub:
     # Net element handling
     # -------------------------
 
-    def get_net_value_from_db(self, net_name, element, element_index,
+    def get_net_value_from_db(self, net, element, element_index,
                               parameter, variant=None, project_id=None):
         if variant is not None:
             variant = int(variant)
@@ -881,12 +881,16 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        _id = self._get_id_from_name(net_name, db)
+        if type(net) == str:
+            net_id = self._get_id_from_name(net, db)
+        else:
+            net_id = net
+
         collection = self._collection_name_of_element(element)
         dtypes = self._datatypes.get(element)
 
         variant_filter = self.get_variant_filter(variant)
-        documents = list(db[collection].find({"index": element_index, "net_id": _id, **variant_filter}))
+        documents = list(db[collection].find({"index": element_index, "net_id": net_id, **variant_filter}))
         if len(documents) == 1:
             document = documents[0]
         else:
@@ -901,7 +905,7 @@ class PandaHub:
         else:
             return document[parameter]
 
-    def delete_net_element(self, net_id, element, element_index, variant=None, project_id=None):
+    def delete_net_element(self, net, element, element_index, variant=None, project_id=None):
         if variant is not None:
             variant = int(variant)
         if project_id:
@@ -909,6 +913,12 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         collection = self._collection_name_of_element(element)
+
+        if type(net) == str:
+            net_id = self._get_id_from_name(net, db)
+        else:
+            net_id = net
+
         element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
 
         target = db[collection].find_one(element_filter)
@@ -922,7 +932,7 @@ class PandaHub:
             db[collection].delete_one({"_id": target["_id"]})
         return target
 
-    def set_net_value_in_db(self, net_id, element, element_index,
+    def set_net_value_in_db(self, net, element, element_index,
                             parameter, value, variant=None, project_id=None):
         logger.info(f"Setting  {parameter} = {value} in {element} with index {element_index} and variant {variant}")
         if variant is not None:
@@ -935,7 +945,10 @@ class PandaHub:
         if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element)
-
+        if type(net) == str:
+            net_id = self._get_id_from_name(net, db)
+        else:
+            net_id = net
         element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
         document = db[collection].find_one({**element_filter})
         if not document:
@@ -970,7 +983,7 @@ class PandaHub:
                                           update_dict)
         return {"document": document, parameter: {"previous": old_value, "current": value}}
 
-    def set_object_attribute(self, net_id, element, element_index,
+    def set_object_attribute(self, net, element, element_index,
                              parameter, value, variant=None, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -980,6 +993,11 @@ class PandaHub:
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element)
+        if type(net) == str:
+            net_id = self._get_id_from_name(net, db)
+        else:
+            net_id = net
+
         js = list(db[collection].find({"index": element_index, "net_id": net_id}))[0]
         obj = json_to_object(js["object"])
         setattr(obj, parameter, value)
@@ -1014,12 +1032,17 @@ class PandaHub:
                 db[collection].update_one({"_id": document["_id"]},
                                           {"$set": {"object._object": obj}})
 
-    def create_element_in_db(self, net_id, element, element_index, data, variant=None, project_id=None):
+    def create_element_in_db(self, net, element, element_index, data, variant=None, project_id=None):
         logger.info(f"Creating element {element} with index {element_index} and variant {variant}, data: {data}")
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
+        if type(net) == str:
+            net_id = self._get_id_from_name(net, db)
+        else:
+            net_id = net
+
         element_data = {**data, **{"index": element_index, "net_id": int(net_id)}}
         if not variant:
             element_data.update(var_type="base", not_in_var=[])
@@ -1032,7 +1055,7 @@ class PandaHub:
         element_data["_id"] = insert_result.inserted_id
         return element_data
 
-    def create_elements_in_db(self, net_id: int, element_type: str, elements_data: list, project_id=None,
+    def create_elements_in_db(self, net: int|str, element_type: str, elements_data: list, project_id=None,
                               variant=None):
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -1042,6 +1065,11 @@ class PandaHub:
             var_data = {"var_type": "base", "not_in_var": []}
         else:
             var_data = {"var_type": "addition", "variant": int(variant)}
+        if type(net) == str:
+            net_id = self._get_id_from_name(net, db)
+        else:
+            net_id = net
+
         data = []
         for elm_data in elements_data:
             self._add_missing_defaults(db, net_id, element_type, elm_data)
