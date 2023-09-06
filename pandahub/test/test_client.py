@@ -10,7 +10,7 @@ def test_client_io(phc: PandaHubClient):
     phc.write_network_to_db(net, name='mv_oberrhein', overwrite=True)
     net_loaded = phc.get_net_from_db(name='mv_oberrhein')
 
-    assert len(net_loaded) == 0
+    assert len(net_loaded) != 0
 
 
 if __name__ == '__main__':
