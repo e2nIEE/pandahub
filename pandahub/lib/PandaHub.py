@@ -161,14 +161,14 @@ class PandaHub:
         user = user_mgmnt_db["users"].find_one({"email": email})
         if user is None:
             return None
-        if str(user["id"]) != self.user_id:
+        if str(user["_id"]) != self.user_id:
             self.check_permission("user_management")
         return user
 
     def _get_user(self):
         user_mgmnt_db = self.mongo_client["user_management"]
         user = user_mgmnt_db["users"].find_one(
-            {"id": UUID(self.user_id)}, projection={"_id": 0, "hashed_password": 0}
+            {"_id": UUID(self.user_id)}, projection= {"hashed_password": 0}
         )
         return user
 
@@ -507,13 +507,13 @@ class PandaHub:
         self.check_permission("user_management")
         project_users = self.active_project["users"]
         users = self.mongo_client["user_management"]["users"].find(
-            {"id": {"$in": [UUID(user_id) for user_id in project_users.keys()]}}
+            {"_id": {"$in": [UUID(user_id) for user_id in project_users.keys()]}}
         )
         enriched_users = []
         for user in users:
             enriched_users.append({
                 "email": user["email"],
-                "role": project_users[str(user["id"])]
+                "role": project_users[str(user["_id"])]
             })
         return enriched_users
 
@@ -522,7 +522,7 @@ class PandaHub:
         user = self.get_user_by_email(email)
         if user is None:
             return
-        user_id = user["id"]
+        user_id = user["_id"]
         self.mongo_client["user_management"]["projects"].update_one(
             {"_id": self.active_project["_id"]},
             {"$set": {f"users.{user_id}": role}}
@@ -534,7 +534,7 @@ class PandaHub:
         user = self.get_user_by_email(email)
         if user is None:
             return
-        user_id = user["id"]
+        user_id = user["_id"]
         self.mongo_client["user_management"]["projects"].update_one(
             {"_id": self.active_project["_id"]},
             {"$set": {f"users.{user_id}": new_role}}
@@ -546,9 +546,9 @@ class PandaHub:
             return
         # check permission only if the user tries to remove a different user to
         # allow leaving a project with just 'read' permission
-        if str(user["id"]) != self.user_id:
+        if str(user["_id"]) != self.user_id:
             self.check_permission("user_management")
-        user_id = user["id"]
+        user_id = user["_id"]
         self.mongo_client["user_management"]["projects"].update_one(
             {"_id": self.active_project["_id"]},
             {"$unset": {f"users.{user_id}": ""}}
