@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,8 +10,18 @@ from pandahub.api.routers import net, projects, timeseries, users, auth, variant
 from pandahub.api.internal.db import User, db, AccessToken
 from beanie import init_beanie
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_beanie(
+        database=db,
+        document_models=[
+            User,
+            AccessToken
+        ],
+    )
+    yield
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 origins = [
     "http://localhost:8080",
@@ -29,16 +41,6 @@ app.include_router(timeseries.router)
 app.include_router(User.router)
 app.include_router(auth.router)
 app.include_router(variants.router)
-
-@app.on_event("startup")
-async def on_startup():
-    await init_beanie(
-        database=db,
-        document_models=[
-            User,
-            AccessToken
-        ],
-    )
 
 
 @app.exception_handler(PandaHubError)
