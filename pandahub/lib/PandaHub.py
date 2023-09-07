@@ -1421,6 +1421,7 @@ class PandaHub:
                                              data_type,
                                              ts_format=ts_format,
                                              compress_ts_data=compress_ts_data,
+                                             element_index=col,
                                              **args)
             documents.append(doc)
         self.bulk_write_to_db(documents, collection_name=collection_name,

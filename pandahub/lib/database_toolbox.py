@@ -184,11 +184,12 @@ def create_timeseries_document(timeseries,
                 "compressed_ts_data": compress_ts_data}
     document = add_timestamp_info_to_document(document, timeseries, ts_format)
     document = {**document, **kwargs}
+
     if not "_id" in document: # IDs set by users will not be overwritten
         document["_id"] = get_document_hash(document)
+
     if compress_ts_data:
-        document["timeseries_data"] = compress_timeseries_data(timeseries,
-                                                               ts_format)
+        document["timeseries_data"] = compress_timeseries_data(timeseries, ts_format)
     else:
         if ts_format == "timestamp_value":
             document["timeseries_data"] = convert_timeseries_to_subdocuments(timeseries)

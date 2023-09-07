@@ -8,6 +8,24 @@ from pandahub import PandaHubError
 from pandapipes.toolbox import nets_equal
 
 
+def test_additional_res_tables(ph):
+    import pandas as pd
+    ph.set_active_project("pytest")
+
+    # reset project aka delete everything
+    db = ph._get_project_database()
+    for cname in db.list_collection_names():
+        db.drop_collection(cname)
+
+    net1 = pp.create_empty_network()
+    net1['res_test'] = pd.DataFrame(data={'col1': [1, 2], 'col2': [3, 4]})
+    ph.write_network_to_db(net1, 'test')
+    net2 = ph.get_net_from_db('test')
+
+    assert('res_test' in net2)
+    assert(net1.res_test.shape == (2,2))
+
+
 def test_network_io(ph):
     ph.set_active_project("pytest")
     # reset project aka delete everything

@@ -46,10 +46,10 @@ jobs:
         run: |
           python3 setup.py sdist --formats=zip
           twine check dist/* --strict
-          python3 -m twine upload dist/*
+          python3 -m twine upload dist/* --verbose
         env:
           TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.TESTPYPI }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
           TWINE_REPOSITORY: testpypi
 
       # Upload to PyPI
@@ -58,10 +58,10 @@ jobs:
         run: |
           python3 setup.py sdist --formats=zip
           twine check dist/* --strict
-          python3 -m twine upload dist/*
+          python3 -m twine upload dist/* --verbose
         env:
           TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
           TWINE_REPOSITORY: pypi
       # Make sure package is available on pypi
       - name: Sleep for 300s to make release available
