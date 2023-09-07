@@ -6,6 +6,7 @@ import pandapower.networks as nw
 
 def test_client_io(phc: PandaHubClient):
     phc.set_active_project("Manderbach")
+
     net = nw.mv_oberrhein()
     phc.write_network_to_db(net, name='mv_oberrhein', overwrite=True)
     net_loaded = phc.get_net_from_db(name='mv_oberrhein')
