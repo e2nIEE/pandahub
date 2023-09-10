@@ -108,3 +108,5 @@ ENV/
 .idea
 
 !pandahub/lib
+
+settings.py
