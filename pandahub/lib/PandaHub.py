@@ -917,10 +917,19 @@ class PandaHub:
             return document[parameter]
 
     def delete_net_element(self, net, element, element_index, variant=None, project_id=None):
+        return self.delete_net_elements(net, element, [element_index], variant, project_id)[0]
+
+    def delete_net_elements(self, net: Union[int, str], element: str, element_indexes: Union[list[int], int],
+                            variant: Union[int, list[int], None] = None, project_id: Union[str, None] = None) -> list[
+        dict]:
+
+        if isinstance(element_indexes, int):
+            element_indexes = [element_indexes]
         if variant is not None:
             variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
+
         self.check_permission("write")
         db = self._get_project_database()
         collection = self._collection_name_of_element(element)
@@ -930,18 +939,29 @@ class PandaHub:
         else:
             net_id = net
 
-        element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
+        element_filter = {"index": {"$in": element_indexes}, "net_id": int(net_id), **self.get_variant_filter(variant)}
 
-        target = db[collection].find_one(element_filter)
-        if target is None:
-            # element does not exist in net
-            return
-        if variant and target["var_type"] == "base":
-            db[collection].update_one({"_id": target["_id"]},
-                                      {"$addToSet": {"not_in_var": variant}})
+        deletion_targets = list(db[collection].find(element_filter))
+        if not deletion_targets:
+            return []
+
+        if variant:
+            delete_ids_variant, delete_ids = [], []
+            for target in deletion_targets:
+                delete_ids_variant.append(target["_id"]) if target["var_type"] == "base" else delete_ids.append(
+                    target["_id"])
+            db[collection].update_many({"_id": {"$in": delete_ids_variant}},
+                                       {"$addToSet": {"not_in_var": variant}})
         else:
-            db[collection].delete_one({"_id": target["_id"]})
-        return target
+            delete_ids = [target["_id"] for target in deletion_targets]
+        db[collection].delete_many({"_id": {"$in": delete_ids}})
+        return deletion_targets
+
+    def delete_multiple_elements(self, net, elements: dict[str, Union[list[int], int]], variant=None, project_id=None):
+        deleted = {}
+        for element_type, element_indexes in elements.items():
+            deleted[element_type] = self.delete_net_elements(net, element_type, element_indexes, variant, project_id)
+        return deleted
 
     def set_net_value_in_db(self, net, element, element_index,
                             parameter, value, variant=None, project_id=None):
