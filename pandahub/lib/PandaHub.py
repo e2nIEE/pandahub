@@ -954,11 +954,6 @@ class PandaHub:
         db[collection].delete_many({"_id": {"$in": delete_ids}})
         return deletion_targets
 
-    def delete_multiple_elements(self, net, elements: dict[str, Union[list[int], int]], variant=None, project_id=None):
-        deleted = {}
-        for element_type, element_indexes in elements.items():
-            deleted[element_type] = self.delete_net_elements(net, element_type, element_indexes, variant, project_id)
-        return deleted
 
     def set_net_value_in_db(self, net, element, element_index,
                             parameter, value, variant=None, project_id=None):
