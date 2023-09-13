@@ -1085,7 +1085,7 @@ class PandaHub:
             data.append({**elm_data, **var_data, "net_id": net_id})
         collection = self._collection_name_of_element(element_type)
         insert_result = db[collection].insert_many(data)
-        return [[z[0].update(_id=z[1]) for z in zip(data, insert_result.inserted_ids)]]
+        return [z[0] | {"_id": z[1]} for z in zip(data, insert_result.inserted_ids)]
 
     def _add_missing_defaults(self, db, net_id, element_type, element_data):
         func_str = f"create_{element_type}"
