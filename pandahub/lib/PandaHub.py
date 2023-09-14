@@ -916,12 +916,13 @@ class PandaHub:
     def delete_net_element(self, net, element, element_index, variant=None, project_id=None):
         return self.delete_net_elements(net, element, [element_index], variant, project_id)[0]
 
-    def delete_net_elements(self, net: Union[int, str], element: str, element_indexes: Union[list[int], int],
+    def delete_net_elements(self, net: Union[int, str], element: str, element_indexes: list[int],
                             variant: Union[int, list[int], None] = None, project_id: Union[str, None] = None) -> list[
         dict]:
 
-        if isinstance(element_indexes, int):
-            element_indexes = [element_indexes]
+        if not isinstance(element_indexes, list):
+            raise TypeError("Parameter element_indexes must be a list of ints!")
+
         if variant is not None:
             variant = int(variant)
         if project_id:
