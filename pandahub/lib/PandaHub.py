@@ -665,10 +665,15 @@ class PandaHub:
         self._add_element_from_collection(net, db, "switch", net_id, switch_filter,
                                           geo_mode=geo_mode, variants=variants, dtypes=dtypes)
 
+        substations_in_net = db["net_bus"].find({"net_id": net_id, "index": {"$in": buses}}, {"_id": 0, "substation": 1}).distinct("substation")
+        substation_filter = {"index": {"$in": substations_in_net}}
+        self._add_element_from_collection(net, db, "substation", net_id, substation_filter,
+                                          geo_mode=geo_mode, variants=variants, dtypes=dtypes)
+
         # add node elements
         node_elements = ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor", "storage"]
         branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
-        all_elements = node_elements + branch_elements + ["bus"]
+        all_elements = node_elements + branch_elements + ["bus", "substation"]
         all_elements = list(set(all_elements) - set(ignore_elements))
 
         # add all node elements that are connected to buses within the network
