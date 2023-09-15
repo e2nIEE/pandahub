@@ -1056,31 +1056,13 @@ class PandaHub:
                 db[collection].update_one({"_id": document["_id"]},
                                           {"$set": {"object._object": obj}})
 
-    def create_element_in_db(self, net, element, element_index, data, variant=None, project_id=None):
-        logger.info(f"Creating element {element} with index {element_index} and variant {variant}, data: {data}")
-        if project_id:
-            self.set_active_project_by_id(project_id)
-        self.check_permission("write")
-        db = self._get_project_database()
-        if type(net) == str:
-            net_id = self._get_id_from_name(net, db)
-        else:
-            net_id = net
+    def create_element_in_db(self, net: Union[int, str], element_type: str, element_index: int, data: dict,
+                             variant=None, project_id=None):
+        return self.create_elements_in_db(net, element_type, [{"index": element_index, **data}],
+                                          project_id, variant)[0]
 
-        element_data = {**data, **{"index": element_index, "net_id": int(net_id)}}
-        if not variant:
-            element_data.update(var_type="base", not_in_var=[])
-        else:
-            element_data.update(var_type="addition", variant=int(variant))
-        self._add_missing_defaults(db, net_id, element, element_data)
-        self._ensure_dtypes(element, element_data)
-        collection = self._collection_name_of_element(element)
-        insert_result = db[collection].insert_one(element_data)
-        element_data["_id"] = insert_result.inserted_id
-        return element_data
-
-    def create_elements_in_db(self, net: Union[int,str], element_type: str, elements_data: list, project_id=None,
-                              variant=None):
+    def create_elements_in_db(self, net: Union[int, str], element_type: str, elements_data: list[dict],
+                              project_id: str = None, variant: int = None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
