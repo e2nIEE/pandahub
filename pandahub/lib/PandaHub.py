@@ -760,7 +760,7 @@ class PandaHub:
         for element, element_data in collections.items():
             self._write_element_to_db(db, element, element_data)
 
-    def _write_element_to_db(self, db, element, element_data):
+    def _write_element_to_db(self, db, element_type, element_data):
         existing_collections = set(db.list_collection_names())
         def add_index(element):
             columns = {"bus": ["net_id", "index"],
@@ -777,15 +777,15 @@ class PandaHub:
                 db[self._collection_name_of_element(element)].create_index([(c, DESCENDING)])
 
 
-        collection_name = self._collection_name_of_element(element)
+        collection_name = self._collection_name_of_element(element_type)
         if len(element_data) > 0:
             try:
                 db[collection_name].insert_many(element_data, ordered=False)
                 if collection_name not in existing_collections:
-                    add_index(element)
+                    add_index(element_type)
             except:
                 traceback.print_exc()
-                print(f"\nFAILED TO WRITE TABLE '{element}' TO DATABASE! (details above)")
+                print(f"\nFAILED TO WRITE TABLE '{element_type}' TO DATABASE! (details above)")
 
     def delete_net_from_db(self, name):
         self.check_permission("write")
@@ -836,12 +836,12 @@ class PandaHub:
     def _get_network_metadata(self, db, net_id):
         return db["_networks"].find_one({"_id": net_id})
 
-    def _add_element_from_collection(self, net, db, element, net_id,
+    def _add_element_from_collection(self, net, db, element_type, net_id,
                                      filter=None, include_results=True,
                                      only_tables=None, geo_mode="string", variants=[], dtypes=None):
-        if only_tables is not None and not element in only_tables:
+        if only_tables is not None and not element_type in only_tables:
             return
-        if not include_results and element.startswith("res_"):
+        if not include_results and element_type.startswith("res_"):
             return
         variants_filter = self.get_variant_filter(variants)
         filter_dict = {"net_id": net_id, **variants_filter}
@@ -853,15 +853,15 @@ class PandaHub:
                 filter_dict = {**filter_dict, **filter, **filter_and}
             else:
                 filter_dict = {**filter_dict, **filter}
-        data = list(db[self._collection_name_of_element(element)].find(filter_dict))
+        data = list(db[self._collection_name_of_element(element_type)].find(filter_dict))
         if len(data) == 0:
             return
         if dtypes is None:
             dtypes = db["_networks"].find_one({"_id": net_id}, projection={"dtypes"})['dtypes']
         df = pd.DataFrame.from_records(data, index="index")
-        if element in dtypes:
+        if element_type in dtypes:
             dtypes_found_columns = {
-                column: dtype for column, dtype in dtypes[element].items() if column in df.columns
+                column: dtype for column, dtype in dtypes[element_type].items() if column in df.columns
             }
             df = df.astype(dtypes_found_columns, errors="ignore")
         df.index.name = None
@@ -870,18 +870,18 @@ class PandaHub:
         convert_geojsons(df, geo_mode)
         if "object" in df.columns:
             df["object"] = df["object"].apply(json_to_object)
-        if not element in net or net[element].empty:
-            net[element] = df
+        if not element_type in net or net[element_type].empty:
+            net[element_type] = df
         else:
-            new_rows = set(df.index) - set(net[element].index)
+            new_rows = set(df.index) - set(net[element_type].index)
             if new_rows:
-                net[element] = pd.concat([net[element], df.loc[list(new_rows)]])
+                net[element_type] = pd.concat([net[element_type], df.loc[list(new_rows)]])
 
     # -------------------------
     # Net element handling
     # -------------------------
 
-    def get_net_value_from_db(self, net, element, element_index,
+    def get_net_value_from_db(self, net, element_type, element_index,
                               parameter, variant=None, project_id=None):
         if variant is not None:
             variant = int(variant)
@@ -894,8 +894,8 @@ class PandaHub:
         else:
             net_id = net
 
-        collection = self._collection_name_of_element(element)
-        dtypes = self._datatypes.get(element)
+        collection = self._collection_name_of_element(element_type)
+        dtypes = self._datatypes.get(element_type)
 
         variant_filter = self.get_variant_filter(variant)
         documents = list(db[collection].find({"index": element_index, "net_id": net_id, **variant_filter}))
@@ -913,10 +913,10 @@ class PandaHub:
         else:
             return document[parameter]
 
-    def delete_net_element(self, net, element, element_index, variant=None, project_id=None):
-        return self.delete_net_elements(net, element, [element_index], variant, project_id)[0]
+    def delete_net_element(self, net, element_type, element_index, variant=None, project_id=None):
+        return self.delete_net_elements(net, element_type, [element_index], variant, project_id)[0]
 
-    def delete_net_elements(self, net: Union[int, str], element: str, element_indexes: list[int],
+    def delete_net_elements(self, net: Union[int, str], element_type: str, element_indexes: list[int],
                             variant: Union[int, list[int], None] = None, project_id: Union[str, None] = None) -> list[
         dict]:
 
@@ -930,7 +930,7 @@ class PandaHub:
 
         self.check_permission("write")
         db = self._get_project_database()
-        collection = self._collection_name_of_element(element)
+        collection = self._collection_name_of_element(element_type)
 
         if type(net) == str:
             net_id = self._get_id_from_name(net, db)
@@ -956,19 +956,19 @@ class PandaHub:
         return deletion_targets
 
 
-    def set_net_value_in_db(self, net, element, element_index,
+    def set_net_value_in_db(self, net, element_type, element_index,
                             parameter, value, variant=None, project_id=None):
-        logger.info(f"Setting  {parameter} = {value} in {element} with index {element_index} and variant {variant}")
+        logger.info(f"Setting  {parameter} = {value} in {element_type} with index {element_index} and variant {variant}")
         if variant is not None:
             variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        dtypes = self._datatypes.get(element)
+        dtypes = self._datatypes.get(element_type)
         if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
-        collection = self._collection_name_of_element(element)
+        collection = self._collection_name_of_element(element_type)
         if type(net) == str:
             net_id = self._get_id_from_name(net, db)
         else:
@@ -976,7 +976,7 @@ class PandaHub:
         element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
         document = db[collection].find_one({**element_filter})
         if not document:
-            raise UserWarning(f"No element '{element}' to change with index '{element_index}' in this variant")
+            raise UserWarning(f"No element '{element_type}' to change with index '{element_index}' in this variant")
 
         old_value = document.get(parameter, None)
         if old_value == value:
@@ -1007,16 +1007,16 @@ class PandaHub:
                                           update_dict)
         return {"document": document, parameter: {"previous": old_value, "current": value}}
 
-    def set_object_attribute(self, net, element, element_index,
+    def set_object_attribute(self, net, element_type, element_index,
                              parameter, value, variant=None, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        dtypes = self._datatypes.get(element)
+        dtypes = self._datatypes.get(element_type)
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
-        collection = self._collection_name_of_element(element)
+        collection = self._collection_name_of_element(element_type)
         if type(net) == str:
             net_id = self._get_id_from_name(net, db)
         else:
@@ -1042,7 +1042,7 @@ class PandaHub:
             element_filter = {**element_filter, **self.get_variant_filter(variant)}
             document = db[collection].find_one({**element_filter})
             if not document:
-                raise UserWarning(f"No element '{element}' to change with index '{element_index}' in this variant")
+                raise UserWarning(f"No element '{element_type}' to change with index '{element_index}' in this variant")
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             if document["var_type"] == "base":
@@ -1135,8 +1135,8 @@ class PandaHub:
                 if "g_us_per_km" not in element_data:
                     element_data["g_us_per_km"] = 0
 
-    def _ensure_dtypes(self, element, data):
-        dtypes = self._datatypes.get(element)
+    def _ensure_dtypes(self, element_type, data):
+        dtypes = self._datatypes.get(element_type)
         if dtypes is None:
             return
         for key, val in data.items():
