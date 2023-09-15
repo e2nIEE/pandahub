@@ -1059,13 +1059,55 @@ class PandaHub:
                 db[collection].update_one({"_id": document["_id"]},
                                           {"$set": {"object._object": obj}})
 
-    def create_element_in_db(self, net: Union[int, str], element_type: str, element_index: int, data: dict,
-                             variant=None, project_id=None):
-        return self.create_elements_in_db(net, element_type, [{"index": element_index, **data}],
+    def create_element(self, net: Union[int, str], element_type: str, element_index: int, element_data: dict,
+                       variant=None, project_id=None) -> dict:
+        """
+        Creates an element in the database.
+
+        Parameters
+        ----------
+        net: str or int
+            Network to add elements to, either as name or numeric id
+        element_type: str
+            Name of the element type (e.g. bus, line)
+        element_index: int
+            Index of the element to add
+        element_data: dict
+            Field-value dict to create element from
+        project_id: str or None
+            ObjectId (as str) of the project in which the network is stored. Defaults to current active project if None
+        variant: int or None
+            Variant index if elements should be created in a variant
+        Returns
+        -------
+        dict
+            The created element (element_data with added _id field)
+        """
+        return self.create_elements_in_db(net, element_type, [{"index": element_index, **element_data}],
                                           project_id, variant)[0]
 
-    def create_elements_in_db(self, net: Union[int, str], element_type: str, elements_data: list[dict],
-                              project_id: str = None, variant: int = None):
+    def create_elements(self, net: Union[int, str], element_type: str, elements_data: list[dict],
+                              project_id: str = None, variant: int = None) -> list[dict]:
+        """
+        Creates multiple elements of the same type in the database.
+
+        Parameters
+        ----------
+        net: str or int
+            Network to add elements to, either a name or numeric id
+        element_type: str
+            Name of the element type (e.g. bus, line)
+        elements_data: list of dict
+            Field-value dicts to create elements from - must include a valid "index" field!
+        project_id: str or None
+            ObjectId (as str) of the project in which the network is stored. Defaults to current active project if None
+        variant: int or None
+            Variant index if elements should be created in a variant
+        Returns
+        -------
+        list
+            A list of the created elements (elements_data with added _id fields)
+        """
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -1974,6 +2016,22 @@ class PandaHub:
         del_res = db[collection_name].delete_many(match_filter)
         return del_res
 
+    #### for
+
+    def create_element_in_db(self, net: Union[int, str], element_type: str, element_index: int, data: dict,
+                             variant=None, project_id=None):
+        warnings.warn(
+            "ph.create_element_in_db was renamed - use ph.create_element instead"
+        )
+        return self.create_element(net, element_type, element_index, data, variant, project_id)
+
+
+    def create_elements_in_db(self, net: Union[int, str], element_type: str, elements_data: list[dict],
+                              project_id: str = None, variant: int = None):
+        warnings.warn(
+            "ph.create_elements_in_db was renamed - use ph.create_elements instead"
+        )
+        return self.create_elements(net, element_type, elements_data, project_id, variant)
 
 if __name__ == '__main__':
     self = PandaHub()
