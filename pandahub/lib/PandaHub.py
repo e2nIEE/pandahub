@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-
 import builtins
 import importlib
 import json
 import logging
 import traceback
+import warnings
 from inspect import signature, _empty
 from typing import Optional, Union
 
@@ -916,13 +916,52 @@ class PandaHub:
         else:
             return document[parameter]
 
-    def delete_net_element(self, net, element_type, element_index, variant=None, project_id=None):
-        return self.delete_net_elements(net, element_type, [element_index], variant, project_id)[0]
+    def delete_element(self, net, element_type, element_index, variant=None, project_id=None):
+        """
+        Delete an element from the database.
 
-    def delete_net_elements(self, net: Union[int, str], element_type: str, element_indexes: list[int],
+        Parameters
+        ----------
+        net: str or int
+            Network to add elements to, either a name or numeric id
+        element_type: str
+            Name of the element type (e.g. bus, line)
+        element_index: int
+            Index of the element to delete
+        project_id: str or None
+            ObjectId (as str) of the project in which the network is stored. Defaults to current active project if None
+        variant: int or None
+            Variant index if elements should be created in a variant
+        Returns
+        -------
+        dict
+            The deleted element as dict with all fields
+        """
+        return self.delete_elements(net, element_type, [element_index], variant, project_id)[0]
+
+    def delete_elements(self, net: Union[int, str], element_type: str, element_indexes: list[int],
                             variant: Union[int, list[int], None] = None, project_id: Union[str, None] = None) -> list[
         dict]:
+        """
+        Delete multiple elements of the same type from the database.
 
+        Parameters
+        ----------
+        net: str or int
+            Network to add elements to, either a name or numeric id
+        element_type: str
+            Name of the element type (e.g. bus, line)
+        element_indexes: list of int
+            Indexes of the elements to delete
+        project_id: str or None
+            ObjectId (as str) of the project in which the network is stored. Defaults to current active project if None
+        variant: int or None
+            Variant index if elements should be created in a variant
+        Returns
+        -------
+        list
+            A list of deleted elements as dicts with all fields
+        """
         if not isinstance(element_indexes, list):
             raise TypeError("Parameter element_indexes must be a list of ints!")
 
@@ -1083,7 +1122,7 @@ class PandaHub:
         dict
             The created element (element_data with added _id field)
         """
-        return self.create_elements_in_db(net, element_type, [{"index": element_index, **element_data}],
+        return self.create_elements(net, element_type, [{"index": element_index, **element_data}],
                                           project_id, variant)[0]
 
     def create_elements(self, net: Union[int, str], element_type: str, elements_data: list[dict],
@@ -2032,6 +2071,20 @@ class PandaHub:
             "ph.create_elements_in_db was renamed - use ph.create_elements instead"
         )
         return self.create_elements(net, element_type, elements_data, project_id, variant)
+
+    def delete_net_element(self, net, element_type, element_index, variant=None, project_id=None):
+        warnings.warn(
+            "ph.delete_net_element was renamed - use ph.delete_element instead"
+        )
+        return self.delete_element(net, element_type, element_index, variant, project_id)
+
+    def delete_net_elements(self, net: Union[int, str], element_type: str, element_indexes: list[int],
+                            variant: Union[int, list[int], None] = None, project_id: Union[str, None] = None):
+        warnings.warn(
+            "ph.delete_net_elementS was renamed - use ph.delete_elementS instead"
+        )
+        return self.delete_elements(net, element_type, element_indexes,variant, project_id)
+
 
 if __name__ == '__main__':
     self = PandaHub()
