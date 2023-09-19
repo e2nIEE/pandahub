@@ -516,7 +516,7 @@ class PandaHub:
 
     def get_all_nets_metadata_from_db(self, project_id=None):
         if project_id:
-            self.set_active_project(project_id)
+            self.set_active_project_by_id(project_id)
         self.check_permission('read')
         db = self._get_project_database()
         return list(db['_networks'].find())
