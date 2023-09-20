@@ -37,7 +37,7 @@ setup(
     name='pandahub',
     packages=find_packages(),
     url='https://github.com/e2nIEE/pandahub',
-    version='0.2.7',
+    version='0.2.8',
     include_package_data=True,
     long_description_content_type='text/markdown',
     zip_safe=False,
