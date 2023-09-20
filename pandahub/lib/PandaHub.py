@@ -516,7 +516,7 @@ class PandaHub:
 
     def get_all_nets_metadata_from_db(self, project_id=None):
         if project_id:
-            self.set_active_project(project_id)
+            self.set_active_project_by_id(project_id)
         self.check_permission('read')
         db = self._get_project_database()
         return list(db['_networks'].find())
@@ -1085,7 +1085,7 @@ class PandaHub:
             data.append({**elm_data, **var_data, "net_id": net_id})
         collection = self._collection_name_of_element(element_type)
         insert_result = db[collection].insert_many(data)
-        return [[z[0].update(_id=z[1]) for z in zip(data, insert_result.inserted_ids)]]
+        return [z[0] | {"_id": z[1]} for z in zip(data, insert_result.inserted_ids)]
 
     def _add_missing_defaults(self, db, net_id, element_type, element_data):
         func_str = f"create_{element_type}"
@@ -1109,7 +1109,7 @@ class PandaHub:
             std_type = element_data["std_type"]
             net_doc = db["_networks"].find_one({"_id": net_id})
             if net_doc is not None:
-#                 std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
+                # std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
                 std_types = net_doc["data"]["std_types"]
                 if std_type in std_types:
                     element_data.update(std_types[std_type])
@@ -1238,7 +1238,7 @@ class PandaHub:
                       for d in data]
         db[collection_name].bulk_write(operations)
 
-    def bulk_update_in_db(self, data, document_ids, collection_name="tasks", global_database=False):
+    def bulk_update_in_db(self, data, document_ids, collection_name="tasks", global_database=False, project_id=None):
         """
         Updates any number of documents in the database at once, according to their
         document_ids.
@@ -1260,6 +1260,8 @@ class PandaHub:
         None.
 
         """
+        if project_id:
+            self.set_active_project_by_id(project_id)
         if global_database:
             db = self._get_global_database()
         else:
@@ -1367,6 +1369,7 @@ class PandaHub:
                                     compress_ts_data=False,
                                     global_database=False,
                                     collection_name="timeseries",
+                                    project_id=None,
                                     **kwargs):
         """
         This function can be used to write a pandas DataFrame, containing multiple
@@ -1412,6 +1415,8 @@ class PandaHub:
 
         """
         documents = []
+        if project_id:
+            self.set_active_project_by_id(project_id)
         for col in timeseries.columns:
             if meta_frame is not None:
                 args = {**kwargs, **meta_frame.loc[col]}
@@ -1430,7 +1435,7 @@ class PandaHub:
         return [d["_id"] for d in documents]
 
     def update_timeseries_in_db(self, new_ts_content, document_id, collection_name="timeseries",
-                                global_database=False):
+                                global_database=False, project_id=None):
 
         """
         This function can be used to append a timeseries to an existing timseries
@@ -1457,6 +1462,8 @@ class PandaHub:
         None.
 
         """
+        if project_id:
+            self.set_active_project_by_id(project_id)
         if global_database:
             db = self._get_global_database()
         else:
@@ -1469,7 +1476,7 @@ class PandaHub:
                                                 )
         # logger.info("document updated in database")
 
-    def bulk_update_timeseries_in_db(self, new_ts_content, document_ids, collection_name="timeseries",
+    def bulk_update_timeseries_in_db(self, new_ts_content, document_ids, project_id=None, collection_name="timeseries",
                                      global_database=False):
 
         """
@@ -1499,13 +1506,16 @@ class PandaHub:
         -------
         None
         """
+        if project_id:
+            self.set_active_project_by_id(project_id)
+
         documents = []
         for i in range(len(new_ts_content.columns)):
             col = new_ts_content.columns[i]
             document = {}
             document["timeseries_data"] = {"$each": convert_timeseries_to_subdocuments(new_ts_content[col])}
             documents.append(document)
-        self.bulk_update_in_db(documents, document_ids, project=project,
+        self.bulk_update_in_db(documents, document_ids, project_id=project_id,
                                collection_name="timeseries", global_database=global_database)
 
         # logger.debug(f"{len(documents)} documents added to database")
