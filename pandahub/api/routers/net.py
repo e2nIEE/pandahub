@@ -44,13 +44,15 @@ def write_network_to_db(data: WriteNetwork, ph=Depends(pandahub)):
 
 
 # -------------------------
-# Element handling
+# Element CRUD
 # -------------------------
 
-class GetNetValueModel(BaseModel):
+class BaseCRUDModel(BaseModel):
     project_id: str
     net_name: str
-    element: str
+    element_type: str
+
+class GetNetValueModel(BaseCRUDModel):
     element_index: int
     parameter: str
 
@@ -58,10 +60,7 @@ class GetNetValueModel(BaseModel):
 def get_net_value_from_db(data: GetNetValueModel, ph=Depends(pandahub)):
     return ph.get_net_value_from_db(**data.dict())
 
-class SetNetValueModel(BaseModel):
-    project_id: str
-    net_name: str
-    element: str
+class SetNetValueModel(BaseCRUDModel):
     element_index: int
     parameter: str
     value: Any
@@ -70,33 +69,45 @@ class SetNetValueModel(BaseModel):
 def set_net_value_in_db(data: SetNetValueModel, ph=Depends(pandahub)):
     return ph.set_net_value_in_db(**data.dict())
 
-class CreateElementModel(BaseModel):
-    project_id: str
-    net_name: str
-    element: str
+class CreateElementModel(BaseCRUDModel):
     element_index: int
-    data: dict
+    element_data: dict
+
+@router.post("/create_element")
+def create_element_in_db(data: CreateElementModel, ph=Depends(pandahub)):
+    return ph.create_element(**data.dict())
+
+class CreateElementsModel(BaseCRUDModel):
+    elements_data: list[dict[str,Any]]
+
+@router.post("/create_elements")
+def create_elements_in_db(data: CreateElementsModel, ph=Depends(pandahub)):
+    return ph.create_elements(**data.dict())
+
+class DeleteElementModel(BaseCRUDModel):
+    element_index: int
+
+@router.post("/delete_element")
+def delete_net_element(data: DeleteElementModel, ph=Depends(pandahub)):
+    return ph.delete_element(**data.dict())
+
+class DeleteElementsModel(BaseCRUDModel):
+    element_indexes: list[int]
+
+@router.post("/delete_elements")
+def delete_net_elements(data: DeleteElementsModel, ph=Depends(pandahub)):
+    return ph.delete_elements(**data.dict())
+
+### deprecated routes
 
 @router.post("/create_element_in_db")
 def create_element_in_db(data: CreateElementModel, ph=Depends(pandahub)):
-    return ph.create_element_in_db(**data.dict())
-
-class CreateElementsModel(BaseModel):
-    project_id: str
-    net_name: str
-    element_type: str
-    elements_data: list
+    return ph.create_element(**data.dict())
 
 @router.post("/create_elements_in_db")
 def create_elements_in_db(data: CreateElementsModel, ph=Depends(pandahub)):
-    return ph.create_elements_in_db(**data.dict())
-
-class DeleteElementModel(BaseModel):
-    project_id: str
-    net_name: str
-    element: str
-    element_index: int
+    return ph.create_elements(**data.dict())
 
 @router.post("/delete_net_element")
 def delete_net_element(data: DeleteElementModel, ph=Depends(pandahub)):
-    return ph.delete_net_element(**data.dict())
+    return ph.delete_element(**data.dict())
