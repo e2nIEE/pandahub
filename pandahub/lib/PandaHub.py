@@ -14,6 +14,7 @@ from bson.errors import InvalidId
 from bson.objectid import ObjectId
 from pydantic.types import UUID4
 from pymongo import MongoClient, ReplaceOne, DESCENDING
+from pymongo.errors import ServerSelectionTimeoutError
 
 import pandapipes as pps
 from pandapipes import from_json_string as from_json_pps
@@ -98,10 +99,10 @@ class PandaHub:
         Checks if the database is accessible
         """
         try:
-            status = self.find({}, collection_name="__connection_test_collection")
+            status = self.mongo_client.find({}, collection_name="__connection_test_collection")
             if status == []:
                 return "ok"
-        except (ServerSelectionTimeoutError, timeout) as e:
+        except (ServerSelectionTimeoutError) as e:
             return "connection timeout"
 
     # -------------------------
@@ -250,7 +251,7 @@ class PandaHub:
         self.has_permission("write")
         project_collection = self.mongo_client["user_management"].projects
         project_name = self.active_project["name"]
-        if self.project_exists(active_project_name, realm):
+        if self.project_exists(project_name, realm):
             raise PandaHubError("Can't change realm - project with this name already exists")
         project_collection.find_one_and_update({"_id": self.active_project["_id"]},
                                                {"$set": {"realm": realm}})
