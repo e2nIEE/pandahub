@@ -708,7 +708,7 @@ class PandaHub:
         return collection[4:]  # remove "net_" prefix
 
     def write_network_to_db(self, net, name, sector="power", overwrite=True, project_id=None,
-                            metadata=None):
+                            metadata=None, skip_results=False, ):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -729,7 +729,9 @@ class PandaHub:
         dtypes = {}
         version_ = version.parse(self.get_project_version())
         for element, element_data in net.items():
-            if element.startswith("_") or element.startswith("res"):
+            if skip_results and element.startswith("res"):
+                continue
+            if element.startswith("_"):
                 continue
             if isinstance(element_data, pd.core.frame.DataFrame):
                 # create type lookup
