@@ -6,7 +6,8 @@ import logging
 import traceback
 import warnings
 from inspect import signature, _empty
-from typing import Optional, Union, Any
+from pymongo.errors import ServerSelectionTimeoutError
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -916,7 +917,7 @@ class PandaHub:
         else:
             return document[parameter]
 
-    def delete_element(self, net, element_type, element_index, variant=None, project_id=None):
+    def delete_element(self, net, element_type, element_index, variant=None, project_id=None, **kwargs) -> dict:
         """
         Delete an element from the database.
 
@@ -937,11 +938,13 @@ class PandaHub:
         dict
             The deleted element as dict with all fields
         """
-        return self.delete_elements(net, element_type, [element_index], variant, project_id)[0]
+        return self.delete_elements(
+            net, element_type, [element_index], variant, project_id, **kwargs
+        )[0]
 
     def delete_elements(self, net: Union[int, str], element_type: str, element_indexes: list[int],
-                        variant: Union[int, list[int], None] = None, project_id: Union[str, None] = None) -> list[
-        dict[str, Any]]:
+                        variant: Union[int, list[int], None] = None, project_id: Union[str, None] = None, **kwargs) -> \
+        list[dict]:
         """
         Delete multiple elements of the same type from the database.
 
@@ -999,7 +1002,7 @@ class PandaHub:
 
 
     def set_net_value_in_db(self, net, element_type, element_index,
-                            parameter, value, variant=None, project_id=None):
+                            parameter, value, variant=None, project_id=None, **kwargs):
         logger.info(f"Setting  {parameter} = {value} in {element_type} with index {element_index} and variant {variant}")
         if variant is not None:
             variant = int(variant)
@@ -1099,7 +1102,7 @@ class PandaHub:
                                           {"$set": {"object._object": obj}})
 
     def create_element(self, net: Union[int, str], element_type: str, element_index: int, element_data: dict,
-                       variant=None, project_id=None) -> dict:
+                       variant=None, project_id=None, **kwargs) -> dict:
         """
         Creates an element in the database.
 
@@ -1123,10 +1126,10 @@ class PandaHub:
             The created element (element_data with added _id field)
         """
         return self.create_elements(net, element_type, [{"index": element_index, **element_data}],
-                                          project_id, variant)[0]
+                                    project_id, variant, **kwargs)[0]
 
     def create_elements(self, net: Union[int, str], element_type: str, elements_data: list[dict],
-                              project_id: str = None, variant: int = None) -> list[dict[str, Any]]:
+                        project_id: str = None, variant: int = None, **kwargs) -> list[dict]:
         """
         Creates multiple elements of the same type in the database.
 
@@ -1166,8 +1169,8 @@ class PandaHub:
             self._ensure_dtypes(element_type, elm_data)
             data.append({**elm_data, **var_data, "net_id": net_id})
         collection = self._collection_name_of_element(element_type)
-        insert_result = db[collection].insert_many(data)
-        return [z[0] | {"_id": z[1]} for z in zip(data, insert_result.inserted_ids)]
+        db[collection].insert_many(data, ordered=False)
+        return data
 
     def _add_missing_defaults(self, db, net_id, element_type, element_data):
         func_str = f"create_{element_type}"
