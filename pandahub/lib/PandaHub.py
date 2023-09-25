@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
+from functools import reduce
+from operator import getitem
 from pydantic.types import UUID4
 from pymongo import MongoClient, ReplaceOne, DESCENDING
 
@@ -377,6 +379,35 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
         return self.active_project["settings"]
+
+
+    def get_project_setting_value(self, setting, project_id=None):
+        """
+        Retrieve the value of a setting.
+
+        Parameters
+        ----------
+        setting: str
+            The setting to retrieve - use dot notation to index into nested settings.
+        project_id: str or None
+            The project id to retrieve the setting from. Applies to the current active project if None.
+        Returns
+        -------
+        Settings value or None
+            The settings' value if set in the database or None if the setting is not defined.
+        """
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        self.check_permission("read")
+        _id = self.active_project["_id"]
+        project_collection = self.mongo_client["user_management"]["projects"]
+        setting_string = f"settings.{setting}"
+        setting = project_collection.find_one({"_id": _id}, {"_id": 0, setting_string: 1})
+        try:
+            return reduce(getitem, setting_string.split("."), setting)
+        except KeyError:
+            return None
+
 
     def set_project_settings(self, settings, project_id=None):
         if project_id:
