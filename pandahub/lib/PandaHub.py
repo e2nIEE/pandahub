@@ -245,7 +245,7 @@ class PandaHub:
         realm = self.active_project["realm"]
         if self.project_exists(project_name, realm):
             raise PandaHubError("Can't rename - project with this name already exists")
-        project_collection.find_one_and_update({"_id": self.active_project["_id"]},
+        project_collection.update_one({"_id": self.active_project["_id"]},
                                                {"$set": {"name": project_name}})
         self.set_active_project(project_name, realm)
 
@@ -255,7 +255,7 @@ class PandaHub:
         project_name = self.active_project["name"]
         if self.project_exists(active_project_name, realm):
             raise PandaHubError("Can't change realm - project with this name already exists")
-        project_collection.find_one_and_update({"_id": self.active_project["_id"]},
+        project_collection.update_one({"_id": self.active_project["_id"]},
                                                {"$set": {"realm": realm}})
         self.set_active_project(project_name, realm)
 
@@ -360,11 +360,11 @@ class PandaHub:
                         dat = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
                     data[key] = dat
 
-                db["_networks"].find_one_and_update({"_id":d["_id"]},
+                db["_networks"].update_one({"_id":d["_id"]},
                                                     {"$set": {"data": data}})
 
         project_collection = self.mongo_client["user_management"].projects
-        project_collection.find_one_and_update({"_id": self.active_project["_id"]},
+        project_collection.update_one({"_id": self.active_project["_id"]},
                                                {"$set": {"version": __version__}})
         logger.info(f"upgraded projekt '{self.active_project['name']}' from version"
                     f" {self.get_project_version()} to version {__version__}")
@@ -416,7 +416,7 @@ class PandaHub:
         _id = self.active_project["_id"]
         new_settings = {**self.active_project["settings"], **settings}
         project_collection = self.mongo_client["user_management"]["projects"]
-        project_collection.find_one_and_update({"_id": _id}, {"$set": {"settings": new_settings}})
+        project_collection.update_one({"_id": _id}, {"$set": {"settings": new_settings}})
         self.active_project["settings"] = new_settings
 
     def set_project_settings_value(self, parameter, value, project_id=None):
@@ -426,7 +426,7 @@ class PandaHub:
         _id = self.active_project["_id"]
         project_collection = self.mongo_client["user_management"]["projects"]
         setting_string = "settings.{}".format(parameter)
-        project_collection.find_one_and_update({"_id": _id}, {"$set": {setting_string: value}})
+        project_collection.update_one({"_id": _id}, {"$set": {setting_string: value}})
         self.active_project["settings"][parameter] = value
 
     def get_project_metadata(self, project_id=None):
@@ -1098,7 +1098,7 @@ class PandaHub:
         js = list(db[collection].find({"index": element_index, "net_id": net_id}))[0]
         obj = json_to_object(js["object"])
         setattr(obj, parameter, value)
-        db[collection].find_one_and_update({"index": element_index, "net_id": net_id},
+        db[collection].update_one({"index": element_index, "net_id": net_id},
                                            {"$set": {"object._object": obj.to_json()}})
 
         element_filter = {"index": element_index, "net_id": int(net_id)}
@@ -1107,7 +1107,7 @@ class PandaHub:
             document = db[collection].find_one({**element_filter, **self.base_variant_filter})
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
-            db[collection].find_one_and_update(
+            db[collection].update_one(
                 {**element_filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
             )
         else:
@@ -1466,7 +1466,7 @@ class PandaHub:
                                               ts_format=ts_format,
                                               compress_ts_data=compress_ts_data,
                                               **kwargs)
-        db[collection_name].find_one_and_replace(
+        db[collection_name].replace_one(
             {"_id": document["_id"]},
             document,
             upsert=True
@@ -1583,10 +1583,8 @@ class PandaHub:
             self.check_permission("write")
             db = self._get_project_database()
         ts_update = {"timeseries_data": {"$each": convert_timeseries_to_subdocuments(new_ts_content)}}
-        db[collection_name].find_one_and_update({"_id": document_id},
-                                                {"$push": ts_update},
-                                                upsert=False
-                                                )
+        db[collection_name].update_one({"_id": document_id},
+                                                {"$push": ts_update},)
         # logger.info("document updated in database")
 
     def bulk_update_timeseries_in_db(self, new_ts_content, document_ids, project_id=None, collection_name="timeseries",
@@ -1805,7 +1803,7 @@ class PandaHub:
             raise PandaHubError
         meta_copy = {**meta_before.iloc[0].to_dict(), **add_meta}
         # write new metadata to mongo db
-        db[collection_name].find_one_and_replace({"_id": meta_before.index[0]},
+        db[collection_name].replace_one({"_id": meta_before.index[0]},
                                                  meta_copy, upsert=True)
         return meta_copy
 
