@@ -714,6 +714,8 @@ class PandaHub:
 
         # Add elements for which the user has provided a filter function
         for element, filter_func in additional_filters.items():
+            if element in ignore_elements:
+                continue
             element_filter = filter_func(buses)
             self._add_element_from_collection(net, db, element, net_id,
                                               element_filter=element_filter, geo_mode=geo_mode,
