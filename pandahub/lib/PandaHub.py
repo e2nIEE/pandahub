@@ -6,8 +6,8 @@ import logging
 import traceback
 import warnings
 from inspect import signature, _empty
-from pymongo.errors import ServerSelectionTimeoutError
-from typing import Optional, Union, Callable
+from collections.abc import Callable
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -609,15 +609,22 @@ class PandaHub:
                     value = json.loads(value[11:], cls=io_pp.PPJSONDecoder)
                 net[key] = value
 
-    def get_subnet_from_db(self, name, bus_filter=None, include_results=True,
-                           add_edge_branches=True, geo_mode="string", variants=[]):
+    def get_subnet_from_db(self,
+                           name,
+                           bus_filter=None,
+                           include_results=True,
+                           add_edge_branches=True,
+                           geo_mode="string",
+                           variants=[],
+                           additional_filters: dict[str, Callable[[pp.auxiliary.pandapowerNet], dict]] = {}):
         self.check_permission("read")
         db = self._get_project_database()
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
         return self.get_subnet_from_db_by_id(_id, bus_filter=bus_filter, include_results=include_results,
-                                             add_edge_branches=add_edge_branches, geo_mode=geo_mode, variants=variants)
+                                             add_edge_branches=add_edge_branches, geo_mode=geo_mode, variants=variants,
+                                             additional_filters=additional_filters)
 
     def get_subnet_from_db_by_id(
         self,
@@ -628,7 +635,7 @@ class PandaHub:
         geo_mode="string",
         variants=[],
         ignore_elements=[],
-        additional_filters: dict[str, Callable[[list[int]], dict]] = {}
+        additional_filters: dict[str, Callable[[pp.auxiliary.pandapowerNet], dict]] = {}
     ) -> pp.pandapowerNet:
         db = self._get_project_database()
         meta = self._get_network_metadata(db, net_id)
@@ -716,7 +723,7 @@ class PandaHub:
         for element, filter_func in additional_filters.items():
             if element in ignore_elements:
                 continue
-            element_filter = filter_func(buses)
+            element_filter = filter_func(net)
             self._add_element_from_collection(net, db, element, net_id,
                                               element_filter=element_filter, geo_mode=geo_mode,
                                               include_results=include_results,
