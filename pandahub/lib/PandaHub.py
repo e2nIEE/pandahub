@@ -1154,7 +1154,7 @@ class PandaHub:
             The created element (element_data with added _id field)
         """
         return self.create_elements(net, element_type, [{"index": element_index, **element_data}],
-                                    project_id, variant, **kwargs)[0]
+                                    project_id=project_id, variant=variant, **kwargs)[0]
 
     def create_elements(self, net: Union[int, str], element_type: str, elements_data: list[dict],
                         project_id: str = None, variant: int = None, **kwargs) -> list[dict]:
