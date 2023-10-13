@@ -79,31 +79,32 @@ class PandaHubClient:
     def set_net_value_in_db(self, net_name, element_type, element_index, parameter, value):
         return self._post("/net/set_net_value_in_db", json=locals())
 
-    def create_element(self, net_name, element_type, element_index, element_data):
+    def create_element(self, net, element_type, element_index, element_data):
         return self._post("/net/create_element", json=locals())
 
-    def create_elements(self, net_name, element_type, elements_data):
+    def create_elements(self, net, element_type, elements_data):
         return self._post("/net/create_elements", json=locals())
 
-    def delete_element(self, net_name, element_type, element_index):
+    def delete_element(self, net, element_type, element_index):
         return self._post("/net/delete_element", json=locals())
 
-    def delete_elements(self, net_name, element_type, element_index):
+    def delete_elements(self, net, element_type, element_index):
         return self._post("/net/delete_elements", json=locals())
 
 
     ### deprecated functions
 
-    def create_element_in_db(self, net_name, element_type, element_index, data):
-        warnings.warn("ph.create_element_in_db was renamed - use ph.create_element instead")
+    def create_element_in_db(self, net_name, element, element_index, data):
+        warnings.warn("create_element_in_db was renamed - use create_element instead!")
         return self._post("/net/create_element", json=locals())
 
     def create_elements_in_db(self, net_name, element_type, elements_data):
-        warnings.warn("ph.create_elements_in_db was renamed - use ph.create_elements instead")
+        warnings.warn("ph.create_elements_in_db was renamed - use ph.create_elements instead! "
+                      "Watch out for changed order of project_id and variant args")
         return self._post("/net/create_elements", json=locals())
 
     def delete_net_element(self, net_name, element, element_index):
-        warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead")
+        warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead!")
         return self._post("/net/delete_element", json=locals())
 
 

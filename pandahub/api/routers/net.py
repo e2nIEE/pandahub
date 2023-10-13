@@ -49,7 +49,7 @@ def write_network_to_db(data: WriteNetwork, ph=Depends(pandahub)):
 
 class BaseCRUDModel(BaseModel):
     project_id: str
-    net_name: str
+    net: str
     element_type: str
 
 class GetNetValueModel(BaseCRUDModel):
@@ -100,14 +100,27 @@ def delete_net_elements(data: DeleteElementsModel, ph=Depends(pandahub)):
 
 ### deprecated routes
 
+class CreateElementModelDeprecated(BaseModel):
+    project_id: str
+    net_name: str
+    element: str
+    element_index: int
+    data: dict
+
 @router.post("/create_element_in_db")
-def create_element_in_db(data: CreateElementModel, ph=Depends(pandahub)):
-    return ph.create_element(**data.dict())
+def create_element_in_db(data: CreateElementModelDeprecated, ph=Depends(pandahub)):
+    return ph.create_element_in_db(**data.dict())
 
 @router.post("/create_elements_in_db")
 def create_elements_in_db(data: CreateElementsModel, ph=Depends(pandahub)):
-    return ph.create_elements(**data.dict())
+    return ph.create_elements_in_db(**data.dict())
+
+class DeleteElementModelDeprecated(BaseModel):
+    project_id: str
+    net_name: str
+    element: str
+    element_index: int
 
 @router.post("/delete_net_element")
-def delete_net_element(data: DeleteElementModel, ph=Depends(pandahub)):
-    return ph.delete_element(**data.dict())
+def delete_net_element(data: DeleteElementModelDeprecated, ph=Depends(pandahub)):
+    return ph.delete_net_element(**data.dict())

@@ -970,7 +970,12 @@ class PandaHub:
             The deleted element as dict with all fields
         """
         return self.delete_elements(
-            net, element_type, [element_index], variant, project_id, **kwargs
+            net=net,
+            element_type=element_type,
+            element_indexes=[element_index],
+            variant=variant,
+            project_id=project_id,
+            **kwargs,
         )[0]
 
     def delete_elements(self, net: Union[int, str], element_type: str, element_indexes: list[int],
@@ -1156,11 +1161,17 @@ class PandaHub:
         dict
             The created element (element_data with added _id field)
         """
-        return self.create_elements(net, element_type, [{"index": element_index, **element_data}],
-                                    project_id=project_id, variant=variant, **kwargs)[0]
+        return self.create_elements(
+            net=net,
+            element_type=element_type,
+            elements_data=[{"index": element_index, **element_data}],
+            variant=variant,
+            project_id=project_id,
+            **kwargs,
+        )[0]
 
     def create_elements(self, net: Union[int, str], element_type: str, elements_data: list[dict],
-                        project_id: str = None, variant: int = None, **kwargs) -> list[dict]:
+                        variant: int = None, project_id: str = None, **kwargs) -> list[dict]:
         """
         Creates multiple elements of the same type in the database.
 
@@ -2089,20 +2100,41 @@ class PandaHub:
 
     #### deprecated functions
 
-    def create_element_in_db(self, net: Union[int, str], element_type: str, element_index: int, data: dict,
+    def create_element_in_db(self, net: Union[int, str], element: str, element_index: int, data: dict,
                              variant=None, project_id=None):
-        warnings.warn("ph.create_element_in_db was renamed - use ph.create_element instead")
-        return self.create_element(net, element_type, element_index, data, variant, project_id)
+        warnings.warn("ph.create_element_in_db was renamed - use ph.create_element instead!")
+        return self.create_element(
+            net=net,
+            element_type=element,
+            element_index=element_index,
+            element_data=data,
+            variant=variant,
+            project_id=project_id,
+        )
 
 
     def create_elements_in_db(self, net: Union[int, str], element_type: str, elements_data: list[dict],
                               project_id: str = None, variant: int = None):
-        warnings.warn("ph.create_elements_in_db was renamed - use ph.create_elements instead")
-        return self.create_elements(net, element_type, elements_data, project_id, variant)
+        warnings.warn("ph.create_elements_in_db was renamed - use ph.create_elements instead! "
+                      "Watch out for changed order of project_id and variant args")
+        return self.create_elements(
+            net=net,
+            element_type=element_type,
+            elements_data=elements_data,
+            variant=variant,
+            project_id=project_id,
+        )
 
-    def delete_net_element(self, net, element_type, element_index, variant=None, project_id=None):
-        warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead")
-        return self.delete_element(net, element_type, element_index, variant, project_id)
+
+    def delete_net_element(self, net, element, element_index, variant=None, project_id=None):
+        warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead!")
+        return self.delete_element(
+            net=net,
+            element_type=element,
+            element_index=element_index,
+            variant=variant,
+            project_id=project_id,
+        )
 
 
 if __name__ == '__main__':
