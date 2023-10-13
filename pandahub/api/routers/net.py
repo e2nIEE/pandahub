@@ -99,28 +99,15 @@ def delete_net_elements(data: DeleteElementsModel, ph=Depends(pandahub)):
     return ph.delete_elements(**data.dict())
 
 ### deprecated routes
-
-class CreateElementModelDeprecated(BaseModel):
-    project_id: str
-    net_name: str
-    element: str
-    element_index: int
-    data: dict
-
 @router.post("/create_element_in_db")
-def create_element_in_db(data: CreateElementModelDeprecated, ph=Depends(pandahub)):
-    return ph.create_element_in_db(**data.dict())
+def create_element_in_db(*args, **kwargs):
+    raise RuntimeError("create_element_in_db was deprecated - use create_element instead!")
 
 @router.post("/create_elements_in_db")
-def create_elements_in_db(data: CreateElementsModel, ph=Depends(pandahub)):
-    return ph.create_elements_in_db(**data.dict())
+def create_elements_in_db(*args, **kwargs):
+    raise RuntimeError("create_elements_in_db was deprecated - use create_elements instead!")
 
-class DeleteElementModelDeprecated(BaseModel):
-    project_id: str
-    net_name: str
-    element: str
-    element_index: int
 
 @router.post("/delete_net_element")
-def delete_net_element(data: DeleteElementModelDeprecated, ph=Depends(pandahub)):
-    return ph.delete_net_element(**data.dict())
+def delete_net_element(*args, **kwargs):
+    raise RuntimeError("delete_net_element was deprecated - use delete_element instead!")

@@ -94,18 +94,15 @@ class PandaHubClient:
 
     ### deprecated functions
 
-    def create_element_in_db(self, net_name, element, element_index, data):
-        warnings.warn("create_element_in_db was renamed - use create_element instead!")
-        return self._post("/net/create_element", json=locals())
+    def create_element_in_db(self, *args, **kwargs):
+        raise RuntimeError("create_element_in_db was deprecated - use create_element instead!")
 
-    def create_elements_in_db(self, net_name, element_type, elements_data):
-        warnings.warn("ph.create_elements_in_db was renamed - use ph.create_elements instead! "
+    def create_elements_in_db(self, *args, **kwargs):
+        raise RuntimeError("ph.create_elements_in_db was deprecated - use ph.create_elements instead! "
                       "Watch out for changed order of project_id and variant args")
-        return self._post("/net/create_elements", json=locals())
 
-    def delete_net_element(self, net_name, element, element_index):
-        warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead!")
-        return self._post("/net/delete_element", json=locals())
+    def delete_net_element(self, *args, **kwargs):
+        raise RuntimeError("ph.delete_net_element was deprecated - use ph.delete_element instead!")
 
 
     ### TIMESERIES
