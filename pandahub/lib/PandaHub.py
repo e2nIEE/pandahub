@@ -688,7 +688,7 @@ class PandaHub:
                             set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
             branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
             self._add_element_from_collection(net, db, "bus", net_id, geo_mode=geo_mode, variants=variants,
-                                              element_filter={"index": {"$in": branch_buses_outside}},
+                                              filter={"index": {"$in": branch_buses_outside}},
                                               dtypes=dtypes)
             buses = net.bus.index.tolist()
 
@@ -725,7 +725,7 @@ class PandaHub:
                 continue
             element_filter = filter_func(net)
             self._add_element_from_collection(net, db, element, net_id,
-                                              element_filter=element_filter, geo_mode=geo_mode,
+                                              filter=element_filter, geo_mode=geo_mode,
                                               include_results=include_results,
                                               variants=variants, dtypes=dtypes)
 
@@ -733,7 +733,7 @@ class PandaHub:
         for element in node_elements:
             element_filter = {"bus": {"$in": buses}}
             self._add_element_from_collection(net, db, element, net_id,
-                                              element_filter=element_filter, geo_mode=geo_mode,
+                                              filter=element_filter, geo_mode=geo_mode,
                                               include_results=include_results,
                                               variants=variants, dtypes=dtypes)
 
@@ -753,7 +753,7 @@ class PandaHub:
                 # all other tables (e.g. std_types) are loaded without filter
                 element_filter = None
             self._add_element_from_collection(net, db, table_name, net_id,
-                                              element_filter=element_filter, geo_mode=geo_mode,
+                                              filter=element_filter, geo_mode=geo_mode,
                                               include_results=include_results,
                                               variants=variants, dtypes=dtypes)
         self.deserialize_and_update_data(net, meta)
@@ -897,7 +897,7 @@ class PandaHub:
         return db["_networks"].find_one({"_id": net_id})
 
     def _add_element_from_collection(self, net, db, element_type, net_id,
-                                     element_filter=None, include_results=True,
+                                     filter=None, include_results=True,
                                      only_tables=None, geo_mode="string", variants=[], dtypes=None):
         if only_tables is not None and not element_type in only_tables:
             return
@@ -905,14 +905,14 @@ class PandaHub:
             return
         variants_filter = self.get_variant_filter(variants)
         filter_dict = {"net_id": net_id, **variants_filter}
-        if element_filter is not None:
-            if "$or" in filter_dict.keys() and "$or" in element_filter.keys():
+        if filter is not None:
+            if "$or" in filter_dict.keys() and "$or" in filter.keys():
                 # if 'or' is in both filters create 'and' with
                 # both to avoid override during filter merge
-                filter_and = {"$and": [{"$or": filter_dict.pop("$or")}, {"$or": element_filter.pop("$or")}]}
-                filter_dict = {**filter_dict, **element_filter, **filter_and}
+                filter_and = {"$and": [{"$or": filter_dict.pop("$or")}, {"$or": filter.pop("$or")}]}
+                filter_dict = {**filter_dict, **filter, **filter_and}
             else:
-                filter_dict = {**filter_dict, **element_filter}
+                filter_dict = {**filter_dict, **filter}
 
         data = list(db[self._collection_name_of_element(element_type)].find(filter_dict))
         if len(data) == 0:
