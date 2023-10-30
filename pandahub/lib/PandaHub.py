@@ -16,17 +16,25 @@ from bson.objectid import ObjectId
 from functools import reduce
 from operator import getitem
 from pydantic.types import UUID4
-from pymongo import MongoClient, ReplaceOne, DESCENDING
+from pymongo import MongoClient, ReplaceOne
 from pymongo.errors import ServerSelectionTimeoutError
 
 import pandapipes as pps
 from pandapipes import from_json_string as from_json_pps
 import pandapower as pp
 import pandapower.io_utils as io_pp
-from pandahub.api.internal import settings
-from pandahub.lib.database_toolbox import create_timeseries_document, convert_timeseries_to_subdocuments, \
-    convert_element_to_dict, json_to_object, serialize_object_data, get_dtypes
-from pandahub.lib.database_toolbox import decompress_timeseries_data, convert_geojsons
+import pandahub.api.internal.settings as SETTINGS
+from pandahub.lib.database_toolbox import (
+    create_timeseries_document,
+    convert_timeseries_to_subdocuments,
+    convert_element_to_dict,
+    json_to_object,
+    serialize_object_data,
+    get_dtypes,
+    decompress_timeseries_data,
+    convert_geojsons,
+)
+from pandahub.lib.mongodb_indexes import mongodb_indexes
 
 logger = logging.getLogger(__name__)
 from pandahub import __version__
@@ -55,14 +63,14 @@ class PandaHub:
         "user_management": ["owner"]
     }
 
-    _datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
+    _datatypes = getattr(importlib.import_module(SETTINGS.DATATYPES_MODULE), "datatypes")
 
     # -------------------------
     # Initialization
     # -------------------------
 
-    def __init__(self, connection_url=settings.MONGODB_URL, connection_user = settings.MONGODB_USER,
-                 connection_password=settings.MONGODB_PASSWORD, check_server_available=False, user_id=None):
+    def __init__(self, connection_url=SETTINGS.MONGODB_URL, connection_user = SETTINGS.MONGODB_USER,
+                 connection_password=SETTINGS.MONGODB_PASSWORD, check_server_available=False, user_id=None):
 
         mongo_client_args = {"host": connection_url, "uuidRepresentation": "standard", "connect":False}
         if connection_user:
@@ -78,6 +86,7 @@ class PandaHub:
                 {"var_type": np.nan},
             ]
         }
+        self.mongodb_indexes = mongodb_indexes
         if check_server_available:
             self.server_is_available()
 
@@ -185,6 +194,8 @@ class PandaHub:
         if self.user_id is not None:
             project_data["users"] = {self.user_id: "owner"}
         self.mongo_client["user_management"]["projects"].insert_one(project_data)
+        if SETTINGS.CREATE_INDEXES_WITH_PROJECT:
+            self._create_mongodb_indexes(project_data["_id"])
         if activate:
             self.set_active_project(name, realm)
         return project_data
@@ -315,11 +326,11 @@ class PandaHub:
         return self.mongo_client[str(self.active_project["_id"])]
 
     def _get_global_database(self):
-        if self.mongo_client_global_db is None and settings.MONGODB_GLOBAL_DATABASE_URL is not None:
-            mongo_client_args = {"host": settings.MONGODB_GLOBAL_DATABASE_URL, "uuidRepresentation": "standard"}
-            if settings.MONGODB_GLOBAL_DATABASE_USER:
-                mongo_client_args |= {"username": settings.MONGODB_GLOBAL_DATABASE_USER,
-                                      "password": settings.MONGODB_GLOBAL_DATABASE_PASSWORD}
+        if self.mongo_client_global_db is None and SETTINGS.MONGODB_GLOBAL_DATABASE_URL is not None:
+            mongo_client_args = {"host": SETTINGS.MONGODB_GLOBAL_DATABASE_URL, "uuidRepresentation": "standard"}
+            if SETTINGS.MONGODB_GLOBAL_DATABASE_USER:
+                mongo_client_args |= {"username": SETTINGS.MONGODB_GLOBAL_DATABASE_USER,
+                                      "password": SETTINGS.MONGODB_GLOBAL_DATABASE_PASSWORD}
             self.mongo_client_global_db = MongoClient(**mongo_client_args)
         if self.mongo_client_global_db is None:
             return self.mongo_client["global_data"]
@@ -822,30 +833,12 @@ class PandaHub:
 
     def _write_element_to_db(self, db, element_type, element_data):
         existing_collections = set(db.list_collection_names())
-        def add_index(element):
-            columns = {"bus": ["net_id", "index"],
-                       "line": ["net_id", "index", "from_bus", "to_bus"],
-                       "trafo": ["net_id", "index", "hv_bus", "lv_bus"],
-                       "switch": ["net_id", "index", "bus", "element", "et"],
-                       "substation": ["net_id", "index"],
-                       "area": ["net_id", "index", "name"]}.get(element, [])
-            if element in ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor",
-                           "storage"]:
-                columns = ["net_id", "bus"]
-            for c in columns:
-                logger.info(f"creating index on '{c}' in collection '{element}'")
-                db[self._collection_name_of_element(element)].create_index([(c, DESCENDING)])
-
-
         collection_name = self._collection_name_of_element(element_type)
         if len(element_data) > 0:
-            try:
-                db[collection_name].insert_many(element_data, ordered=False)
-                if collection_name not in existing_collections:
-                    add_index(element_type)
-            except:
-                traceback.print_exc()
-                print(f"\nFAILED TO WRITE TABLE '{element_type}' TO DATABASE! (details above)")
+            if collection_name not in existing_collections:
+                self._create_mongodb_indexes(collection=collection_name)
+            db[collection_name].insert_many(element_data, ordered=False)
+            # print(f"\nFAILED TO WRITE TABLE '{element_type}' TO DATABASE! (details above)")
 
     def delete_net_from_db(self, name):
         self.check_permission("write")
@@ -1279,6 +1272,36 @@ class PandaHub:
         for key, val in data.items():
             if not val is None and key in dtypes and not dtypes[key] == object:
                 data[key] = dtypes[key](val)
+
+    def _create_mongodb_indexes(self, project_id: Optional[str]=None, collection: Optional["str"]=None):
+        """
+        Create indexes on mongodb collections. Indexes are defined in pandahub.lib.mongodb_indexes
+
+        Parameters
+        ----------
+        project_id: str or None
+            Project to create indexes in - if None, current active project is used.
+        collection: str or None
+            Single collection to create index for - if None, alle defined Indexes are created.
+
+        Returns
+        -------
+        None
+        """
+        if project_id:
+            project_db = self.mongo_client[str(project_id)]
+        else:
+            project_db = self._get_project_database()
+        if collection:
+            if collection in self.mongodb_indexes:
+                indexes_to_set = {collection: self.mongodb_indexes[collection]}
+            else:
+                return
+        else:
+            indexes_to_set = self.mongodb_indexes
+        for collection, indexes in indexes_to_set.items():
+            logger.info(f"creating indexes in {collection} collection")
+            project_db[collection].create_indexes(indexes)
 
     # -------------------------
     # Variants
