@@ -102,4 +102,32 @@ mongodb_indexes = {
         IndexModel([("from_junction", DESCENDING)]),
         IndexModel([("to_junction", DESCENDING)]),
     ],
+    "net_area": [
+        IndexModel(
+            [("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)],
+            unique=True,
+        ),
+        IndexModel([("index", DESCENDING)]),
+        IndexModel([("buses", DESCENDING)]),
+        IndexModel([("lines", DESCENDING)]),
+        IndexModel([("connection_points", DESCENDING)]),
+        IndexModel([("feeders", DESCENDING)]),
+        IndexModel([("trafos", DESCENDING)]),
+        IndexModel([("substations", DESCENDING)]),
+        IndexModel([("type", DESCENDING)]),
+        IndexModel([("substation_buses", DESCENDING)]),
+        IndexModel([("level", DESCENDING)]),
+        IndexModel([("geo", GEOSPHERE)]),
+        IndexModel([("variant", DESCENDING)]),
+    ],
+    "net_substation": [
+        IndexModel(
+            [("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)],
+            unique=True,
+        ),
+        IndexModel([("index", DESCENDING)]),
+        IndexModel([("type", DESCENDING)]),
+        IndexModel([("level", DESCENDING)]),
+        IndexModel([("geo", GEOSPHERE)]),
+    ],
 }
