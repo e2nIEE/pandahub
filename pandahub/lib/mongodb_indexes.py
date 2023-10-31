@@ -58,4 +58,48 @@ mongodb_indexes = {
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("bus", DESCENDING)]),
     ],
+    "net_water_tank": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("junction", DESCENDING)]),
+    ],
+    "net_flow_control": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("from_junction", DESCENDING)]),
+        IndexModel([("to_junction", DESCENDING)]),
+    ],
+    "net_press_control": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("from_junction", DESCENDING)]),
+        IndexModel([("to_junction", DESCENDING)]),
+    ],
+    "net_compressor": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("from_junction", DESCENDING)]),
+        IndexModel([("to_junction", DESCENDING)]),
+    ],
+    "net_pump": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("from_junction", DESCENDING)]),
+        IndexModel([("to_junction", DESCENDING)]),
+    ],
+    "net_circ_pump_mass": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("return_junction", DESCENDING)]),
+        IndexModel([("flow_junction", DESCENDING)]),
+    ],
+    "net_circ_pump_pressure": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("return_junction", DESCENDING)]),
+        IndexModel([("flow_junction", DESCENDING)]),
+    ],
+    "net_heat_exchanger": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("from_junction", DESCENDING)]),
+        IndexModel([("to_junction", DESCENDING)]),
+    ],
+    "net_heat_consumer": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("from_junction", DESCENDING)]),
+        IndexModel([("to_junction", DESCENDING)]),
+    ],
 }
