@@ -1,6 +1,7 @@
 from pymongo import DESCENDING, GEOSPHERE, IndexModel
 
 mongodb_indexes = {
+    # pandapower
     "net_bus": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("geo", GEOSPHERE)]),
@@ -37,6 +38,7 @@ mongodb_indexes = {
     "net_ext_grid": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("bus", DESCENDING)]),
+        IndexModel([("junction", DESCENDING)]),
     ],
     "net_shunt": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
@@ -57,6 +59,31 @@ mongodb_indexes = {
     "net_storage": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("bus", DESCENDING)]),
+    ],
+
+    # pandapipes
+    "net_junction": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("geo", GEOSPHERE)]),
+    ],
+    "net_pipe": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("from_junction", DESCENDING)]),
+        IndexModel([("to_junction", DESCENDING)]),
+        IndexModel([("geo", GEOSPHERE)]),
+    ],
+    "net_valve": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("from_junction", DESCENDING)]),
+        IndexModel([("to_junction", DESCENDING)]),
+    ],
+    "net_sink": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("junction", DESCENDING)]),
+    ],
+    "net_source": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("junction", DESCENDING)]),
     ],
     "net_water_tank": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
@@ -102,6 +129,8 @@ mongodb_indexes = {
         IndexModel([("from_junction", DESCENDING)]),
         IndexModel([("to_junction", DESCENDING)]),
     ],
+
+    # others
     "net_area": [
         IndexModel(
             [("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)],
