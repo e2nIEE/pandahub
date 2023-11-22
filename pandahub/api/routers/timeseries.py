@@ -30,7 +30,7 @@ class GetTimeSeriesModel(BaseModel):
 def get_timeseries_from_db(data: GetTimeSeriesModel, ph=Depends(pandahub)):
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
-    ts = ph.get_timeseries_from_db(**data.dict())
+    ts = ph.get_timeseries_from_db(**data.model_dump())
     return ts.to_json(date_format="iso")
 
 
@@ -47,7 +47,7 @@ class MultiGetTimeSeriesModel(BaseModel):
 def multi_get_timeseries_from_db(data: MultiGetTimeSeriesModel, ph=Depends(pandahub)):
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
-    ts = ph.multi_get_timeseries_from_db(**data.dict(), include_metadata=True)
+    ts = ph.multi_get_timeseries_from_db(**data.model_dump(), include_metadata=True)
     for i, data in enumerate(ts):
         ts[i]["timeseries_data"] = data["timeseries_data"].to_json(date_format="iso")
     return ts
@@ -85,5 +85,5 @@ class WriteTimeSeriesModel(BaseModel):
 def write_timeseries_to_db(data: WriteTimeSeriesModel, ph=Depends(pandahub)):
     data.timeseries = pd.Series(json.loads(data.timeseries))
     data.timeseries.index = pd.to_datetime(data.timeseries.index)
-    ph.write_timeseries_to_db(**data.dict())
+    ph.write_timeseries_to_db(**data.model_dump())
     return True
