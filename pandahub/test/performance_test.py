@@ -38,14 +38,14 @@ def write_test_net_to_mongodb(net, project_name):
         ph.set_active_project(project_name)
         ph.delete_project(True)
     ph.create_project(project_name)
-    ph.write_network_to_db(net, "net")
+    ph.write_network_to_db(net, "test_net")
     
 def load_test_subnet_from_mongodb(project_name):
     ph = PandaHub()
     ph.set_active_project(project_name)
     buses = list(range(1000))
     t0 = time.time()
-    subnet = ph.get_subnet_from_db("net", 
+    subnet = ph.get_subnet_from_db("test_net", 
                                  bus_filter={"index": {"$in": buses}})
     t1 = time.time()
     print("LOADED NET IN %.2fs"%(t1-t0))
@@ -64,6 +64,5 @@ if __name__ == '__main__':
     project_name = "test_%u"%n_buses
     net = get_test_net(n_buses)
     write_test_net_to_mongodb(net, project_name)
-
     profile_load_test(project_name)
-    # subnet = load_test_subnet_from_mongodb()
+    # subnet = load_test_subnet_from_mongodb(project_name)
