@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -379,3 +380,47 @@ def object_to_json(obj):
         "_class": obj.__class__.__name__,
         "_object": obj.to_json()
     }
+
+def migrate_userdb_to_beanie(ph):
+    """Migrate existing users to beanie backend used by pandahub >= 0.3.0.
+
+    Will raise an exception if the user database is inconsistent, and return silently if no users need to be migrated.
+    See pandahub v0.3.0 release notes for details!
+
+    Parameters
+    ----------
+    ph: pandahub.PandaHub
+        PandaHub instance with connected mongodb database to apply migrations to.
+    Returns
+    -------
+    None
+    """
+    from datetime import datetime
+    from pymongo.errors import OperationFailure
+    userdb_backup = ph.mongo_client["user_management"][datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")]
+    userdb = ph.mongo_client["user_management"]["users"]
+    old_users = list(userdb.find({"_id": {"$type": "objectId"}}))
+    new_users = list(userdb.find({"_id": {"$not": {"$type": "objectId"}}}))
+    if old_users and new_users:
+        old_users = [user.get("email") for user in old_users]
+        new_users = [user.get("email") for user in new_users]
+        raise RuntimeError("Inconsistent user database - you need to resolve conflicts manually! "
+                           "See pandahub v0.3.0 release notes for details."
+                           f"pandahub < 0.3.0 users: {old_users}"
+                           f"pandahub >= 0.3.0 users: {new_users}"
+                           )
+    elif not old_users:
+        return
+    userdb_backup.insert_many(old_users)
+    try:
+        userdb.drop_index("id_1")
+    except OperationFailure as e:
+        if e.code == 27:
+            pass
+        else:
+            raise e
+
+    migration = [{'$addFields': {'_id': '$id'}},
+                 {'$unset': 'id'},
+                 {'$out': 'users'}]
+    userdb.aggregate(migration)

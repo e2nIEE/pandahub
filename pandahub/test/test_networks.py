@@ -131,7 +131,7 @@ def test_access_and_set_single_values(ph):
     value = ph.get_net_value_from_db(name, element, index, parameter)
     assert value == p_mw_new
 
-    ph.delete_net_element(name, element, index)
+    ph.delete_element(name, element, index)
     with pytest.raises(PandaHubError):
         ph.get_net_value_from_db(name, element, index, parameter)
     net = ph.get_net_from_db(name)
