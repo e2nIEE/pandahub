@@ -248,9 +248,9 @@ class PandaHub:
         try:
             project_id = ObjectId(project_id)
         except InvalidId:
-            raise PandaHubError('Project ID wrong.', 400)
+            pass
         self.active_project = self._get_project_document({"_id": project_id})
-        if self.active_project == None:
+        if self.active_project is None:
             raise PandaHubError('Project not found!', 404)
 
     def rename_project(self, project_name):
