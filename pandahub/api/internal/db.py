@@ -21,8 +21,6 @@ client.get_io_loop = asyncio.get_event_loop
 db = client["user_management"]
 
 class User(BeanieBaseUser, Document):
-    # pass
-    # id: Optional[UUID4] = Field(alias="id")
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     class Settings(BeanieBaseUser.Settings):
         name = "users"

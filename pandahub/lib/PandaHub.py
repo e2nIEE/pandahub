@@ -727,7 +727,8 @@ class PandaHub:
                                           geo_mode=geo_mode, variants=variants, dtypes=dtypes)
 
         # add node elements
-        node_elements = ["load", "sgen", "gen", "ext_grid", "shunt", "xward", "ward", "motor", "storage"]
+        node_elements = ["load", "asymmetric_load", "sgen", "asymmetric_sgen", "gen", "ext_grid", "shunt", "xward",
+                         "ward", "motor", "storage"]
         branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
         all_elements = node_elements + branch_elements + ["bus"] + list(additional_filters.keys())
         all_elements = list(set(all_elements) - set(ignore_elements))
@@ -1056,7 +1057,6 @@ class PandaHub:
             delete_ids = [target["_id"] for target in deletion_targets]
         db[collection].delete_many({"_id": {"$in": delete_ids}})
         return deletion_targets
-
 
     def set_net_value_in_db(self, net, element_type, element_index,
                             parameter, value, variant=None, project_id=None, **kwargs):
