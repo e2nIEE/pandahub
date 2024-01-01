@@ -7,15 +7,13 @@ from typing import Optional
 
 from pandahub.api.dependencies import pandahub
 
-router = APIRouter(
-    prefix="/timeseries",
-    tags=["timeseries"]
-)
+router = APIRouter(prefix="/timeseries", tags=["timeseries"])
 
 
 # -------------------------------
 #  ROUTES
 # -------------------------------
+
 
 class GetTimeSeriesModel(BaseModel):
     filter_document: Optional[dict] = {}
@@ -57,13 +55,16 @@ class GetTimeseriesMetadataModel(BaseModel):
     project_id: str
     filter_document: Optional[dict] = {}
     global_database: Optional[bool] = False
+    collection_name: Optional[str] = "timeseries"
+
 
 @router.post("/get_timeseries_metadata")
 def get_timeseries_metadata(data: GetTimeseriesMetadataModel, ph=Depends(pandahub)):
     ph.set_active_project_by_id(data.project_id)
     ts = ph.get_timeseries_metadata(
         filter_document=data.filter_document,
-        global_database=data.global_database
+        global_database=data.global_database,
+        collection_name=data.collection_name,
     )
     ts = json.loads(ts.to_json(orient="index"))
     return ts

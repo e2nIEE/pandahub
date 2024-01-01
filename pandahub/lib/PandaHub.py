@@ -41,10 +41,14 @@ from pandahub import __version__
 from packaging import version
 
 
+import pymongoarrow.monkey
+
+pymongoarrow.monkey.patch_all()
 
 # -------------------------
 # Exceptions
 # -------------------------
+
 
 class PandaHubError(Exception):
     def __init__(self, message, status_code=400):
@@ -56,25 +60,40 @@ class PandaHubError(Exception):
 # PandaHub
 # -------------------------
 
+
 class PandaHub:
     permissions = {
         "read": ["owner", "developer", "guest"],
         "write": ["owner", "developer"],
-        "user_management": ["owner"]
+        "user_management": ["owner"],
     }
 
-    _datatypes = getattr(importlib.import_module(SETTINGS.DATATYPES_MODULE), "datatypes")
+    _datatypes = getattr(
+        importlib.import_module(SETTINGS.DATATYPES_MODULE), "datatypes"
+    )
 
     # -------------------------
     # Initialization
     # -------------------------
 
-    def __init__(self, connection_url=SETTINGS.MONGODB_URL, connection_user = SETTINGS.MONGODB_USER,
-                 connection_password=SETTINGS.MONGODB_PASSWORD, check_server_available=False, user_id=None):
-
-        mongo_client_args = {"host": connection_url, "uuidRepresentation": "standard", "connect":False}
+    def __init__(
+        self,
+        connection_url=SETTINGS.MONGODB_URL,
+        connection_user=SETTINGS.MONGODB_USER,
+        connection_password=SETTINGS.MONGODB_PASSWORD,
+        check_server_available=False,
+        user_id=None,
+    ):
+        mongo_client_args = {
+            "host": connection_url,
+            "uuidRepresentation": "standard",
+            "connect": False,
+        }
         if connection_user:
-            mongo_client_args |= {"username": connection_user, "password": connection_password}
+            mongo_client_args |= {
+                "username": connection_user,
+                "password": connection_password,
+            }
         self.mongo_client = MongoClient(**mongo_client_args)
         self.mongo_client_global_db = None
         self.active_project = None
@@ -100,10 +119,14 @@ class PandaHub:
         """
         try:
             self.mongo_client.server_info()
-            logger.debug("connected to mongoDB server %s" % self.get_masked_mongodb_url())
+            logger.debug(
+                "connected to mongoDB server %s" % self.get_masked_mongodb_url()
+            )
             return True
         except ServerSelectionTimeoutError:
-            logger.error("could not connect to mongoDB server %s" % self.get_masked_mongodb_url())
+            logger.error(
+                "could not connect to mongoDB server %s" % self.get_masked_mongodb_url()
+            )
             return False
 
     def check_connection_status(self):
@@ -111,10 +134,12 @@ class PandaHub:
         Checks if the database is accessible
         """
         try:
-            status = self.mongo_client.find({}, collection_name="__connection_test_collection")
+            status = self.mongo_client.find(
+                {}, collection_name="__connection_test_collection"
+            )
             if status == []:
                 return "ok"
-        except (ServerSelectionTimeoutError) as e:
+        except ServerSelectionTimeoutError as e:
             return "connection timeout"
 
     # -------------------------
@@ -125,7 +150,9 @@ class PandaHub:
         if self.active_project is None:
             raise PandaHubError("No project is activated")
         if not self.has_permission(permission):
-            raise PandaHubError("You don't have {} rights on this project".format(permission), 403)
+            raise PandaHubError(
+                "You don't have {} rights on this project".format(permission), 403
+            )
 
     def has_permission(self, permission):
         if not "users" in self.active_project:
@@ -168,7 +195,7 @@ class PandaHub:
     def _get_user(self):
         user_mgmnt_db = self.mongo_client["user_management"]
         user = user_mgmnt_db["users"].find_one(
-            {"_id": UUID(self.user_id)}, projection= {"hashed_password": 0}
+            {"_id": UUID(self.user_id)}, projection={"hashed_password": 0}
         )
         return user
 
@@ -176,19 +203,28 @@ class PandaHub:
     # Project handling
     # -------------------------
 
-    def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None,
-                       activate=True):
+    def create_project(
+        self,
+        name,
+        settings=None,
+        realm=None,
+        metadata=None,
+        project_id=None,
+        activate=True,
+    ):
         if self.project_exists(name, realm):
             raise PandaHubError("Project already exists")
         if settings is None:
             settings = {}
         if metadata is None:
             metadata = {}
-        project_data = {"name": name,
-                        "realm": realm,
-                        "settings": settings,
-                        "metadata": metadata,
-                        "version": __version__}
+        project_data = {
+            "name": name,
+            "realm": realm,
+            "settings": settings,
+            "metadata": metadata,
+            "version": __version__,
+        }
         if project_id:
             project_data["_id"] = project_id
         if self.user_id is not None:
@@ -207,7 +243,8 @@ class PandaHub:
         self.check_permission("write")
         if not i_know_this_action_is_final:
             raise PandaHubError(
-                "Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm.")
+                "Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm."
+            )
         self.mongo_client.drop_database(str(project_id))
         self.mongo_client.user_management.projects.delete_one({"_id": project_id})
         self.active_project = None
@@ -223,19 +260,28 @@ class PandaHub:
             filter_dict = {"users": {"$exists": False}}
         db = self.mongo_client["user_management"]
         projects = list(db["projects"].find(filter_dict))
-        return [{
-            "id": str(p["_id"]),
-            "name": p["name"],
-            "realm": str(p["realm"]),
-            "settings": p["settings"],
-            "locked": p.get("locked"),
-            "locked_by": p.get("locked_by"),
-            "permissions": self.get_permissions_by_role(p.get("users").get(self.user_id)) if self.user_id else None
-        } for p in projects]
+        return [
+            {
+                "id": str(p["_id"]),
+                "name": p["name"],
+                "realm": str(p["realm"]),
+                "settings": p["settings"],
+                "locked": p.get("locked"),
+                "locked_by": p.get("locked_by"),
+                "permissions": self.get_permissions_by_role(
+                    p.get("users").get(self.user_id)
+                )
+                if self.user_id
+                else None,
+            }
+            for p in projects
+        ]
 
     def set_active_project(self, project_name, realm=None):
         projects = self.get_projects()
-        active_projects = [project for project in projects if project["name"] == project_name]
+        active_projects = [
+            project for project in projects if project["name"] == project_name
+        ]
         if len(active_projects) == 0:
             raise PandaHubError("Project not found!", 404)
         elif len(active_projects) > 1:
@@ -251,7 +297,7 @@ class PandaHub:
             pass
         self.active_project = self._get_project_document({"_id": project_id})
         if self.active_project is None:
-            raise PandaHubError('Project not found!', 404)
+            raise PandaHubError("Project not found!", 404)
 
     def rename_project(self, project_name):
         self.has_permission("write")
@@ -259,8 +305,9 @@ class PandaHub:
         realm = self.active_project["realm"]
         if self.project_exists(project_name, realm):
             raise PandaHubError("Can't rename - project with this name already exists")
-        project_collection.update_one({"_id": self.active_project["_id"]},
-                                               {"$set": {"name": project_name}})
+        project_collection.update_one(
+            {"_id": self.active_project["_id"]}, {"$set": {"name": project_name}}
+        )
         self.set_active_project(project_name, realm)
 
     def change_realm(self, realm):
@@ -268,16 +315,21 @@ class PandaHub:
         project_collection = self.mongo_client["user_management"].projects
         project_name = self.active_project["name"]
         if self.project_exists(project_name, realm):
-            raise PandaHubError("Can't change realm - project with this name already exists")
-        project_collection.update_one({"_id": self.active_project["_id"]},
-                                               {"$set": {"realm": realm}})
+            raise PandaHubError(
+                "Can't change realm - project with this name already exists"
+            )
+        project_collection.update_one(
+            {"_id": self.active_project["_id"]}, {"$set": {"realm": realm}}
+        )
         self.set_active_project(project_name, realm)
 
     def lock_project(self):
         db = self.mongo_client["user_management"]["projects"]
         result = db.update_one(
-            {"_id": self.active_project["_id"], },
-            {"$set": {"locked": True, "locked_by": self.user_id}}
+            {
+                "_id": self.active_project["_id"],
+            },
+            {"$set": {"locked": True, "locked_by": self.user_id}},
         )
         return result.acknowledged and result.modified_count > 0
 
@@ -285,7 +337,7 @@ class PandaHub:
         db = self.mongo_client["user_management"]["projects"]
         return db.update_one(
             {"_id": self.active_project["_id"], "locked_by": self.user_id},
-            {"$set": {"locked": False, "locked_by": None}}
+            {"$set": {"locked": False, "locked_by": None}},
         )
 
     def force_unlock_project(self, project_id):
@@ -294,8 +346,15 @@ class PandaHub:
         user = self._get_user()
         if project is None:
             return None
-        if "users" not in project or self.user_id in project["users"].keys() or user["is_superuser"]:
-            return db.update_one({"_id": ObjectId(project_id)}, {"$set": {"locked": False, "locked_by": None}})
+        if (
+            "users" not in project
+            or self.user_id in project["users"].keys()
+            or user["is_superuser"]
+        ):
+            return db.update_one(
+                {"_id": ObjectId(project_id)},
+                {"$set": {"locked": False, "locked_by": None}},
+            )
         else:
             raise PandaHubError("You don't have rights to access this project", 403)
 
@@ -311,7 +370,8 @@ class PandaHub:
             return None
         if len(projects) > 1:
             raise PandaHubError(
-                "Duplicate Project detected. This should never happen if you create projects through the API. Remove duplicate projects manually in the database.")
+                "Duplicate Project detected. This should never happen if you create projects through the API. Remove duplicate projects manually in the database."
+            )
         project_doc = projects[0]
         if "users" not in project_doc:
             return project_doc  # project is not user protected
@@ -328,11 +388,19 @@ class PandaHub:
         return self.mongo_client[str(self.active_project["_id"])]
 
     def _get_global_database(self):
-        if self.mongo_client_global_db is None and SETTINGS.MONGODB_GLOBAL_DATABASE_URL is not None:
-            mongo_client_args = {"host": SETTINGS.MONGODB_GLOBAL_DATABASE_URL, "uuidRepresentation": "standard"}
+        if (
+            self.mongo_client_global_db is None
+            and SETTINGS.MONGODB_GLOBAL_DATABASE_URL is not None
+        ):
+            mongo_client_args = {
+                "host": SETTINGS.MONGODB_GLOBAL_DATABASE_URL,
+                "uuidRepresentation": "standard",
+            }
             if SETTINGS.MONGODB_GLOBAL_DATABASE_USER:
-                mongo_client_args |= {"username": SETTINGS.MONGODB_GLOBAL_DATABASE_USER,
-                                      "password": SETTINGS.MONGODB_GLOBAL_DATABASE_PASSWORD}
+                mongo_client_args |= {
+                    "username": SETTINGS.MONGODB_GLOBAL_DATABASE_USER,
+                    "password": SETTINGS.MONGODB_GLOBAL_DATABASE_PASSWORD,
+                }
             self.mongo_client_global_db = MongoClient(**mongo_client_args)
         if self.mongo_client_global_db is None:
             return self.mongo_client["global_data"]
@@ -350,9 +418,13 @@ class PandaHub:
         if version.parse(self.get_project_version()) < version.parse("0.2.3"):
             db = self._get_project_database()
             all_collection_names = db.list_collection_names()
-            old_net_collections = [name for name in all_collection_names if
-                                   not name.startswith("_") and
-                                   not name == "timeseries" and not name.startswith("net_")]
+            old_net_collections = [
+                name
+                for name in all_collection_names
+                if not name.startswith("_")
+                and not name == "timeseries"
+                and not name.startswith("net_")
+            ]
 
             for element in old_net_collections:
                 db[element].rename(self._collection_name_of_element(element))
@@ -360,12 +432,17 @@ class PandaHub:
         if version.parse(self.get_project_version()) < version.parse("0.2.3"):
             db = self._get_project_database()
             # for all networks
-            for d in list(db["_networks"].find({}, projection={"sector":1, "data":1})):
+            for d in list(
+                db["_networks"].find({}, projection={"sector": 1, "data": 1})
+            ):
                 # load old format
                 if d.get("sector", "power") == "power":
-                    data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in d['data'].items())
+                    data = dict(
+                        (k, json.loads(v, cls=io_pp.PPJSONDecoder))
+                        for k, v in d["data"].items()
+                    )
                 else:
-                    data = dict((k, from_json_pps(v)) for k, v in d['data'].items())
+                    data = dict((k, from_json_pps(v)) for k, v in d["data"].items())
                 # save new format
                 for key, dat in data.items():
                     try:
@@ -374,14 +451,16 @@ class PandaHub:
                         dat = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
                     data[key] = dat
 
-                db["_networks"].update_one({"_id":d["_id"]},
-                                                    {"$set": {"data": data}})
+                db["_networks"].update_one({"_id": d["_id"]}, {"$set": {"data": data}})
 
         project_collection = self.mongo_client["user_management"].projects
-        project_collection.update_one({"_id": self.active_project["_id"]},
-                                               {"$set": {"version": __version__}})
-        logger.info(f"upgraded projekt '{self.active_project['name']}' from version"
-                    f" {self.get_project_version()} to version {__version__}")
+        project_collection.update_one(
+            {"_id": self.active_project["_id"]}, {"$set": {"version": __version__}}
+        )
+        logger.info(
+            f"upgraded projekt '{self.active_project['name']}' from version"
+            f" {self.get_project_version()} to version {__version__}"
+        )
         self.active_project["version"] = __version__
 
     # -------------------------
@@ -393,7 +472,6 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
         return self.active_project["settings"]
-
 
     def get_project_setting_value(self, setting, project_id=None):
         """
@@ -416,12 +494,13 @@ class PandaHub:
         _id = self.active_project["_id"]
         project_collection = self.mongo_client["user_management"]["projects"]
         setting_string = f"settings.{setting}"
-        setting = project_collection.find_one({"_id": _id}, {"_id": 0, setting_string: 1})
+        setting = project_collection.find_one(
+            {"_id": _id}, {"_id": 0, setting_string: 1}
+        )
         try:
             return reduce(getitem, setting_string.split("."), setting)
         except KeyError:
             return None
-
 
     def set_project_settings(self, settings, project_id=None):
         if project_id:
@@ -430,7 +509,9 @@ class PandaHub:
         _id = self.active_project["_id"]
         new_settings = {**self.active_project["settings"], **settings}
         project_collection = self.mongo_client["user_management"]["projects"]
-        project_collection.update_one({"_id": _id}, {"$set": {"settings": new_settings}})
+        project_collection.update_one(
+            {"_id": _id}, {"$set": {"settings": new_settings}}
+        )
         self.active_project["settings"] = new_settings
 
     def set_project_settings_value(self, parameter, value, project_id=None):
@@ -493,11 +574,13 @@ class PandaHub:
         replace_empty(update_metadata, new_metadata)
 
         self.mongo_client.user_management.projects.update_one(
-            {"_id": project_data['_id']},
+            {"_id": project_data["_id"]},
             [
-                {"$unset": "metadata"},  # deletion needed because set won't delete not existing fields
-                {"$set": {"metadata": update_metadata}}
-            ]
+                {
+                    "$unset": "metadata"
+                },  # deletion needed because set won't delete not existing fields
+                {"$set": {"metadata": update_metadata}},
+            ],
         )
         self.active_project["metadata"] = update_metadata
 
@@ -513,10 +596,9 @@ class PandaHub:
         )
         enriched_users = []
         for user in users:
-            enriched_users.append({
-                "email": user["email"],
-                "role": project_users[str(user["_id"])]
-            })
+            enriched_users.append(
+                {"email": user["email"], "role": project_users[str(user["_id"])]}
+            )
         return enriched_users
 
     def add_user_to_project(self, email, role):
@@ -526,8 +608,7 @@ class PandaHub:
             return
         user_id = user["_id"]
         self.mongo_client["user_management"]["projects"].update_one(
-            {"_id": self.active_project["_id"]},
-            {"$set": {f"users.{user_id}": role}}
+            {"_id": self.active_project["_id"]}, {"$set": {f"users.{user_id}": role}}
         )
         return user
 
@@ -539,7 +620,7 @@ class PandaHub:
         user_id = user["_id"]
         self.mongo_client["user_management"]["projects"].update_one(
             {"_id": self.active_project["_id"]},
-            {"$set": {f"users.{user_id}": new_role}}
+            {"$set": {f"users.{user_id}": new_role}},
         )
 
     def remove_user_from_project(self, email):
@@ -552,8 +633,7 @@ class PandaHub:
             self.check_permission("user_management")
         user_id = user["_id"]
         self.mongo_client["user_management"]["projects"].update_one(
-            {"_id": self.active_project["_id"]},
-            {"$unset": {f"users.{user_id}": ""}}
+            {"_id": self.active_project["_id"]}, {"$unset": {f"users.{user_id}": ""}}
         )
 
     # -------------------------
@@ -563,13 +643,19 @@ class PandaHub:
     def get_all_nets_metadata_from_db(self, project_id=None):
         if project_id:
             self.set_active_project_by_id(project_id)
-        self.check_permission('read')
+        self.check_permission("read")
         db = self._get_project_database()
-        return list(db['_networks'].find())
+        return list(db["_networks"].find())
 
-
-    def get_net_from_db(self, name, include_results=True, only_tables=None, project_id=None,
-                        geo_mode="string", variants=[]):
+    def get_net_from_db(
+        self,
+        name,
+        include_results=True,
+        only_tables=None,
+        project_id=None,
+        geo_mode="string",
+        variants=[],
+    ):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
@@ -577,16 +663,38 @@ class PandaHub:
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_net_from_db_by_id(_id, include_results, only_tables, geo_mode=geo_mode, variants=variants)
+        return self.get_net_from_db_by_id(
+            _id, include_results, only_tables, geo_mode=geo_mode, variants=variants
+        )
 
-    def get_net_from_db_by_id(self, id, include_results=True, only_tables=None, convert=True,
-                              geo_mode="string", variants=[]):
+    def get_net_from_db_by_id(
+        self,
+        id,
+        include_results=True,
+        only_tables=None,
+        convert=True,
+        geo_mode="string",
+        variants=[],
+    ):
         self.check_permission("read")
-        return self._get_net_from_db_by_id(id, include_results, only_tables, convert=convert,
-                                           geo_mode=geo_mode, variants=variants)
+        return self._get_net_from_db_by_id(
+            id,
+            include_results,
+            only_tables,
+            convert=convert,
+            geo_mode=geo_mode,
+            variants=variants,
+        )
 
-    def _get_net_from_db_by_id(self, id_, include_results=True, only_tables=None, convert=True,
-                               geo_mode="string", variants=[]):
+    def _get_net_from_db_by_id(
+        self,
+        id_,
+        include_results=True,
+        only_tables=None,
+        convert=True,
+        geo_mode="string",
+        variants=[],
+    ):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id_)
 
@@ -597,9 +705,16 @@ class PandaHub:
         collection_names = self._get_net_collections(db)
         for collection_name in collection_names:
             el = self._element_name_of_collection(collection_name)
-            self._add_element_from_collection(net, db, el, id_, include_results=include_results,
-                                              only_tables=only_tables, geo_mode=geo_mode,
-                                              variants=variants)
+            self._add_element_from_collection(
+                net,
+                db,
+                el,
+                id_,
+                include_results=include_results,
+                only_tables=only_tables,
+                geo_mode=geo_mode,
+                variants=variants,
+            )
         # add data that is not stored in dataframes
         self.deserialize_and_update_data(net, meta)
 
@@ -611,10 +726,13 @@ class PandaHub:
     def deserialize_and_update_data(self, net, meta):
         if version.parse(self.get_project_version()) <= version.parse("0.2.3"):
             if meta.get("sector", "power") == "power":
-                data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in meta['data'].items())
+                data = dict(
+                    (k, json.loads(v, cls=io_pp.PPJSONDecoder))
+                    for k, v in meta["data"].items()
+                )
                 net.update(data)
             else:
-                data = dict((k, from_json_pps(v)) for k, v in meta['data'].items())
+                data = dict((k, from_json_pps(v)) for k, v in meta["data"].items())
                 net.update(data)
         else:
             for key, value in meta["data"].items():
@@ -622,22 +740,32 @@ class PandaHub:
                     value = json.loads(value[11:], cls=io_pp.PPJSONDecoder)
                 net[key] = value
 
-    def get_subnet_from_db(self,
-                           name,
-                           bus_filter=None,
-                           include_results=True,
-                           add_edge_branches=True,
-                           geo_mode="string",
-                           variants=[],
-                           additional_filters: dict[str, Callable[[pp.auxiliary.pandapowerNet], dict]] = {}):
+    def get_subnet_from_db(
+        self,
+        name,
+        bus_filter=None,
+        include_results=True,
+        add_edge_branches=True,
+        geo_mode="string",
+        variants=[],
+        additional_filters: dict[
+            str, Callable[[pp.auxiliary.pandapowerNet], dict]
+        ] = {},
+    ):
         self.check_permission("read")
         db = self._get_project_database()
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_subnet_from_db_by_id(_id, bus_filter=bus_filter, include_results=include_results,
-                                             add_edge_branches=add_edge_branches, geo_mode=geo_mode, variants=variants,
-                                             additional_filters=additional_filters)
+        return self.get_subnet_from_db_by_id(
+            _id,
+            bus_filter=bus_filter,
+            include_results=include_results,
+            add_edge_branches=add_edge_branches,
+            geo_mode=geo_mode,
+            variants=variants,
+            additional_filters=additional_filters,
+        )
 
     def get_subnet_from_db_by_id(
         self,
@@ -648,7 +776,9 @@ class PandaHub:
         geo_mode="string",
         variants=[],
         ignore_elements=[],
-        additional_filters: dict[str, Callable[[pp.auxiliary.pandapowerNet], dict]] = {}
+        additional_filters: dict[
+            str, Callable[[pp.auxiliary.pandapowerNet], dict]
+        ] = {},
     ) -> pp.pandapowerNet:
         db = self._get_project_database()
         meta = self._get_network_metadata(db, net_id)
@@ -661,76 +791,149 @@ class PandaHub:
 
         # Add buses with filter
         if bus_filter is not None:
-            self._add_element_from_collection(net, db, "bus", net_id, bus_filter, geo_mode=geo_mode,
-                                              variants=variants, dtypes=dtypes)
+            self._add_element_from_collection(
+                net,
+                db,
+                "bus",
+                net_id,
+                bus_filter,
+                geo_mode=geo_mode,
+                variants=variants,
+                dtypes=dtypes,
+            )
         buses = net.bus.index.tolist()
 
         branch_operator = "$or" if add_edge_branches else "$and"
         # Add branch elements connected to at least one bus
-        self._add_element_from_collection(net, db, "line", net_id,
-                                          {branch_operator: [
-                                              {"from_bus": {"$in": buses}},
-                                              {"to_bus": {"$in": buses}}]}, geo_mode=geo_mode,
-                                          variants=variants, dtypes=dtypes)
-        self._add_element_from_collection(net, db, "trafo", net_id,
-                                          {branch_operator: [
-                                              {"hv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode,
-                                          variants=variants, dtypes=dtypes)
-        self._add_element_from_collection(net, db, "trafo3w", net_id,
-                                          {branch_operator: [
-                                              {"hv_bus": {"$in": buses}},
-                                              {"mv_bus": {"$in": buses}},
-                                              {"lv_bus": {"$in": buses}}]}, geo_mode=geo_mode,
-                                          variants=variants, dtypes=dtypes)
+        self._add_element_from_collection(
+            net,
+            db,
+            "line",
+            net_id,
+            {
+                branch_operator: [
+                    {"from_bus": {"$in": buses}},
+                    {"to_bus": {"$in": buses}},
+                ]
+            },
+            geo_mode=geo_mode,
+            variants=variants,
+            dtypes=dtypes,
+        )
+        self._add_element_from_collection(
+            net,
+            db,
+            "trafo",
+            net_id,
+            {branch_operator: [{"hv_bus": {"$in": buses}}, {"lv_bus": {"$in": buses}}]},
+            geo_mode=geo_mode,
+            variants=variants,
+            dtypes=dtypes,
+        )
+        self._add_element_from_collection(
+            net,
+            db,
+            "trafo3w",
+            net_id,
+            {
+                branch_operator: [
+                    {"hv_bus": {"$in": buses}},
+                    {"mv_bus": {"$in": buses}},
+                    {"lv_bus": {"$in": buses}},
+                ]
+            },
+            geo_mode=geo_mode,
+            variants=variants,
+            dtypes=dtypes,
+        )
 
-        self._add_element_from_collection(net, db, "switch", net_id,
-                                          {"$and": [
-                                              {"et": "b"},
-                                              {branch_operator: [
-                                                  {"bus": {"$in": buses}},
-                                                  {"element": {"$in": buses}}
-                                              ]}
-                                          ]
-                                          }, geo_mode=geo_mode, variants=variants, dtypes=dtypes)
+        self._add_element_from_collection(
+            net,
+            db,
+            "switch",
+            net_id,
+            {
+                "$and": [
+                    {"et": "b"},
+                    {
+                        branch_operator: [
+                            {"bus": {"$in": buses}},
+                            {"element": {"$in": buses}},
+                        ]
+                    },
+                ]
+            },
+            geo_mode=geo_mode,
+            variants=variants,
+            dtypes=dtypes,
+        )
         if add_edge_branches:
             # Add buses on the other side of the branches
-            branch_buses = set(net.trafo.hv_bus.values) | set(net.trafo.lv_bus.values) | \
-                            set(net.line.from_bus) | set(net.line.to_bus) | \
-                            set(net.trafo3w.hv_bus.values) | set(net.trafo3w.mv_bus.values) | \
-                            set(net.trafo3w.lv_bus.values) | set(net.switch.bus) | set(net.switch.element)
+            branch_buses = (
+                set(net.trafo.hv_bus.values)
+                | set(net.trafo.lv_bus.values)
+                | set(net.line.from_bus)
+                | set(net.line.to_bus)
+                | set(net.trafo3w.hv_bus.values)
+                | set(net.trafo3w.mv_bus.values)
+                | set(net.trafo3w.lv_bus.values)
+                | set(net.switch.bus)
+                | set(net.switch.element)
+            )
             branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
-            self._add_element_from_collection(net, db, "bus", net_id, geo_mode=geo_mode, variants=variants,
-                                              filter={"index": {"$in": branch_buses_outside}},
-                                              dtypes=dtypes)
+            self._add_element_from_collection(
+                net,
+                db,
+                "bus",
+                net_id,
+                geo_mode=geo_mode,
+                variants=variants,
+                filter={"index": {"$in": branch_buses_outside}},
+                dtypes=dtypes,
+            )
             buses = net.bus.index.tolist()
 
-        switch_filter = {"$or": [
-            {"$and": [
-                {"et": "t"},
-                {"element": {"$in": net.trafo.index.tolist()}}
+        switch_filter = {
+            "$or": [
+                {"$and": [{"et": "t"}, {"element": {"$in": net.trafo.index.tolist()}}]},
+                {"$and": [{"et": "l"}, {"element": {"$in": net.line.index.tolist()}}]},
+                {
+                    "$and": [
+                        {"et": "t3"},
+                        {"element": {"$in": net.trafo3w.index.tolist()}},
+                    ]
+                },
             ]
-            },
-            {"$and": [
-                {"et": "l"},
-                {"element": {"$in": net.line.index.tolist()}}
-            ]
-            },
-            {"$and": [
-                {"et": "t3"},
-                {"element": {"$in": net.trafo3w.index.tolist()}}
-            ]
-            }
-        ]
         }
-        self._add_element_from_collection(net, db, "switch", net_id, switch_filter,
-                                          geo_mode=geo_mode, variants=variants, dtypes=dtypes)
+        self._add_element_from_collection(
+            net,
+            db,
+            "switch",
+            net_id,
+            switch_filter,
+            geo_mode=geo_mode,
+            variants=variants,
+            dtypes=dtypes,
+        )
 
         # add node elements
-        node_elements = ["load", "asymmetric_load", "sgen", "asymmetric_sgen", "gen", "ext_grid", "shunt", "xward",
-                         "ward", "motor", "storage"]
+        node_elements = [
+            "load",
+            "asymmetric_load",
+            "sgen",
+            "asymmetric_sgen",
+            "gen",
+            "ext_grid",
+            "shunt",
+            "xward",
+            "ward",
+            "motor",
+            "storage",
+        ]
         branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
-        all_elements = node_elements + branch_elements + ["bus"] + list(additional_filters.keys())
+        all_elements = (
+            node_elements + branch_elements + ["bus"] + list(additional_filters.keys())
+        )
         all_elements = list(set(all_elements) - set(ignore_elements))
 
         # Add elements for which the user has provided a filter function
@@ -738,18 +941,32 @@ class PandaHub:
             if element in ignore_elements:
                 continue
             element_filter = filter_func(net)
-            self._add_element_from_collection(net, db, element, net_id,
-                                              filter=element_filter, geo_mode=geo_mode,
-                                              include_results=include_results,
-                                              variants=variants, dtypes=dtypes)
+            self._add_element_from_collection(
+                net,
+                db,
+                element,
+                net_id,
+                filter=element_filter,
+                geo_mode=geo_mode,
+                include_results=include_results,
+                variants=variants,
+                dtypes=dtypes,
+            )
 
         # add all node elements that are connected to buses within the network
         for element in node_elements:
             element_filter = {"bus": {"$in": buses}}
-            self._add_element_from_collection(net, db, element, net_id,
-                                              filter=element_filter, geo_mode=geo_mode,
-                                              include_results=include_results,
-                                              variants=variants, dtypes=dtypes)
+            self._add_element_from_collection(
+                net,
+                db,
+                element,
+                net_id,
+                filter=element_filter,
+                geo_mode=geo_mode,
+                include_results=include_results,
+                variants=variants,
+                dtypes=dtypes,
+            )
 
         # add all other collections
         collection_names = self._get_net_collections(db)
@@ -760,16 +977,25 @@ class PandaHub:
                 continue
             # for tables that share an index with an element (e.g. load->res_load) load only relevant entries
             for element in all_elements:
-                if table_name.startswith(element + "_") or table_name.startswith("net_res_" + element):
+                if table_name.startswith(element + "_") or table_name.startswith(
+                    "net_res_" + element
+                ):
                     element_filter = {"index": {"$in": net[element].index.tolist()}}
                     break
             else:
                 # all other tables (e.g. std_types) are loaded without filter
                 element_filter = None
-            self._add_element_from_collection(net, db, table_name, net_id,
-                                              filter=element_filter, geo_mode=geo_mode,
-                                              include_results=include_results,
-                                              variants=variants, dtypes=dtypes)
+            self._add_element_from_collection(
+                net,
+                db,
+                table_name,
+                net_id,
+                filter=element_filter,
+                geo_mode=geo_mode,
+                include_results=include_results,
+                variants=variants,
+                dtypes=dtypes,
+            )
         self.deserialize_and_update_data(net, meta)
         return net
 
@@ -779,15 +1005,23 @@ class PandaHub:
     def _element_name_of_collection(self, collection):
         return collection[4:]  # remove "net_" prefix
 
-    def write_network_to_db(self, net, name, sector="power", overwrite=True, project_id=None,
-                            metadata=None, skip_results=False, ):
+    def write_network_to_db(
+        self,
+        net,
+        name,
+        sector="power",
+        overwrite=True,
+        project_id=None,
+        metadata=None,
+        skip_results=False,
+    ):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
 
-#         if not isinstance(net, pp.pandapowerNet) and not isinstance(net, pps.pandapipesNet):
-#             raise PandaHubError("net must be a pandapower or pandapipes object")
+        #         if not isinstance(net, pp.pandapowerNet) and not isinstance(net, pps.pandapipesNet):
+        #             raise PandaHubError("net must be a pandapower or pandapipes object")
 
         if self._network_with_name_exists(name, db):
             if overwrite:
@@ -811,7 +1045,9 @@ class PandaHub:
                 if element_data.empty:
                     continue
                 # convert pandapower dataframe object to dict and save to db
-                element_data = convert_element_to_dict(element_data.copy(deep=True), _id, self._datatypes.get(element))
+                element_data = convert_element_to_dict(
+                    element_data.copy(deep=True), _id, self._datatypes.get(element)
+                )
                 self._write_element_to_db(db, element, element_data)
 
             else:
@@ -820,11 +1056,13 @@ class PandaHub:
                     data[element] = element_data
 
         # write network metadata
-        net_dict = {"_id": _id,
-                    "name": name,
-                    "sector": sector,
-                    "dtypes": dtypes,
-                    "data": data}
+        net_dict = {
+            "_id": _id,
+            "name": name,
+            "sector": sector,
+            "dtypes": dtypes,
+            "data": data,
+        }
 
         if metadata is not None:
             net_dict.update(metadata)
@@ -851,7 +1089,7 @@ class PandaHub:
             raise PandaHubError("Network does not exist", 404)
         collection_names = self._get_net_collections(db)  # TODO
         for collection_name in collection_names:
-            db[collection_name].delete_many({'net_id': _id})
+            db[collection_name].delete_many({"net_id": _id})
         db["_networks"].delete_one({"_id": _id})
 
     def network_with_name_exists(self, name):
@@ -883,18 +1121,27 @@ class PandaHub:
 
     def _get_net_collections(self, db, with_areas=True):
         if with_areas:
-            collection_filter = {'name': {'$regex': '^net_'}}
+            collection_filter = {"name": {"$regex": "^net_"}}
         else:
-            collection_filter = {'name': {'$regex': '^net_.*(?<!area)$'}}
+            collection_filter = {"name": {"$regex": "^net_.*(?<!area)$"}}
         return db.list_collection_names(filter=collection_filter)
-
 
     def _get_network_metadata(self, db, net_id):
         return db["_networks"].find_one({"_id": net_id})
 
-    def _add_element_from_collection(self, net, db, element_type, net_id,
-                                     filter=None, include_results=True,
-                                     only_tables=None, geo_mode="string", variants=[], dtypes=None):
+    def _add_element_from_collection(
+        self,
+        net,
+        db,
+        element_type,
+        net_id,
+        filter=None,
+        include_results=True,
+        only_tables=None,
+        geo_mode="string",
+        variants=[],
+        dtypes=None,
+    ):
         if only_tables is not None and not element_type in only_tables:
             return
         if not include_results and element_type.startswith("res_"):
@@ -905,20 +1152,31 @@ class PandaHub:
             if "$or" in filter_dict.keys() and "$or" in filter.keys():
                 # if 'or' is in both filters create 'and' with
                 # both to avoid override during filter merge
-                filter_and = {"$and": [{"$or": filter_dict.pop("$or")}, {"$or": filter.pop("$or")}]}
+                filter_and = {
+                    "$and": [
+                        {"$or": filter_dict.pop("$or")},
+                        {"$or": filter.pop("$or")},
+                    ]
+                }
                 filter_dict = {**filter_dict, **filter, **filter_and}
             else:
                 filter_dict = {**filter_dict, **filter}
 
-        data = list(db[self._collection_name_of_element(element_type)].find(filter_dict))
+        data = list(
+            db[self._collection_name_of_element(element_type)].find(filter_dict)
+        )
         if len(data) == 0:
             return
         if dtypes is None:
-            dtypes = db["_networks"].find_one({"_id": net_id}, projection={"dtypes"})['dtypes']
+            dtypes = db["_networks"].find_one({"_id": net_id}, projection={"dtypes"})[
+                "dtypes"
+            ]
         df = pd.DataFrame.from_records(data, index="index")
         if element_type in dtypes:
             dtypes_found_columns = {
-                column: dtype for column, dtype in dtypes[element_type].items() if column in df.columns
+                column: dtype
+                for column, dtype in dtypes[element_type].items()
+                if column in df.columns
             }
             df = df.astype(dtypes_found_columns, errors="ignore")
         df.index.name = None
@@ -932,14 +1190,17 @@ class PandaHub:
         else:
             new_rows = set(df.index) - set(net[element_type].index)
             if new_rows:
-                net[element_type] = pd.concat([net[element_type], df.loc[list(new_rows)]])
+                net[element_type] = pd.concat(
+                    [net[element_type], df.loc[list(new_rows)]]
+                )
 
     # -------------------------
     # Net element handling
     # -------------------------
 
-    def get_net_value_from_db(self, net, element_type, element_index,
-                              parameter, variant=None, project_id=None):
+    def get_net_value_from_db(
+        self, net, element_type, element_index, parameter, variant=None, project_id=None
+    ):
         if variant is not None:
             variant = int(variant)
         if project_id:
@@ -955,7 +1216,11 @@ class PandaHub:
         dtypes = self._datatypes.get(element_type)
 
         variant_filter = self.get_variant_filter(variant)
-        documents = list(db[collection].find({"index": element_index, "net_id": net_id, **variant_filter}))
+        documents = list(
+            db[collection].find(
+                {"index": element_index, "net_id": net_id, **variant_filter}
+            )
+        )
         if len(documents) == 1:
             document = documents[0]
         else:
@@ -970,7 +1235,9 @@ class PandaHub:
         else:
             return document[parameter]
 
-    def delete_element(self, net, element_type, element_index, variant=None, project_id=None, **kwargs) -> dict:
+    def delete_element(
+        self, net, element_type, element_index, variant=None, project_id=None, **kwargs
+    ) -> dict:
         """
         Delete an element from the database.
 
@@ -1000,9 +1267,15 @@ class PandaHub:
             **kwargs,
         )[0]
 
-    def delete_elements(self, net: Union[int, str], element_type: str, element_indexes: list[int],
-                        variant: Union[int, list[int], None] = None, project_id: Union[str, None] = None, **kwargs) -> \
-        list[dict]:
+    def delete_elements(
+        self,
+        net: Union[int, str],
+        element_type: str,
+        element_indexes: list[int],
+        variant: Union[int, list[int], None] = None,
+        project_id: Union[str, None] = None,
+        **kwargs,
+    ) -> list[dict]:
         """
         Delete multiple elements of the same type from the database.
 
@@ -1040,7 +1313,11 @@ class PandaHub:
         else:
             net_id = net
 
-        element_filter = {"index": {"$in": element_indexes}, "net_id": int(net_id), **self.get_variant_filter(variant)}
+        element_filter = {
+            "index": {"$in": element_indexes},
+            "net_id": int(net_id),
+            **self.get_variant_filter(variant),
+        }
 
         deletion_targets = list(db[collection].find(element_filter))
         if not deletion_targets:
@@ -1049,18 +1326,32 @@ class PandaHub:
         if variant:
             delete_ids_variant, delete_ids = [], []
             for target in deletion_targets:
-                delete_ids_variant.append(target["_id"]) if target["var_type"] == "base" else delete_ids.append(
-                    target["_id"])
-            db[collection].update_many({"_id": {"$in": delete_ids_variant}},
-                                       {"$addToSet": {"not_in_var": variant}})
+                delete_ids_variant.append(target["_id"]) if target[
+                    "var_type"
+                ] == "base" else delete_ids.append(target["_id"])
+            db[collection].update_many(
+                {"_id": {"$in": delete_ids_variant}},
+                {"$addToSet": {"not_in_var": variant}},
+            )
         else:
             delete_ids = [target["_id"] for target in deletion_targets]
         db[collection].delete_many({"_id": {"$in": delete_ids}})
         return deletion_targets
 
-    def set_net_value_in_db(self, net, element_type, element_index,
-                            parameter, value, variant=None, project_id=None, **kwargs):
-        logger.info(f"Setting  {parameter} = {value} in {element_type} with index {element_index} and variant {variant}")
+    def set_net_value_in_db(
+        self,
+        net,
+        element_type,
+        element_index,
+        parameter,
+        value,
+        variant=None,
+        project_id=None,
+        **kwargs,
+    ):
+        logger.info(
+            f"Setting  {parameter} = {value} in {element_type} with index {element_index} and variant {variant}"
+        )
         if variant is not None:
             variant = int(variant)
         if project_id:
@@ -1075,14 +1366,22 @@ class PandaHub:
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
-        element_filter = {"index": element_index, "net_id": int(net_id), **self.get_variant_filter(variant)}
+        element_filter = {
+            "index": element_index,
+            "net_id": int(net_id),
+            **self.get_variant_filter(variant),
+        }
         document = db[collection].find_one({**element_filter})
         if not document:
-            raise UserWarning(f"No element '{element_type}' to change with index '{element_index}' in this variant")
+            raise UserWarning(
+                f"No element '{element_type}' to change with index '{element_index}' in this variant"
+            )
 
         old_value = document.get(parameter, None)
         if old_value == value:
-            logger.warning(f'Value "{value}" for "{parameter}" identical to database element - no change applied')
+            logger.warning(
+                f'Value "{value}" for "{parameter}" identical to database element - no change applied'
+            )
             return None
         if "." in parameter:
             key, subkey = parameter.split(".")
@@ -1091,26 +1390,41 @@ class PandaHub:
             document[parameter] = value
 
         if variant is None:
-            db[collection].update_one({**element_filter, **self.base_variant_filter},
-                                      {"$set": {parameter: value}})
+            db[collection].update_one(
+                {**element_filter, **self.base_variant_filter},
+                {"$set": {parameter: value}},
+            )
         else:
             if document["var_type"] == "base":
                 base_variant_id = document.pop("_id")
-                db[collection].update_one({"_id": base_variant_id},
-                                          {"$addToSet": {"not_in_var": variant}})
-                document.update(var_type="change", variant=variant, changed_fields=[parameter])
+                db[collection].update_one(
+                    {"_id": base_variant_id}, {"$addToSet": {"not_in_var": variant}}
+                )
+                document.update(
+                    var_type="change", variant=variant, changed_fields=[parameter]
+                )
                 insert_result = db[collection].insert_one(document)
                 document["_id"] = insert_result.inserted_id
             else:
                 update_dict = {"$set": {parameter: value}, "$unset": {"not_in_var": ""}}
                 if document["var_type"] == "change":
                     update_dict["$addToSet"] = {"changed_fields": parameter}
-                db[collection].update_one({"_id": document["_id"]},
-                                          update_dict)
-        return {"document": document, parameter: {"previous": old_value, "current": value}}
+                db[collection].update_one({"_id": document["_id"]}, update_dict)
+        return {
+            "document": document,
+            parameter: {"previous": old_value, "current": value},
+        }
 
-    def set_object_attribute(self, net, element_type, element_index,
-                             parameter, value, variant=None, project_id=None):
+    def set_object_attribute(
+        self,
+        net,
+        element_type,
+        element_index,
+        parameter,
+        value,
+        variant=None,
+        project_id=None,
+    ):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -1127,39 +1441,56 @@ class PandaHub:
         js = list(db[collection].find({"index": element_index, "net_id": net_id}))[0]
         obj = json_to_object(js["object"])
         setattr(obj, parameter, value)
-        db[collection].update_one({"index": element_index, "net_id": net_id},
-                                           {"$set": {"object._object": obj.to_json()}})
+        db[collection].update_one(
+            {"index": element_index, "net_id": net_id},
+            {"$set": {"object._object": obj.to_json()}},
+        )
 
         element_filter = {"index": element_index, "net_id": int(net_id)}
 
         if variant is None:
-            document = db[collection].find_one({**element_filter, **self.base_variant_filter})
+            document = db[collection].find_one(
+                {**element_filter, **self.base_variant_filter}
+            )
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             db[collection].update_one(
-                {**element_filter, **self.base_variant_filter}, {"$set": {"object._object": obj.to_json()}}
+                {**element_filter, **self.base_variant_filter},
+                {"$set": {"object._object": obj.to_json()}},
             )
         else:
             variant = int(variant)
             element_filter = {**element_filter, **self.get_variant_filter(variant)}
             document = db[collection].find_one({**element_filter})
             if not document:
-                raise UserWarning(f"No element '{element_type}' to change with index '{element_index}' in this variant")
+                raise UserWarning(
+                    f"No element '{element_type}' to change with index '{element_index}' in this variant"
+                )
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             if document["var_type"] == "base":
                 base_variant_id = document.pop("_id")
-                db[collection].update_one({"_id": base_variant_id},
-                                          {"$addToSet": {"not_in_var": variant}})
+                db[collection].update_one(
+                    {"_id": base_variant_id}, {"$addToSet": {"not_in_var": variant}}
+                )
                 document["object"]["_object"] = obj
                 document["var_type"] = "change"
                 db[collection].insert_one(document)
             else:
-                db[collection].update_one({"_id": document["_id"]},
-                                          {"$set": {"object._object": obj}})
+                db[collection].update_one(
+                    {"_id": document["_id"]}, {"$set": {"object._object": obj}}
+                )
 
-    def create_element(self, net: Union[int, str], element_type: str, element_index: int, element_data: dict,
-                       variant=None, project_id=None, **kwargs) -> dict:
+    def create_element(
+        self,
+        net: Union[int, str],
+        element_type: str,
+        element_index: int,
+        element_data: dict,
+        variant=None,
+        project_id=None,
+        **kwargs,
+    ) -> dict:
         """
         Creates an element in the database.
 
@@ -1191,8 +1522,15 @@ class PandaHub:
             **kwargs,
         )[0]
 
-    def create_elements(self, net: Union[int, str], element_type: str, elements_data: list[dict],
-                        variant: int = None, project_id: str = None, **kwargs) -> list[dict]:
+    def create_elements(
+        self,
+        net: Union[int, str],
+        element_type: str,
+        elements_data: list[dict],
+        variant: int = None,
+        project_id: str = None,
+        **kwargs,
+    ) -> list[dict]:
         """
         Creates multiple elements of the same type in the database.
 
@@ -1275,7 +1613,9 @@ class PandaHub:
             if not val is None and key in dtypes and not dtypes[key] == object:
                 data[key] = dtypes[key](val)
 
-    def _create_mongodb_indexes(self, project_id: Optional[str]=None, collection: Optional["str"]=None):
+    def _create_mongodb_indexes(
+        self, project_id: Optional[str] = None, collection: Optional["str"] = None
+    ):
         """
         Create indexes on mongodb collections. Indexes are defined in pandahub.lib.mongodb_indexes
 
@@ -1312,13 +1652,16 @@ class PandaHub:
     def create_variant(self, data):
         db = self._get_project_database()
         net_id = int(data["net_id"])
-        max_index = list(db["variant"].find({"net_id": net_id},
-                                            projection={"_id": 0, "index": 1}).sort("index", -1).limit(1))
+        max_index = list(
+            db["variant"]
+            .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
+            .sort("index", -1)
+            .limit(1)
+        )
         if not max_index:
             index = 1
             for coll in self._get_net_collections(db):
-                update = {"$set": {"var_type": "base",
-                                   "not_in_var": []}}
+                update = {"$set": {"var_type": "base", "not_in_var": []}}
                 db[coll].update_many({}, update)
 
         else:
@@ -1339,11 +1682,18 @@ class PandaHub:
         collection_names = self._get_net_collections(db)
         for coll in collection_names:
             # remove references to deleted objects
-            db[coll].update_many({"net_id": net_id, "var_type": "base", "not_in_var": index},
-                                 {"$pull": {"not_in_var": index}})
+            db[coll].update_many(
+                {"net_id": net_id, "var_type": "base", "not_in_var": index},
+                {"$pull": {"not_in_var": index}},
+            )
             # remove changes and additions
-            db[coll].delete_many({"net_id": net_id, "var_type": {"$in": ["change", "addition"]},
-                                  "variant": index})
+            db[coll].delete_many(
+                {
+                    "net_id": net_id,
+                    "var_type": {"$in": ["change", "addition"]},
+                    "variant": index,
+                }
+            )
         # delete variant
         db["variant"].delete_one({"net_id": net_id, "index": index})
 
@@ -1367,15 +1717,28 @@ class PandaHub:
         """
         if type(variants) is list and variants:
             if len(variants) > 1:
-                variants = [int(var) for var in variants] # make sure variants are of type int
-                return {"$or": [{"var_type": "base", "not_in_var": {"$nin": variants}},
-                                {"var_type": {"$in": ["change", "addition"]}, "variant": {"$in": variants}}]}
+                variants = [
+                    int(var) for var in variants
+                ]  # make sure variants are of type int
+                return {
+                    "$or": [
+                        {"var_type": "base", "not_in_var": {"$nin": variants}},
+                        {
+                            "var_type": {"$in": ["change", "addition"]},
+                            "variant": {"$in": variants},
+                        },
+                    ]
+                }
             else:
                 variants = variants[0]
         if variants:
             variants = int(variants)
-            return {"$or": [{"var_type": "base", "not_in_var": {"$ne": variants}},
-                            {"var_type": {"$in": ["change", "addition"]}, "variant": variants}]}
+            return {
+                "$or": [
+                    {"var_type": "base", "not_in_var": {"$ne": variants}},
+                    {"var_type": {"$in": ["change", "addition"]}, "variant": variants},
+                ]
+            }
         else:
             return self.base_variant_filter
 
@@ -1383,7 +1746,9 @@ class PandaHub:
     # Bulk operations
     # -------------------------
 
-    def bulk_write_to_db(self, data, collection_name="tasks", global_database=True, project_id=None):
+    def bulk_write_to_db(
+        self, data, collection_name="tasks", global_database=True, project_id=None
+    ):
         """
         Writes any number of documents to the database at once. Checks, if any
         document with the same _id already exists in the database. Already existing
@@ -1411,12 +1776,20 @@ class PandaHub:
         else:
             self.check_permission("write")
             db = self._get_project_database()
-        operations = [ReplaceOne(replacement=d, filter={"_id": d["_id"]},
-                                 upsert=True)
-                      for d in data]
+        operations = [
+            ReplaceOne(replacement=d, filter={"_id": d["_id"]}, upsert=True)
+            for d in data
+        ]
         db[collection_name].bulk_write(operations)
 
-    def bulk_update_in_db(self, data, document_ids, collection_name="tasks", global_database=False, project_id=None):
+    def bulk_update_in_db(
+        self,
+        data,
+        document_ids,
+        collection_name="tasks",
+        global_database=False,
+        project_id=None,
+    ):
         """
         Updates any number of documents in the database at once, according to their
         document_ids.
@@ -1449,11 +1822,13 @@ class PandaHub:
         operations["UpdateOne"] = []
         i = 0
         for d in data:
-            operations["UpdateOne"].append({
-                "filter": {"_id": document_ids[i]},
-                "update": {"$push": d},
-                "upsert": False
-            })
+            operations["UpdateOne"].append(
+                {
+                    "filter": {"_id": document_ids[i]},
+                    "update": {"$push": d},
+                    "upsert": False,
+                }
+            )
             i += 1
 
         db[collection_name].bulk_write(operations)
@@ -1462,15 +1837,17 @@ class PandaHub:
     # Timeseries
     # -------------------------
 
-    def write_timeseries_to_db(self,
-                               timeseries,
-                               data_type,
-                               ts_format="timestamp_value",
-                               compress_ts_data=False,
-                               global_database=False,
-                               collection_name="timeseries",
-                               project_id=None,
-                               **kwargs):
+    def write_timeseries_to_db(
+        self,
+        timeseries,
+        data_type,
+        ts_format="timestamp_value",
+        compress_ts_data=False,
+        global_database=False,
+        collection_name="timeseries",
+        project_id=None,
+        **kwargs,
+    ):
         """
         This function can be used to write a timeseries to a MongoDB database.
         The timeseries must be provided as a pandas Series with the timestamps as
@@ -1526,29 +1903,46 @@ class PandaHub:
         else:
             self.check_permission("write")
             db = self._get_project_database()
-        document = create_timeseries_document(timeseries=timeseries,
-                                              data_type=data_type,
-                                              ts_format=ts_format,
-                                              compress_ts_data=compress_ts_data,
-                                              **kwargs)
-        db[collection_name].replace_one(
-            {"_id": document["_id"]},
-            document,
-            upsert=True
+        if self.collection_is_timeseries(collection_name, project_id, global_database):
+            metadata = kwargs
+            if data_type is not None:
+                metadata["data_type"] = data_type
+            if isinstance(timeseries, pd.Series):
+                documents = [
+                    {"metadata": metadata, "timestamp": idx, "value": value}
+                    for idx, value in timeseries.items()
+                ]
+            elif isinstance(timeseries, pd.DataFrame):
+                documents = [
+                    {"metadata": metadata, "timestamp": idx, **row.to_dict()}
+                    for idx, row in timeseries.iterrows()
+                ]
+            return db.measurements.insert_many(documents)
+        document = create_timeseries_document(
+            timeseries=timeseries,
+            data_type=data_type,
+            ts_format=ts_format,
+            compress_ts_data=compress_ts_data,
+            **kwargs,
         )
+        db[collection_name].replace_one({"_id": document["_id"]}, document, upsert=True)
         logger.debug("document with _id {document['_id']} added to database")
         if kwargs.get("return_id"):
             return document["_id"]
         return None
 
-    def bulk_write_timeseries_to_db(self, timeseries, data_type,
-                                    meta_frame=None,
-                                    ts_format="timestamp_value",
-                                    compress_ts_data=False,
-                                    global_database=False,
-                                    collection_name="timeseries",
-                                    project_id=None,
-                                    **kwargs):
+    def bulk_write_timeseries_to_db(
+        self,
+        timeseries,
+        data_type,
+        meta_frame=None,
+        ts_format="timestamp_value",
+        compress_ts_data=False,
+        global_database=False,
+        collection_name="timeseries",
+        project_id=None,
+        **kwargs,
+    ):
         """
         This function can be used to write a pandas DataFrame, containing multiple
         timeseries of the same element_type and data_type at once to a MongoDB
@@ -1595,26 +1989,36 @@ class PandaHub:
         documents = []
         if project_id:
             self.set_active_project_by_id(project_id)
+        if self.collection_is_timeseries(collection_name, project_id, global_database):
+            raise NotImplementedError("Not implemented yet for timeseries collections")
         for col in timeseries.columns:
             if meta_frame is not None:
                 args = {**kwargs, **meta_frame.loc[col]}
             else:
                 args = kwargs
-            doc = create_timeseries_document(timeseries[col],
-                                             data_type,
-                                             ts_format=ts_format,
-                                             compress_ts_data=compress_ts_data,
-                                             element_index=col,
-                                             **args)
+            doc = create_timeseries_document(
+                timeseries[col],
+                data_type,
+                ts_format=ts_format,
+                compress_ts_data=compress_ts_data,
+                element_index=col,
+                **args,
+            )
             documents.append(doc)
-        self.bulk_write_to_db(documents, collection_name=collection_name,
-                              global_database=global_database)
+        self.bulk_write_to_db(
+            documents, collection_name=collection_name, global_database=global_database
+        )
         logger.debug(f"{len(documents)} documents added to database")
         return [d["_id"] for d in documents]
 
-    def update_timeseries_in_db(self, new_ts_content, document_id, collection_name="timeseries",
-                                global_database=False, project_id=None):
-
+    def update_timeseries_in_db(
+        self,
+        new_ts_content,
+        document_id,
+        collection_name="timeseries",
+        global_database=False,
+        project_id=None,
+    ):
         """
         This function can be used to append a timeseries to an existing timseries
         in the MongoDB database.
@@ -1647,14 +2051,25 @@ class PandaHub:
         else:
             self.check_permission("write")
             db = self._get_project_database()
-        ts_update = {"timeseries_data": {"$each": convert_timeseries_to_subdocuments(new_ts_content)}}
-        db[collection_name].update_one({"_id": document_id},
-                                                {"$push": ts_update},)
+        ts_update = {
+            "timeseries_data": {
+                "$each": convert_timeseries_to_subdocuments(new_ts_content)
+            }
+        }
+        db[collection_name].update_one(
+            {"_id": document_id},
+            {"$push": ts_update},
+        )
         # logger.info("document updated in database")
 
-    def bulk_update_timeseries_in_db(self, new_ts_content, document_ids, project_id=None, collection_name="timeseries",
-                                     global_database=False):
-
+    def bulk_update_timeseries_in_db(
+        self,
+        new_ts_content,
+        document_ids,
+        project_id=None,
+        collection_name="timeseries",
+        global_database=False,
+    ):
         """
         This function can be used to append a pandas DataFrame, containing multiple
         timeseries of the same element_type and data_type at once, to an already
@@ -1684,23 +2099,38 @@ class PandaHub:
         """
         if project_id:
             self.set_active_project_by_id(project_id)
-
+        if self.collection_is_timeseries(collection_name, project_id, global_database):
+            raise NotImplementedError("Not implemented yet for timeseries collections")
         documents = []
         for i in range(len(new_ts_content.columns)):
             col = new_ts_content.columns[i]
             document = {}
-            document["timeseries_data"] = {"$each": convert_timeseries_to_subdocuments(new_ts_content[col])}
+            document["timeseries_data"] = {
+                "$each": convert_timeseries_to_subdocuments(new_ts_content[col])
+            }
             documents.append(document)
-        self.bulk_update_in_db(documents, document_ids, project_id=project_id,
-                               collection_name="timeseries", global_database=global_database)
+        self.bulk_update_in_db(
+            documents,
+            document_ids,
+            project_id=project_id,
+            collection_name="timeseries",
+            global_database=global_database,
+        )
 
         # logger.debug(f"{len(documents)} documents added to database")
 
-    def get_timeseries_from_db(self, filter_document={}, timestamp_range=None,
-                               ts_format="timestamp_value",
-                               compressed_ts_data=False,
-                               global_database=False, collection_name="timeseries",
-                               include_metadata=False, project_id=None, **kwargs):
+    def get_timeseries_from_db(
+        self,
+        filter_document={},
+        timestamp_range=None,
+        ts_format="timestamp_value",
+        compressed_ts_data=False,
+        global_database=False,
+        collection_name="timeseries",
+        include_metadata=False,
+        project_id=None,
+        **kwargs,
+    ):
         """
         This function can be used to retrieve a single timeseries from a
         MongoDB database that matches the provided metadata filter_document.
@@ -1751,28 +2181,67 @@ class PandaHub:
         else:
             self.check_permission("read")
             db = self._get_project_database()
+        if self.collection_is_timeseries(collection_name, project_id, global_database):
+            meta_filter = {
+                "metadata." + key: value for key, value in filter_document.items()
+            }
+            pipeline = []
+            pipeline.append({"$match": meta_filter})
+            pipeline.append({"$project": {"_id": 0, "metadata": 0}})
+            timeseries = db[collection_name].aggregate_pandas_all(pipeline)
+            timeseries.set_index("timestamp", inplace=True)
+            if include_metadata:
+                raise NotImplementedError(
+                    "Not implemented yet for timeseries collections"
+                )
+            return timeseries
         filter_document = {**filter_document, **kwargs}
         pipeline = [{"$match": filter_document}]
         if not compressed_ts_data:
             if ts_format == "timestamp_value":
                 if timestamp_range:
-                    pipeline.append({"$project": {"timeseries_data": {"$filter": {"input": "$timeseries_data",
-                                                                                  "as": "timeseries_data",
-                                                                                  "cond": {"$and": [{"$gte": [
-                                                                                      "$$timeseries_data.timestamp",
-                                                                                      timestamp_range[0]]},
-                                                                                      {"$lt": [
-                                                                                          "$$timeseries_data.timestamp",
-                                                                                          timestamp_range[
-                                                                                              1]]}]}}}}})
-                pipeline.append({"$addFields": {"timestamps": "$timeseries_data.timestamp",
-                                                "values": "$timeseries_data.value"}})
+                    pipeline.append(
+                        {
+                            "$project": {
+                                "timeseries_data": {
+                                    "$filter": {
+                                        "input": "$timeseries_data",
+                                        "as": "timeseries_data",
+                                        "cond": {
+                                            "$and": [
+                                                {
+                                                    "$gte": [
+                                                        "$$timeseries_data.timestamp",
+                                                        timestamp_range[0],
+                                                    ]
+                                                },
+                                                {
+                                                    "$lt": [
+                                                        "$$timeseries_data.timestamp",
+                                                        timestamp_range[1],
+                                                    ]
+                                                },
+                                            ]
+                                        },
+                                    }
+                                }
+                            }
+                        }
+                    )
+                pipeline.append(
+                    {
+                        "$addFields": {
+                            "timestamps": "$timeseries_data.timestamp",
+                            "values": "$timeseries_data.value",
+                        }
+                    }
+                )
                 if include_metadata:
                     pipeline.append({"$project": {"timeseries_data": 0}})
                 else:
-                    pipeline.append({"$project": {"timestamps": 1,
-                                                  "values": 1,
-                                                  "_id": 0}})
+                    pipeline.append(
+                        {"$project": {"timestamps": 1, "values": 1, "_id": 0}}
+                    )
             elif ts_format == "array":
                 if not include_metadata:
                     pipeline.append({"$project": {"timeseries_data": 1}})
@@ -1787,12 +2256,14 @@ class PandaHub:
         else:
             data = data[0]
         if compressed_ts_data:
-            timeseries_data = decompress_timeseries_data(data["timeseries_data"], ts_format)
+            timeseries_data = decompress_timeseries_data(
+                data["timeseries_data"], ts_format
+            )
         else:
             if ts_format == "timestamp_value":
-                timeseries_data = pd.Series(data["values"],
-                                            index=data["timestamps"],
-                                            dtype="float64")
+                timeseries_data = pd.Series(
+                    data["values"], index=data["timestamps"], dtype="float64"
+                )
             elif ts_format == "array":
                 timeseries_data = data["timeseries_data"]
         if include_metadata:
@@ -1803,7 +2274,13 @@ class PandaHub:
         else:
             return timeseries_data
 
-    def get_timeseries_metadata(self, filter_document, collection_name="timeseries", global_database=False):
+    def get_timeseries_metadata(
+        self,
+        filter_document,
+        collection_name="timeseries",
+        global_database=False,
+        project_id=None,
+    ):
         """
         Returns a DataFrame, containing all metadata matching the provided filter.
         A filter document has to be provided in form of a dictionary, containing
@@ -1827,59 +2304,6 @@ class PandaHub:
             DataFrame, containing all metadata matching the provided filter.
 
         """
-        if global_database:
-            db = self._get_global_database()
-        else:
-            self.check_permission("read")
-            db = self._get_project_database()
-        match_filter = []
-        pipeline = []
-        for key in filter_document:
-            if key == "timestamp_range":
-                continue
-            filter_value = filter_document[key]
-            if type(filter_value) == list:
-                match_filter.append({key: {"$in": filter_value}})
-            else:
-                match_filter.append({key: filter_value})
-        if match_filter:
-            pipeline.append({"$match": {"$and": match_filter}})
-        projection = {"$project": {"timeseries_data": 0}}
-        pipeline.append(projection)
-        metadata = list(db[collection_name].aggregate(pipeline))
-        df_metadata = pd.DataFrame(metadata)
-        if len(df_metadata):
-            df_metadata.set_index("_id", inplace=True)
-        return df_metadata
-
-    def add_metadata(self, filter_document, add_meta, global_database=False,
-                     collection_name="timeseries"):
-        if global_database:
-            db = self._get_global_database()
-        else:
-            self.check_permission("write")
-            db = self._get_project_database()
-
-        # get metada before change
-        meta_before = self.get_timeseries_metadata(filter_document, global_database=global_database,
-                                                   collection_name=collection_name)
-        # add the new information to the metadata dict of the existing timeseries
-        if len(meta_before) > 1:  # TODO is this the desired behaviour? Needs to specified
-            raise PandaHubError
-        meta_copy = {**meta_before.iloc[0].to_dict(), **add_meta}
-        # write new metadata to mongo db
-        db[collection_name].replace_one({"_id": meta_before.index[0]},
-                                                 meta_copy, upsert=True)
-        return meta_copy
-
-    def multi_get_timeseries_from_db(self, filter_document={},
-                                     timestamp_range=None,
-                                     exclude_timestamp_range=None,
-                                     include_metadata=False,
-                                     ts_format="timestamp_value",
-                                     compressed_ts_data=False,
-                                     global_database=False, collection_name="timeseries",
-                                     project_id=None, **kwargs):
         if project_id:
             self.set_active_project_by_id(project_id)
         if global_database:
@@ -1887,6 +2311,170 @@ class PandaHub:
         else:
             self.check_permission("read")
             db = self._get_project_database()
+        if self.collection_is_timeseries(collection_name, project_id, global_database):
+            pipeline = []
+            if len(filter_document) > 0:
+                document_filter = {
+                    "metadata." + key: value for key, value in filter_document.items()
+                }
+                pipeline.append({"$match": document_filter})
+            else:
+                document_filter = {}
+            document = db[collection_name].find_one(
+                document_filter, projection={"timestamp": 0, "metadata": 0, "_id": 0}
+            )
+            value_fields = ["$%s" % field for field in document.keys()]
+            pipeline.append(
+                {
+                    "$group": {
+                        "_id": "$metadata._id",
+                        "max_value": {"$max": {"$max": value_fields}},
+                        "min_value": {"$min": {"$min": value_fields}},
+                        "first_timestamp": {"$min": "$timestamp"},
+                        "last_timestamp": {"$max": "$timestamp"},
+                    }
+                }
+            )
+        else:
+            match_filter = []
+            pipeline = []
+            for key in filter_document:
+                if key == "timestamp_range":
+                    continue
+                filter_value = filter_document[key]
+                if type(filter_value) == list:
+                    match_filter.append({key: {"$in": filter_value}})
+                else:
+                    match_filter.append({key: filter_value})
+            if match_filter:
+                pipeline.append({"$match": {"$and": match_filter}})
+            projection = {"$project": {"timeseries_data": 0}}
+            pipeline.append(projection)
+        metadata = list(db[collection_name].aggregate(pipeline))
+        df_metadata = pd.DataFrame(metadata)
+        if len(df_metadata):
+            df_metadata.set_index("_id", inplace=True)
+        return df_metadata
+
+    def add_metadata(
+        self,
+        filter_document,
+        add_meta,
+        global_database=False,
+        collection_name="timeseries",
+    ):
+        if global_database:
+            db = self._get_global_database()
+        else:
+            self.check_permission("write")
+            db = self._get_project_database()
+
+        # get metada before change
+        meta_before = self.get_timeseries_metadata(
+            filter_document,
+            global_database=global_database,
+            collection_name=collection_name,
+        )
+        # add the new information to the metadata dict of the existing timeseries
+        if (
+            len(meta_before) > 1
+        ):  # TODO is this the desired behaviour? Needs to specified
+            raise PandaHubError
+        meta_copy = {**meta_before.iloc[0].to_dict(), **add_meta}
+        # write new metadata to mongo db
+        db[collection_name].replace_one(
+            {"_id": meta_before.index[0]}, meta_copy, upsert=True
+        )
+        return meta_copy
+
+    def multi_get_timeseries_from_db(
+        self,
+        filter_document={},
+        timestamp_range=None,
+        exclude_timestamp_range=None,
+        include_metadata=False,
+        ts_format="timestamp_value",
+        compressed_ts_data=False,
+        global_database=False,
+        collection_name="timeseries",
+        project_id=None,
+        **kwargs,
+    ):
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        if global_database:
+            db = self._get_global_database()
+        else:
+            self.check_permission("read")
+            db = self._get_project_database()
+        if self.collection_is_timeseries(collection_name, project_id, global_database):
+            pipeline = []
+            if timestamp_range is not None:
+                pipeline.append(
+                    {
+                        "$match": {
+                            "timestamp": {
+                                "$gte": timestamp_range[0],
+                                "$lt": timestamp_range[1],
+                            }
+                        }
+                    }
+                )
+            if exclude_timestamp_range is not None:
+                pipeline.append(
+                    {
+                        "$match": {
+                            "timestamp": {
+                                "$gte": exclude_timestamp_range[0],
+                                "$lt": exclude_timestamp_range[1],
+                            }
+                        }
+                    }
+                )
+            if filter_document is not None:
+                document_filter = {
+                    "metadata." + key: value for key, value in filter_document.items()
+                }
+                pipeline.append({"$match": document_filter})
+
+            pipeline.append({"$addFields": {"_id": "$metadata._id"}})
+            pipeline.append({"$project": {"metadata": 0}})
+
+            if include_metadata:
+                document = db[collection_name].find_one(
+                    document_filter,
+                    projection={"timestamp": 0, "metadata": 0, "_id": 0},
+                )
+                meta_pipeline = []
+                meta_pipeline.append({"$match": document_filter})
+                value_fields = ["$%s" % field for field in document.keys()]
+                meta_pipeline.append(
+                    {
+                        "$group": {
+                            "_id": "$metadata._id",
+                            "max_value": {"$max": {"$max": value_fields}},
+                            "min_value": {"$min": {"$min": value_fields}},
+                            "first_timestamp": {"$min": "$timestamp"},
+                            "last_timestamp": {"$max": "$timestamp"},
+                            "name": {"$first": "$metadata.name"},
+                            "data_type": {"$first": "$metadata.data_type"},
+                        }
+                    }
+                )
+                meta_data = {
+                    d["_id"]: d for d in db[collection_name].aggregate(meta_pipeline)
+                }
+            timeseries = []
+            ts_all = db.measurements.aggregate_pandas_all(pipeline)
+            for _id, ts in ts_all.groupby("_id"):
+                ts.set_index("timestamp", inplace=True)
+                for col in set(ts.columns) - {"timestamp", "_id"}:
+                    timeseries_dict = {"timeseries_data": ts[col]}
+                    if include_metadata:
+                        timeseries_dict.update(meta_data[_id])
+                    timeseries.append(timeseries_dict)
+            return timeseries
+
         filter_document = {**filter_document, **kwargs}
         match_filter = []
         for key in filter_document:
@@ -1901,20 +2489,56 @@ class PandaHub:
         else:
             pipeline = []
         if timestamp_range:
-            projection = {"timeseries_data": {"$filter": {"input": "$timeseries_data",
-                                                          "as": "timeseries_data",
-                                                          "cond": {"$and": [{"$gte": ["$$timeseries_data.timestamp",
-                                                                                      timestamp_range[0]]},
-                                                                            {"$lt": ["$$timeseries_data.timestamp",
-                                                                                     timestamp_range[1]]}]}}}}
+            projection = {
+                "timeseries_data": {
+                    "$filter": {
+                        "input": "$timeseries_data",
+                        "as": "timeseries_data",
+                        "cond": {
+                            "$and": [
+                                {
+                                    "$gte": [
+                                        "$$timeseries_data.timestamp",
+                                        timestamp_range[0],
+                                    ]
+                                },
+                                {
+                                    "$lt": [
+                                        "$$timeseries_data.timestamp",
+                                        timestamp_range[1],
+                                    ]
+                                },
+                            ]
+                        },
+                    }
+                }
+            }
             pipeline.append({"$project": projection})
         if exclude_timestamp_range:
-            projection = {"timeseries_data": {"$filter": {"input": "$timeseries_data",
-                                                          "as": "timeseries_data",
-                                                          "cond": {"$or": [{"$lt": ["$$timeseries_data.timestamp",
-                                                                                    timestamp_range[0]]},
-                                                                           {"$gte": ["$$timeseries_data.timestamp",
-                                                                                     timestamp_range[1]]}]}}}}
+            projection = {
+                "timeseries_data": {
+                    "$filter": {
+                        "input": "$timeseries_data",
+                        "as": "timeseries_data",
+                        "cond": {
+                            "$or": [
+                                {
+                                    "$lt": [
+                                        "$$timeseries_data.timestamp",
+                                        timestamp_range[0],
+                                    ]
+                                },
+                                {
+                                    "$gte": [
+                                        "$$timeseries_data.timestamp",
+                                        timestamp_range[1],
+                                    ]
+                                },
+                            ]
+                        },
+                    }
+                }
+            }
             pipeline.append({"$project": projection})
         if not include_metadata:
             pipeline.append({"$project": {"timeseries_data": 1}})
@@ -1937,7 +2561,9 @@ class PandaHub:
                 timeseries.append(ts)
                 if exclude_timestamp_range is not None or timestamp_range is not None:
                     # TODO: Second query to get the metadata, since metadata is not returned if a projection on the subfield is used
-                    metadata = db[collection_name].find_one({"_id": ts["_id"]}, projection={"timeseries_data": 0})
+                    metadata = db[collection_name].find_one(
+                        {"_id": ts["_id"]}, projection={"timeseries_data": 0}
+                    )
                     ts.update(metadata)
             else:
                 if ts_format == "timestamp_value":
@@ -1951,11 +2577,18 @@ class PandaHub:
                 return pd.DataFrame(np.array(timeseries).T, index=timeseries_data.index)
             return pd.DataFrame(np.array(timeseries).T)
 
-    def bulk_get_timeseries_from_db(self, filter_document={}, timestamp_range=None,
-                                    exclude_timestamp_range=None,
-                                    additional_columns=None, pivot_by_column=None,
-                                    global_database=False, collection_name="timeseries",
-                                    **kwargs):
+    def bulk_get_timeseries_from_db(
+        self,
+        filter_document={},
+        timestamp_range=None,
+        exclude_timestamp_range=None,
+        additional_columns=None,
+        pivot_by_column=None,
+        global_database=False,
+        collection_name="timeseries",
+        project_id=None,
+        **kwargs,
+    ):
         """
         This function can be used to retrieve multiple timeseries at once from a
         MongoDB database. The timeseries will be filtered by their metadata.
@@ -2006,6 +2639,30 @@ class PandaHub:
             self.check_permission("read")
             db = self._get_project_database()
 
+        if self.collection_is_timeseries(collection_name, project_id, global_database):
+            document_filter = {
+                "metadata." + key: value for key, value in filter_document.items()
+            }
+            if timestamp_range is not None and exclude_timestamp_range is not None:
+                raise NotImplementedError(
+                    "timestamp_range and exclude_timestamp_range cannot be used at the same time with timeseries collections"
+                )
+            if timestamp_range is not None:
+                document_filter["timestamp"] = {
+                    "$gte": timestamp_range[0],
+                    "$lte": timestamp_range[1],
+                }
+            if exclude_timestamp_range is not None:
+                document_filter["timestamp"] = {
+                    "$lte": exclude_timestamp_range[0],
+                    "$gte": exclude_timestamp_range[1],
+                }
+            timeseries = {
+                d["timestamp"]: d["value"]
+                for d in db[collection_name].find(document_filter)
+            }
+            return pd.Series(timeseries)
+
         filter_document = {**filter_document, **kwargs}
         match_filter = []
         for key in filter_document:
@@ -2023,26 +2680,64 @@ class PandaHub:
         if pivot_by_column:
             custom_projection[pivot_by_column] = 1
         if timestamp_range:
-            projection = {"timeseries_data": {"$filter": {"input": "$timeseries_data",
-                                                          "as": "timeseries_data",
-                                                          "cond": {"$and": [{"$gte": ["$$timeseries_data.timestamp",
-                                                                                      timestamp_range[0]]},
-                                                                            {"$lt": ["$$timeseries_data.timestamp",
-                                                                                     timestamp_range[1]]}]}}}}
+            projection = {
+                "timeseries_data": {
+                    "$filter": {
+                        "input": "$timeseries_data",
+                        "as": "timeseries_data",
+                        "cond": {
+                            "$and": [
+                                {
+                                    "$gte": [
+                                        "$$timeseries_data.timestamp",
+                                        timestamp_range[0],
+                                    ]
+                                },
+                                {
+                                    "$lt": [
+                                        "$$timeseries_data.timestamp",
+                                        timestamp_range[1],
+                                    ]
+                                },
+                            ]
+                        },
+                    }
+                }
+            }
             projection = {**projection, **custom_projection}
             pipeline.append({"$project": projection})
         if exclude_timestamp_range:
-            projection = {"timeseries_data": {"$filter": {"input": "$timeseries_data",
-                                                          "as": "timeseries_data",
-                                                          "cond": {"$or": [{"$lt": ["$$timeseries_data.timestamp",
-                                                                                    timestamp_range[0]]},
-                                                                           {"$gte": ["$$timeseries_data.timestamp",
-                                                                                     timestamp_range[1]]}]}}}}
+            projection = {
+                "timeseries_data": {
+                    "$filter": {
+                        "input": "$timeseries_data",
+                        "as": "timeseries_data",
+                        "cond": {
+                            "$or": [
+                                {
+                                    "$lt": [
+                                        "$$timeseries_data.timestamp",
+                                        timestamp_range[0],
+                                    ]
+                                },
+                                {
+                                    "$gte": [
+                                        "$$timeseries_data.timestamp",
+                                        timestamp_range[1],
+                                    ]
+                                },
+                            ]
+                        },
+                    }
+                }
+            }
             projection = {**projection, **custom_projection}
             pipeline.append({"$project": projection})
         pipeline.append({"$unwind": "$timeseries_data"})
-        projection = {"value": "$timeseries_data.value",
-                      "timestamp": "$timeseries_data.timestamp"}
+        projection = {
+            "value": "$timeseries_data.value",
+            "timestamp": "$timeseries_data.timestamp",
+        }
         projection = {**projection, **custom_projection}
         pipeline.append({"$project": projection})
         timeseries = pd.DataFrame(db[collection_name].aggregate(pipeline))
@@ -2057,9 +2752,15 @@ class PandaHub:
             timeseries = timeseries.pivot(columns=pivot_by_column, values="value")
         return timeseries
 
-    def delete_timeseries_from_db(self, element_type, data_type, netname=None,
-                                  element_index=None, collection_name="timeseries",
-                                  **kwargs):
+    def delete_timeseries_from_db(
+        self,
+        element_type,
+        data_type,
+        netname=None,
+        element_index=None,
+        collection_name="timeseries",
+        **kwargs,
+    ):
         """
         This function can be used to delete a single timeseries that matches
         the provided metadata from a MongoDB database. The element_type and data_type
@@ -2097,8 +2798,7 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
 
-        filter_document = {"element_type": element_type,
-                           "data_type": data_type}
+        filter_document = {"element_type": element_type, "data_type": data_type}
         if netname is not None:
             filter_document["netname"] = netname
         if element_index is not None:
@@ -2107,8 +2807,9 @@ class PandaHub:
         del_res = db[collection_name].delete_one(filter_document)
         return del_res
 
-    def bulk_del_timeseries_from_db(self, filter_document,
-                                    collection_name="timeseries"):
+    def bulk_del_timeseries_from_db(
+        self, filter_document, collection_name="timeseries"
+    ):
         """
         This function can be used to delete multiple timeseries at once from a
         MongoDB database. The timeseries will be filtered by their metadata.
@@ -2136,6 +2837,12 @@ class PandaHub:
         """
         self.check_permission("write")
         db = self._get_project_database()
+        if self.collection_is_timeseries(collection_name):
+            meta_filter = {
+                "metadata." + key: value for key, value in filter_document.items()
+            }
+            return db[collection_name].delete_many(meta_filter)
+        db = self._get_project_database()
         match_filter = {}
         for key in filter_document:
             if key == "timestamp_range":
@@ -2149,11 +2856,57 @@ class PandaHub:
         del_res = db[collection_name].delete_many(match_filter)
         return del_res
 
+    def create_timeseries_collection(self, collection_name, overwrite=False):
+        db = self._get_project_database()
+        collection_exists = collection_name in db.list_collection_names()
+        if collection_exists:
+            if overwrite:
+                db.drop_collection(collection_name)
+            else:
+                print("Collection exists, skipping")
+                return
+        db.create_collection(
+            collection_name,
+            timeseries={
+                "timeField": "timestamp",
+                "metaField": "metadata",
+                "granularity": "minutes",
+            },
+        )
+        db[collection_name].create_index({"metadata._id": 1})
+
+    def collection_is_timeseries(
+        self,
+        collection_name,
+        project_id=None,
+        global_database=False,
+    ):
+        db = self._get_project_or_global_db(project_id, global_database)
+        collections = list(db.list_collections(filter={"name": collection_name}))
+        return len(collections) == 1 and collections[0]["type"] == "timeseries"
+
+    def _get_project_or_global_db(self, project_id=None, global_database=False):
+        if project_id:
+            self.set_active_project_by_id(project_id)
+        if global_database:
+            return self._get_global_database()
+        else:
+            return self._get_project_database()
+
     #### deprecated functions
 
-    def create_element_in_db(self, net: Union[int, str], element: str, element_index: int, data: dict,
-                             variant=None, project_id=None):
-        warnings.warn("ph.create_element_in_db was renamed - use ph.create_element instead!")
+    def create_element_in_db(
+        self,
+        net: Union[int, str],
+        element: str,
+        element_index: int,
+        data: dict,
+        variant=None,
+        project_id=None,
+    ):
+        warnings.warn(
+            "ph.create_element_in_db was renamed - use ph.create_element instead!"
+        )
         return self.create_element(
             net=net,
             element_type=element,
@@ -2163,11 +2916,18 @@ class PandaHub:
             project_id=project_id,
         )
 
-
-    def create_elements_in_db(self, net: Union[int, str], element_type: str, elements_data: list[dict],
-                              project_id: str = None, variant: int = None):
-        warnings.warn("ph.create_elements_in_db was renamed - use ph.create_elements instead! "
-                      "Watch out for changed order of project_id and variant args")
+    def create_elements_in_db(
+        self,
+        net: Union[int, str],
+        element_type: str,
+        elements_data: list[dict],
+        project_id: str = None,
+        variant: int = None,
+    ):
+        warnings.warn(
+            "ph.create_elements_in_db was renamed - use ph.create_elements instead! "
+            "Watch out for changed order of project_id and variant args"
+        )
         return self.create_elements(
             net=net,
             element_type=element_type,
@@ -2176,9 +2936,12 @@ class PandaHub:
             project_id=project_id,
         )
 
-
-    def delete_net_element(self, net, element, element_index, variant=None, project_id=None):
-        warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead!")
+    def delete_net_element(
+        self, net, element, element_index, variant=None, project_id=None
+    ):
+        warnings.warn(
+            "ph.delete_net_element was renamed - use ph.delete_element instead!"
+        )
         return self.delete_element(
             net=net,
             element_type=element,
@@ -2188,9 +2951,9 @@ class PandaHub:
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     self = PandaHub()
-    project_name = 'test_project'
+    project_name = "test_project"
     self.set_active_project(project_name)
     ts = self.multi_get_timeseries_from_db(global_database=True)
     # r = self.create_account(email, password)
