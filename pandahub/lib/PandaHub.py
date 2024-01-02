@@ -1747,7 +1747,7 @@ class PandaHub:
     # -------------------------
 
     def bulk_write_to_db(
-        self, data, collection_name="tasks", global_database=True, project_id=None
+        self, data, collection_name="tasks", global_database=False, project_id=None
     ):
         """
         Writes any number of documents to the database at once. Checks, if any
@@ -1776,8 +1776,21 @@ class PandaHub:
         else:
             self.check_permission("write")
             db = self._get_project_database()
+        if self.collection_is_timeseries(
+            collection_name=collection_name,
+            project_id=project_id,
+            global_database=global_database,
+        ):
+            raise NotImplementedError(
+                "Bulk write is not fully supported for timeseries collections in MongoDB"
+            )
+
         operations = [
-            ReplaceOne(replacement=d, filter={"_id": d["_id"]}, upsert=True)
+            ReplaceOne(
+                replacement=d,
+                filter={"_id": d["_id"]},
+                upsert=True,
+            )
             for d in data
         ]
         db[collection_name].bulk_write(operations)
@@ -1917,7 +1930,7 @@ class PandaHub:
                     {"metadata": metadata, "timestamp": idx, **row.to_dict()}
                     for idx, row in timeseries.iterrows()
                 ]
-            return db.measurements.insert_many(documents)
+            return db[collection_name].insert_many(documents)
         document = create_timeseries_document(
             timeseries=timeseries,
             data_type=data_type,
@@ -2321,20 +2334,23 @@ class PandaHub:
             else:
                 document_filter = {}
             document = db[collection_name].find_one(
-                document_filter, projection={"timestamp": 0, "metadata": 0, "_id": 0}
+                document_filter, projection={"timestamp": 0, "_id": 0}
             )
             value_fields = ["$%s" % field for field in document.keys()]
-            pipeline.append(
-                {
-                    "$group": {
-                        "_id": "$metadata._id",
-                        "max_value": {"$max": {"$max": value_fields}},
-                        "min_value": {"$min": {"$min": value_fields}},
-                        "first_timestamp": {"$min": "$timestamp"},
-                        "last_timestamp": {"$max": "$timestamp"},
-                    }
-                }
-            )
+            group_dict = {
+                "_id": "$metadata._id",
+                "max_value": {"$max": {"$max": value_fields}},
+                "min_value": {"$min": {"$min": value_fields}},
+                "first_timestamp": {"$min": "$timestamp"},
+                "last_timestamp": {"$max": "$timestamp"},
+            }
+            metadata_fields = {
+                metadata_field: {"$first": "$metadata.%s" % metadata_field}
+                for metadata_field in document["metadata"].keys()
+                if metadata_field != "_id"
+            }
+            group_dict.update(metadata_fields)
+            pipeline.append({"$group": group_dict})
         else:
             match_filter = []
             pipeline = []
@@ -2448,30 +2464,41 @@ class PandaHub:
                 meta_pipeline = []
                 meta_pipeline.append({"$match": document_filter})
                 value_fields = ["$%s" % field for field in document.keys()]
-                meta_pipeline.append(
-                    {
-                        "$group": {
-                            "_id": "$metadata._id",
-                            "max_value": {"$max": {"$max": value_fields}},
-                            "min_value": {"$min": {"$min": value_fields}},
-                            "first_timestamp": {"$min": "$timestamp"},
-                            "last_timestamp": {"$max": "$timestamp"},
-                            "name": {"$first": "$metadata.name"},
-                            "data_type": {"$first": "$metadata.data_type"},
-                        }
-                    }
-                )
+                group_dict = {
+                    "_id": "$metadata._id",
+                    "max_value": {"$max": {"$max": value_fields}},
+                    "min_value": {"$min": {"$min": value_fields}},
+                    "first_timestamp": {"$min": "$timestamp"},
+                    "last_timestamp": {"$max": "$timestamp"},
+                }
+                document = db[collection_name].find_one(document_filter)
+                metadata_fields = {
+                    metadata_field: {"$first": "$metadata.%s" % metadata_field}
+                    for metadata_field in document["metadata"].keys()
+                    if metadata_field != "_id"
+                }
+                group_dict.update(metadata_fields)
+                meta_pipeline.append({"$group": group_dict})
                 meta_data = {
                     d["_id"]: d for d in db[collection_name].aggregate(meta_pipeline)
                 }
             timeseries = []
-            ts_all = db.measurements.aggregate_pandas_all(pipeline)
+            ts_all = db[collection_name].aggregate_pandas_all(pipeline)
+            if len(ts_all) == 0:
+                return timeseries
             for _id, ts in ts_all.groupby("_id"):
                 ts.set_index("timestamp", inplace=True)
-                for col in set(ts.columns) - {"timestamp", "_id"}:
+                value_columns = list(set(ts.columns) - {"timestamp", "_id"})
+                value_columns.sort()
+                for col in value_columns:
                     timeseries_dict = {"timeseries_data": ts[col]}
                     if include_metadata:
                         timeseries_dict.update(meta_data[_id])
+                        if len(value_columns) > 1:
+                            timeseries_dict["name"] = "%s, %s" % (
+                                timeseries_dict["name"],
+                                col,
+                            )
                     timeseries.append(timeseries_dict)
             return timeseries
 
@@ -2863,7 +2890,7 @@ class PandaHub:
             if overwrite:
                 db.drop_collection(collection_name)
             else:
-                print("Collection exists, skipping")
+                logger.info("Collection already exists, skipping")
                 return
         db.create_collection(
             collection_name,
