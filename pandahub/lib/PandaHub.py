@@ -102,7 +102,7 @@ class PandaHub:
             "$or": [
                 {"var_type": {"$exists": False}},
                 {"var_type": "base"},
-                {"var_type": np.nan},
+                {"var_type": None},
             ]
         }
         self.mongodb_indexes = mongodb_indexes
