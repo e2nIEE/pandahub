@@ -103,6 +103,7 @@ class PandaHub:
                 {"var_type": {"$exists": False}},
                 {"var_type": "base"},
                 {"var_type": None},
+                {"var_type": np.nan},
             ]
         }
         self.mongodb_indexes = mongodb_indexes
