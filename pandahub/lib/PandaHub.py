@@ -234,7 +234,7 @@ class PandaHub:
         if SETTINGS.CREATE_INDEXES_WITH_PROJECT:
             self._create_mongodb_indexes(project_data["_id"])
         if activate:
-            self.set_active_project(name, realm)
+            self.set_active_project_by_id(project_data["_id"])
         return project_data
 
     def delete_project(self, i_know_this_action_is_final=False, project_id=None):
