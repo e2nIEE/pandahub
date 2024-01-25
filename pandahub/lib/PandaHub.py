@@ -937,11 +937,9 @@ class PandaHub:
         )
         all_elements = list(set(all_elements) - set(ignore_elements))
 
-        # Add elements for which the user has provided a filter function
-        for element, filter_func in additional_filters.items():
-            if element in ignore_elements:
-                continue
-            element_filter = filter_func(net)
+        # add all node elements that are connected to buses within the network
+        for element in node_elements:
+            element_filter = {"bus": {"$in": buses}}
             self._add_element_from_collection(
                 net,
                 db,
@@ -954,9 +952,11 @@ class PandaHub:
                 dtypes=dtypes,
             )
 
-        # add all node elements that are connected to buses within the network
-        for element in node_elements:
-            element_filter = {"bus": {"$in": buses}}
+        # Add elements for which the user has provided a filter function
+        for element, filter_func in additional_filters.items():
+            if element in ignore_elements:
+                continue
+            element_filter = filter_func(net)
             self._add_element_from_collection(
                 net,
                 db,
