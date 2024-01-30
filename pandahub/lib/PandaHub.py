@@ -2261,7 +2261,8 @@ class PandaHub:
                     pipeline.append({"$project": {"timeseries_data": 1}})
         else:
             if not include_metadata:
-                pipeline.append({"$project": {"timeseries_data": 1}})
+                pipeline.append({"$project": {"timeseries_data": 1,
+                                              "num_timestamps": 1}})
         data = list(db[collection_name].aggregate(pipeline))
         if len(data) == 0:
             raise PandaHubError("no documents matching the provided filter found", 404)
@@ -2270,9 +2271,9 @@ class PandaHub:
         else:
             data = data[0]
         if compressed_ts_data:
-            timeseries_data = decompress_timeseries_data(
-                data["timeseries_data"], ts_format
-            )
+            timeseries_data = decompress_timeseries_data(data["timeseries_data"], 
+                                                         ts_format,
+                                                         num_timestamps=data["num_timestamps"])
         else:
             if ts_format == "timestamp_value":
                 timeseries_data = pd.Series(
