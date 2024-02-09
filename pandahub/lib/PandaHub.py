@@ -3,6 +3,7 @@ import builtins
 import importlib
 import json
 import logging
+import pymongo
 import traceback
 import warnings
 from inspect import signature, _empty
@@ -385,7 +386,7 @@ class PandaHub:
         else:
             return project_doc
 
-    def _get_project_database(self):
+    def _get_project_database(self) -> pymongo.mongo_client:
         return self.mongo_client[str(self.active_project["_id"])]
 
     def _get_global_database(self):
@@ -1068,6 +1069,7 @@ class PandaHub:
         if metadata is not None:
             net_dict.update(metadata)
         db["_networks"].insert_one(net_dict)
+        return net_dict
 
     def _write_net_collections_to_db(self, db, collections):
         for element, element_data in collections.items():
@@ -1725,6 +1727,7 @@ class PandaHub:
                     "$or": [
                         {"var_type": "base", "not_in_var": {"$nin": variants}},
                         {
+                            # redundant?
                             "var_type": {"$in": ["change", "addition"]},
                             "variant": {"$in": variants},
                         },
@@ -1737,6 +1740,7 @@ class PandaHub:
             return {
                 "$or": [
                     {"var_type": "base", "not_in_var": {"$ne": variants}},
+                    # var type redundant
                     {"var_type": {"$in": ["change", "addition"]}, "variant": variants},
                 ]
             }
