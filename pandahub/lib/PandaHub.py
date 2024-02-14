@@ -21,7 +21,7 @@ from pymongo import MongoClient, ReplaceOne
 from pymongo.errors import ServerSelectionTimeoutError
 
 import pandapipes as pps
-from pandapipes import from_json_string as from_json_pps
+from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
 import pandapower as pp
 import pandapower.io_utils as io_pp
 import pandahub.api.internal.settings as SETTINGS
@@ -726,20 +726,16 @@ class PandaHub:
         return net
 
     def deserialize_and_update_data(self, net, meta):
+        registry = io_pp.FromSerializableRegistry if meta.get("sector", "power") == "power" \
+            else FromSerializableRegistryPpipe
         if version.parse(self.get_project_version()) <= version.parse("0.2.3"):
-            if meta.get("sector", "power") == "power":
-                data = dict(
-                    (k, json.loads(v, cls=io_pp.PPJSONDecoder))
-                    for k, v in meta["data"].items()
-                )
-                net.update(data)
-            else:
-                data = dict((k, from_json_pps(v)) for k, v in meta["data"].items())
-                net.update(data)
+            data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder, registry_class=registry))
+                        for k, v in meta["data"].items())
+            net.update(data)
         else:
             for key, value in meta["data"].items():
                 if type(value) == str and value.startswith("serialized_"):
-                    value = json.loads(value[11:], cls=io_pp.PPJSONDecoder)
+                    value = json.loads(value[11:], cls=io_pp.PPJSONDecoder, registry_class=registry)
                 net[key] = value
 
     def get_subnet_from_db(
