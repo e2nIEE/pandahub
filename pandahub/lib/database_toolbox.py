@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -184,11 +185,12 @@ def create_timeseries_document(timeseries,
                 "compressed_ts_data": compress_ts_data}
     document = add_timestamp_info_to_document(document, timeseries, ts_format)
     document = {**document, **kwargs}
+
     if not "_id" in document: # IDs set by users will not be overwritten
         document["_id"] = get_document_hash(document)
+
     if compress_ts_data:
-        document["timeseries_data"] = compress_timeseries_data(timeseries,
-                                                               ts_format)
+        document["timeseries_data"] = compress_timeseries_data(timeseries, ts_format)
     else:
         if ts_format == "timestamp_value":
             document["timeseries_data"] = convert_timeseries_to_subdocuments(timeseries)
@@ -197,7 +199,41 @@ def create_timeseries_document(timeseries,
 
     return document
 
-def convert_dataframes_to_dicts(net, _id, version_,datatypes=None):
+def convert_element_to_dict(element_data, net_id, default_dtypes=None):
+    '''
+    Converts a pandapower pandas.DataFrame element into dictonary, casting columns to default dtypes.
+    * Columns of type Object are serialized to json
+    * Columns named "geo" or "*_geo" containing strings are parsed into dicts
+    * net_id and index (from element_data df index) are added as values
+
+    Parameters
+    ----------
+    element_data: pandas.DataFrame
+        pandapower element table to convert to dict
+    net_id: int
+        Network id
+    default_dtypes: dict
+        Default dtypes for columns in element_data
+
+    Returns
+    -------
+    dict
+        Record-orientated dict representation of element_data
+
+    '''
+    if default_dtypes is not None:
+        for column in element_data.columns:
+            if column in default_dtypes:
+                element_data[column] = element_data[column].astype(default_dtypes[column], errors="ignore")
+
+    if "object" in element_data.columns:
+        element_data["object"] = element_data["object"].apply(object_to_json)
+    element_data["index"] = element_data.index
+    element_data["net_id"] = net_id
+    load_geojsons(element_data)
+    return element_data.to_dict(orient="records")
+
+def convert_dataframes_to_dicts(net, net_id, version_, datatypes=None):
     if datatypes is None:
         datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
 
@@ -208,57 +244,84 @@ def convert_dataframes_to_dicts(net, _id, version_,datatypes=None):
         if key.startswith("_") or key.startswith("res"):
             continue
         if isinstance(data, pd.core.frame.DataFrame):
-
             # ------------
             # create type lookup
-
-            types[key] = dict()
-            default_dtypes = datatypes.get(key)
-            if default_dtypes is not None:
-                types[key].update({key: dtype.__name__ for key, dtype in default_dtypes.items()})
-            types[key].update(
-                {
-                    column: str(dtype) for column, dtype in net[key].dtypes.items()
-                    if column not in types[key]
-                }
-            )
+            types[key] = get_dtypes(key, data, datatypes.get(key))
             if data.empty:
                 continue
-
             # ------------
             # convert pandapower objects in dataframes to dict
-
-            df = net[key].copy(deep=True)
-
-            # ------------
-            # cast all columns with their default datatype
-
-            if default_dtypes is not None:
-                for column in df.columns:
-                    if column in default_dtypes:
-                        df[column] = df[column].astype(default_dtypes[column], errors="ignore")
-
-            if "object" in df.columns:
-                df["object"] = df["object"].apply(object_to_json)
-            df["index"] = df.index
-            df["net_id"] = _id
-            load_geojsons(df)
-            dataframes[key] = df.to_dict(orient="records")
+            dataframes[key] = convert_element_to_dict(net[key].copy(deep=True), net_id, datatypes.get(key))
         else:
-            if version_ <= version.parse("0.2.3"):
-                try:
-                    data = json.dumps(data, cls=PPJSONEncoder)
-                except:
-                    print("Data in net[{}] is not JSON serializable and was therefore omitted on import".format(key))
-                else:
-                    other_parameters[key] = data
-            else:
-                try:
-                    json.dumps(data)
-                except:
-                    data = f"serialized_{json.dumps(data, cls=PPJSONEncoder)}"
+            data = serialize_object_data(key, data, version_)
+            if data:
                 other_parameters[key] = data
+
     return dataframes, other_parameters, types
+
+def serialize_object_data(element, element_data, version_):
+    '''
+    Serialize a pandapower element which is not of type pandas.DataFrame into json.
+
+    Parameters
+    ----------
+    element: str
+        Name of the pandapower element
+    element_data: object
+        pandapower element data
+    version_:
+        pandahub version to target for serialization
+
+    Returns
+    -------
+    json
+        A json representation of the pandapower element
+    '''
+    if version_ <= version.parse("0.2.3"):
+        try:
+            element_data = json.dumps(element_data, cls=PPJSONEncoder)
+        except:
+            print(
+                "Data in net[{}] is not JSON serializable and was therefore omitted on import".format(element))
+        else:
+            return element_data
+    else:
+        try:
+            json.dumps(element_data)
+        except:
+            element_data = f"serialized_{json.dumps(element_data, cls=PPJSONEncoder)}"
+        return element_data
+
+
+def get_dtypes(element_data, default_dtypes):
+    '''
+    Construct data types from a pandas.DataFrame, with given defaults taking precedence.
+
+    Parameters
+    ----------
+    element_data: pandas.DataFrame
+        Input dataframe
+    default_dtypes: dict
+        Default datatypes definition
+
+    Returns
+    -------
+    dict
+        Datatypes for all columns present in element_data. Column type is taken from default_dtypes if defined,
+        otherwise directly from element_data
+
+    '''
+    types = {}
+    if default_dtypes is not None:
+        types.update({key: dtype.__name__ for key, dtype in default_dtypes.items()})
+    types.update(
+        {
+            column: str(dtype) for column, dtype in element_data.dtypes.items()
+            if column not in types
+        }
+    )
+    return types
+
 
 def load_geojsons(df):
     for column in df.columns:
@@ -317,3 +380,47 @@ def object_to_json(obj):
         "_class": obj.__class__.__name__,
         "_object": obj.to_json()
     }
+
+def migrate_userdb_to_beanie(ph):
+    """Migrate existing users to beanie backend used by pandahub >= 0.3.0.
+
+    Will raise an exception if the user database is inconsistent, and return silently if no users need to be migrated.
+    See pandahub v0.3.0 release notes for details!
+
+    Parameters
+    ----------
+    ph: pandahub.PandaHub
+        PandaHub instance with connected mongodb database to apply migrations to.
+    Returns
+    -------
+    None
+    """
+    from datetime import datetime
+    from pymongo.errors import OperationFailure
+    userdb_backup = ph.mongo_client["user_management"][datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")]
+    userdb = ph.mongo_client["user_management"]["users"]
+    old_users = list(userdb.find({"_id": {"$type": "objectId"}}))
+    new_users = list(userdb.find({"_id": {"$not": {"$type": "objectId"}}}))
+    if old_users and new_users:
+        old_users = [user.get("email") for user in old_users]
+        new_users = [user.get("email") for user in new_users]
+        raise RuntimeError("Inconsistent user database - you need to resolve conflicts manually! "
+                           "See pandahub v0.3.0 release notes for details."
+                           f"pandahub < 0.3.0 users: {old_users}"
+                           f"pandahub >= 0.3.0 users: {new_users}"
+                           )
+    elif not old_users:
+        return
+    userdb_backup.insert_many(old_users)
+    try:
+        userdb.drop_index("id_1")
+    except OperationFailure as e:
+        if e.code == 27:
+            pass
+        else:
+            raise e
+
+    migration = [{'$addFields': {'_id': '$id'}},
+                 {'$unset': 'id'},
+                 {'$out': 'users'}]
+    userdb.aggregate(migration)
