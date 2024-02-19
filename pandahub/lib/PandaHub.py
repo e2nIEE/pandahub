@@ -213,6 +213,7 @@ class PandaHub:
         metadata=None,
         project_id=None,
         activate=True,
+        additional_project_data=None,
     ):
         if self.project_exists(name, realm):
             raise PandaHubError("Project already exists")
@@ -220,12 +221,15 @@ class PandaHub:
             settings = {}
         if metadata is None:
             metadata = {}
+        if additional_project_data is None:
+            additional_project_data = {}
         project_data = {
             "name": name,
             "realm": realm,
             "settings": settings,
             "metadata": metadata,
             "version": __version__,
+            **additional_project_data,
         }
         if project_id:
             project_data["_id"] = project_id
