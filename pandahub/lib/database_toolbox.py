@@ -114,7 +114,7 @@ def convert_timeseries_to_subdocuments(timeseries):
 def compress_timeseries_data(timeseries_data, ts_format):
     import blosc
     if ts_format == "timestamp_value":
-        timeseries_data = np.array([timeseries_data.index.astype(int),
+        timeseries_data = np.array([timeseries_data.index.astype("int64"),
                                     timeseries_data.values])
         return blosc.compress(timeseries_data.tobytes(),
                               shuffle=blosc.SHUFFLE,
@@ -125,11 +125,11 @@ def compress_timeseries_data(timeseries_data, ts_format):
                               cname="zlib")
 
 
-def decompress_timeseries_data(timeseries_data, ts_format):
+def decompress_timeseries_data(timeseries_data, ts_format, num_timestamps):
     import blosc
     if ts_format == "timestamp_value":
-        data = np.frombuffer(blosc.decompress(timeseries_data),
-                             dtype=np.float64).reshape((35040,2),
+        data = np.frombuffer(blosc.decompress(timeseries_data), 
+                             dtype=np.float64).reshape((num_timestamps, 2),
                                                        order="F")
         return pd.Series(data[:,1], index=pd.to_datetime(data[:,0]))
     elif ts_format == "array":
