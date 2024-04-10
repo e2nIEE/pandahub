@@ -390,10 +390,10 @@ class PandaHub:
         else:
             return project_doc
 
-    def _get_project_database(self) -> pymongo.mongo_client:
+    def _get_project_database(self) -> MongoClient:
         return self.mongo_client[str(self.active_project["_id"])]
 
-    def _get_global_database(self):
+    def _get_global_database(self) -> MongoClient:
         if (
             self.mongo_client_global_db is None
             and SETTINGS.MONGODB_GLOBAL_DATABASE_URL is not None
@@ -1652,23 +1652,23 @@ class PandaHub:
     # Variants
     # -------------------------
 
-    def create_variant(self, data):
+    def create_variant(self, data, index: Optional[int] = None):
         db = self._get_project_database()
         net_id = int(data["net_id"])
-        max_index = list(
-            db["variant"]
-            .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
-            .sort("index", -1)
-            .limit(1)
-        )
-        if not max_index:
-            index = 1
-            for coll in self._get_net_collections(db):
-                update = {"$set": {"var_type": "base", "not_in_var": []}}
-                db[coll].update_many({}, update)
-
-        else:
-            index = int(max_index[0]["index"]) + 1
+        if index is None:
+            max_index = list(
+                db["variant"]
+                .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
+                .sort("index", -1)
+                .limit(1)
+            )
+            if not max_index:
+                index = 1
+                for coll in self._get_net_collections(db):
+                    update = {"$set": {"var_type": "base", "not_in_var": []}}
+                    db[coll].update_many({}, update)
+            else:
+                index = int(max_index[0]["index"]) + 1
 
         data["index"] = index
 
@@ -1704,7 +1704,7 @@ class PandaHub:
         db = self._get_project_database()
         db["variant"].update_one({"net_id": net_id, "index": index}, {"$set": data})
 
-    def get_variant_filter(self, variants):
+    def get_variant_filter(self, variants: Optional[Union[list[int], int]]) -> dict:
         """
         Creates a mongodb query filter to retrieve pandapower elements for the given variant(s).
 
@@ -1718,11 +1718,9 @@ class PandaHub:
         dict
             mongodb query filter for the given variant(s)
         """
-        if type(variants) is list and variants:
+        if isinstance(variants, list):
             if len(variants) > 1:
-                variants = [
-                    int(var) for var in variants
-                ]  # make sure variants are of type int
+                variants = [int(var) for var in variants]  # make sure variants are of type int
                 return {
                     "$or": [
                         {"var_type": "base", "not_in_var": {"$nin": variants}},
