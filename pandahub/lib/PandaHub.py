@@ -1016,6 +1016,7 @@ class PandaHub:
         project_id=None,
         metadata=None,
         skip_results=False,
+        net_id=None,
     ):
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -1030,8 +1031,11 @@ class PandaHub:
                 self.delete_net_from_db(name)
             else:
                 raise PandaHubError("Network name already exists")
-        max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
-        _id = 0 if max_id_network is None else max_id_network["_id"] + 1
+
+        if net_id is None:
+            max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
+            net_id = 0 if max_id_network is None else max_id_network["_id"] + 1
+        db["_networks"].insert_one({"_id": net_id})
 
         data = {}
         dtypes = {}
@@ -1048,7 +1052,7 @@ class PandaHub:
                     continue
                 # convert pandapower dataframe object to dict and save to db
                 element_data = convert_element_to_dict(
-                    element_data.copy(deep=True), _id, self._datatypes.get(element)
+                    element_data.copy(deep=True), net_id, self._datatypes.get(element)
                 )
                 self._write_element_to_db(db, element, element_data)
 
@@ -1058,18 +1062,16 @@ class PandaHub:
                     data[element] = element_data
 
         # write network metadata
-        net_dict = {
-            "_id": _id,
+        network_data = {
             "name": name,
             "sector": sector,
             "dtypes": dtypes,
             "data": data,
         }
-
         if metadata is not None:
-            net_dict.update(metadata)
-        db["_networks"].insert_one(net_dict)
-        return net_dict
+            network_data.update(metadata)
+        db["_networks"].update_one({"_id": net_id}, {"$set": network_data})
+        return network_data | {"_id": net_id}
 
     def _write_net_collections_to_db(self, db, collections):
         for element, element_data in collections.items():
