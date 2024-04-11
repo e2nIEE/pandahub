@@ -660,7 +660,7 @@ class PandaHub:
         only_tables=None,
         project_id=None,
         geo_mode="string",
-        variants=[],
+        variants=None,
     ):
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -2275,7 +2275,7 @@ class PandaHub:
         else:
             data = data[0]
         if compressed_ts_data:
-            timeseries_data = decompress_timeseries_data(data["timeseries_data"], 
+            timeseries_data = decompress_timeseries_data(data["timeseries_data"],
                                                          ts_format,
                                                          num_timestamps=data["num_timestamps"])
         else:
