@@ -3,6 +3,7 @@ import builtins
 import importlib
 import json
 import logging
+import pymongo
 import traceback
 import warnings
 from inspect import signature, _empty
@@ -20,7 +21,7 @@ from pymongo import MongoClient, ReplaceOne
 from pymongo.errors import ServerSelectionTimeoutError
 
 import pandapipes as pps
-from pandapipes import from_json_string as from_json_pps
+from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
 import pandapower as pp
 import pandapower.io_utils as io_pp
 import pandahub.api.internal.settings as SETTINGS
@@ -212,6 +213,7 @@ class PandaHub:
         metadata=None,
         project_id=None,
         activate=True,
+        additional_project_data=None,
     ):
         if self.project_exists(name, realm):
             raise PandaHubError("Project already exists")
@@ -219,12 +221,15 @@ class PandaHub:
             settings = {}
         if metadata is None:
             metadata = {}
+        if additional_project_data is None:
+            additional_project_data = {}
         project_data = {
             "name": name,
             "realm": realm,
             "settings": settings,
             "metadata": metadata,
             "version": __version__,
+            **additional_project_data,
         }
         if project_id:
             project_data["_id"] = project_id
@@ -385,10 +390,10 @@ class PandaHub:
         else:
             return project_doc
 
-    def _get_project_database(self):
+    def _get_project_database(self) -> MongoClient:
         return self.mongo_client[str(self.active_project["_id"])]
 
-    def _get_global_database(self):
+    def _get_global_database(self) -> MongoClient:
         if (
             self.mongo_client_global_db is None
             and SETTINGS.MONGODB_GLOBAL_DATABASE_URL is not None
@@ -725,20 +730,16 @@ class PandaHub:
         return net
 
     def deserialize_and_update_data(self, net, meta):
+        registry = io_pp.FromSerializableRegistry if meta.get("sector", "power") == "power" \
+            else FromSerializableRegistryPpipe
         if version.parse(self.get_project_version()) <= version.parse("0.2.3"):
-            if meta.get("sector", "power") == "power":
-                data = dict(
-                    (k, json.loads(v, cls=io_pp.PPJSONDecoder))
-                    for k, v in meta["data"].items()
-                )
-                net.update(data)
-            else:
-                data = dict((k, from_json_pps(v)) for k, v in meta["data"].items())
-                net.update(data)
+            data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder, registry_class=registry))
+                        for k, v in meta["data"].items())
+            net.update(data)
         else:
             for key, value in meta["data"].items():
                 if type(value) == str and value.startswith("serialized_"):
-                    value = json.loads(value[11:], cls=io_pp.PPJSONDecoder)
+                    value = json.loads(value[11:], cls=io_pp.PPJSONDecoder, registry_class=registry)
                 net[key] = value
 
     def get_subnet_from_db(
@@ -1015,6 +1016,7 @@ class PandaHub:
         project_id=None,
         metadata=None,
         skip_results=False,
+        net_id=None,
     ):
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -1029,8 +1031,11 @@ class PandaHub:
                 self.delete_net_from_db(name)
             else:
                 raise PandaHubError("Network name already exists")
-        max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
-        _id = 0 if max_id_network is None else max_id_network["_id"] + 1
+
+        if net_id is None:
+            max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
+            net_id = 0 if max_id_network is None else max_id_network["_id"] + 1
+        db["_networks"].insert_one({"_id": net_id})
 
         data = {}
         dtypes = {}
@@ -1047,7 +1052,7 @@ class PandaHub:
                     continue
                 # convert pandapower dataframe object to dict and save to db
                 element_data = convert_element_to_dict(
-                    element_data.copy(deep=True), _id, self._datatypes.get(element)
+                    element_data.copy(deep=True), net_id, self._datatypes.get(element)
                 )
                 self._write_element_to_db(db, element, element_data)
 
@@ -1057,17 +1062,16 @@ class PandaHub:
                     data[element] = element_data
 
         # write network metadata
-        net_dict = {
-            "_id": _id,
+        network_data = {
             "name": name,
             "sector": sector,
             "dtypes": dtypes,
             "data": data,
         }
-
         if metadata is not None:
-            net_dict.update(metadata)
-        db["_networks"].insert_one(net_dict)
+            network_data.update(metadata)
+        db["_networks"].update_one({"_id": net_id}, {"$set": network_data})
+        return network_data | {"_id": net_id}
 
     def _write_net_collections_to_db(self, db, collections):
         for element, element_data in collections.items():
@@ -1650,23 +1654,23 @@ class PandaHub:
     # Variants
     # -------------------------
 
-    def create_variant(self, data):
+    def create_variant(self, data, index: Optional[int] = None):
         db = self._get_project_database()
         net_id = int(data["net_id"])
-        max_index = list(
-            db["variant"]
-            .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
-            .sort("index", -1)
-            .limit(1)
-        )
-        if not max_index:
-            index = 1
-            for coll in self._get_net_collections(db):
-                update = {"$set": {"var_type": "base", "not_in_var": []}}
-                db[coll].update_many({}, update)
-
-        else:
-            index = int(max_index[0]["index"]) + 1
+        if index is None:
+            max_index = list(
+                db["variant"]
+                .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
+                .sort("index", -1)
+                .limit(1)
+            )
+            if not max_index:
+                index = 1
+                for coll in self._get_net_collections(db):
+                    update = {"$set": {"var_type": "base", "not_in_var": []}}
+                    db[coll].update_many({}, update)
+            else:
+                index = int(max_index[0]["index"]) + 1
 
         data["index"] = index
 
@@ -1702,7 +1706,7 @@ class PandaHub:
         db = self._get_project_database()
         db["variant"].update_one({"net_id": net_id, "index": index}, {"$set": data})
 
-    def get_variant_filter(self, variants):
+    def get_variant_filter(self, variants: Optional[Union[list[int], int]]) -> dict:
         """
         Creates a mongodb query filter to retrieve pandapower elements for the given variant(s).
 
@@ -1716,15 +1720,14 @@ class PandaHub:
         dict
             mongodb query filter for the given variant(s)
         """
-        if type(variants) is list and variants:
+        if isinstance(variants, list):
             if len(variants) > 1:
-                variants = [
-                    int(var) for var in variants
-                ]  # make sure variants are of type int
+                variants = [int(var) for var in variants]  # make sure variants are of type int
                 return {
                     "$or": [
                         {"var_type": "base", "not_in_var": {"$nin": variants}},
                         {
+                            # redundant?
                             "var_type": {"$in": ["change", "addition"]},
                             "variant": {"$in": variants},
                         },
@@ -1737,6 +1740,7 @@ class PandaHub:
             return {
                 "$or": [
                     {"var_type": "base", "not_in_var": {"$ne": variants}},
+                    # var type redundant
                     {"var_type": {"$in": ["change", "addition"]}, "variant": variants},
                 ]
             }
