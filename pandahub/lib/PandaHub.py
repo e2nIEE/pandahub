@@ -1675,10 +1675,9 @@ class PandaHub:
 
         if index == 1:
             for coll in self._get_net_collections(db):
-                update = {"$set": {"var_type": "base", "not_in_var": []}}
                 db[coll].update_many(
                     {"$or": [{"var_type": None}, {"var_type": np.nan}]},
-                    {"$set": {"var_type": "base"}}
+                    {"$set": {"var_type": "base", "not_in_var": []}}
                 )
         return data
 
