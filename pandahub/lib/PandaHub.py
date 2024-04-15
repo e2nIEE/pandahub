@@ -101,7 +101,6 @@ class PandaHub:
         self.user_id = user_id
         self.base_variant_filter = {
             "$or": [
-                {"var_type": {"$exists": False}},
                 {"var_type": "base"},
                 {"var_type": None},
                 {"var_type": np.nan},
@@ -680,7 +679,7 @@ class PandaHub:
         only_tables=None,
         convert=True,
         geo_mode="string",
-        variants=[],
+        variants=None,
     ):
         self.check_permission("read")
         return self._get_net_from_db_by_id(
@@ -699,7 +698,7 @@ class PandaHub:
         only_tables=None,
         convert=True,
         geo_mode="string",
-        variants=[],
+        variants=None,
     ):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id_)
@@ -749,7 +748,7 @@ class PandaHub:
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
-        variants=[],
+        variants=None,
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet], dict]
         ] = {},
@@ -776,7 +775,7 @@ class PandaHub:
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
-        variants=[],
+        variants=None,
         ignore_elements=[],
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet], dict]
@@ -1050,10 +1049,12 @@ class PandaHub:
                 dtypes[element] = get_dtypes(element_data, self._datatypes.get(element))
                 if element_data.empty:
                     continue
-                # convert pandapower dataframe object to dict and save to db
-                element_data = convert_element_to_dict(
-                    element_data.copy(deep=True), net_id, self._datatypes.get(element)
-                )
+                element_data = element_data.copy(deep=True)
+                if "var_type" in element_data:
+                    element_data["var_type"] = element_data["var_type"].fillna("base")
+                else:
+                    element_data["var_type"] = "base"
+                element_data = convert_element_to_dict(element_data, net_id, self._datatypes.get(element))
                 self._write_element_to_db(db, element, element_data)
 
             else:
@@ -1144,7 +1145,7 @@ class PandaHub:
         include_results=True,
         only_tables=None,
         geo_mode="string",
-        variants=[],
+        variants=None,
         dtypes=None,
     ):
         if only_tables is not None and not element_type in only_tables:
@@ -1664,22 +1665,21 @@ class PandaHub:
                 .sort("index", -1)
                 .limit(1)
             )
-            if not max_index:
-                index = 1
-                for coll in self._get_net_collections(db):
-                    update = {"$set": {"var_type": "base", "not_in_var": []}}
-                    db[coll].update_many({}, update)
-            else:
-                index = int(max_index[0]["index"]) + 1
+            index = int(max_index[0]["index"]) + 1 if max_index else 1
 
         data["index"] = index
-
         if data.get("default_name") is not None and data.get("name") is None:
             data["name"] = data.pop("default_name") + " " + str(index)
-
         db["variant"].insert_one(data)
         del data["_id"]
 
+        if index == 1:
+            for coll in self._get_net_collections(db):
+                update = {"$set": {"var_type": "base", "not_in_var": []}}
+                db[coll].update_many(
+                    {"$or": [{"var_type": None}, {"var_type": np.nan}]},
+                    {"$set": {"var_type": "base"}}
+                )
         return data
 
     def delete_variant(self, net_id, index):
@@ -1706,7 +1706,7 @@ class PandaHub:
         db = self._get_project_database()
         db["variant"].update_one({"net_id": net_id, "index": index}, {"$set": data})
 
-    def get_variant_filter(self, variants: Optional[Union[list[int], int]]) -> dict:
+    def get_variant_filter(self, variants: Optional[int]) -> dict:
         """
         Creates a mongodb query filter to retrieve pandapower elements for the given variant(s).
 
@@ -1721,26 +1721,38 @@ class PandaHub:
             mongodb query filter for the given variant(s)
         """
         if isinstance(variants, list):
-            if len(variants) > 1:
-                variants = [int(var) for var in variants]  # make sure variants are of type int
+            warnings.warn(
+                f"Passing variants as list is deprecated, use None or int instead (variants: {variants})",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if len(variants) == 0:
+                variants = None
+            elif len(variants) == 1:
+                variants = variants[0]
+            elif len(variants) > 1:
+                warnings.warn(
+                    f"Passing multiple variants is deprecated, use None or int instead (variants: {variants})",
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+                variants = [
+                    int(var) for var in variants
+                ]  # make sure variants are of type int
                 return {
                     "$or": [
                         {"var_type": "base", "not_in_var": {"$nin": variants}},
                         {
-                            # redundant?
                             "var_type": {"$in": ["change", "addition"]},
                             "variant": {"$in": variants},
                         },
                     ]
                 }
-            else:
-                variants = variants[0]
         if variants:
             variants = int(variants)
             return {
                 "$or": [
                     {"var_type": "base", "not_in_var": {"$ne": variants}},
-                    # var type redundant
                     {"var_type": {"$in": ["change", "addition"]}, "variant": variants},
                 ]
             }
