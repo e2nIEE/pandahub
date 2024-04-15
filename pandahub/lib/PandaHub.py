@@ -1049,10 +1049,12 @@ class PandaHub:
                 dtypes[element] = get_dtypes(element_data, self._datatypes.get(element))
                 if element_data.empty:
                     continue
-                # convert pandapower dataframe object to dict and save to db
-                element_data = convert_element_to_dict(
-                    element_data.copy(deep=True), net_id, self._datatypes.get(element)
-                )
+                element_data = element_data.copy(deep=True)
+                if "var_type" in element_data:
+                    element_data["var_type"] = element_data["var_type"].fillna("base")
+                else:
+                    element_data["var_type"] = "base"
+                element_data = convert_element_to_dict(element_data, net_id, self._datatypes.get(element))
                 self._write_element_to_db(db, element, element_data)
 
             else:
