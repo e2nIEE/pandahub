@@ -1663,22 +1663,21 @@ class PandaHub:
                 .sort("index", -1)
                 .limit(1)
             )
-            if not max_index:
-                index = 1
-                for coll in self._get_net_collections(db):
-                    update = {"$set": {"var_type": "base", "not_in_var": []}}
-                    db[coll].update_many({}, update)
-            else:
-                index = int(max_index[0]["index"]) + 1
+            index = int(max_index[0]["index"]) + 1 if max_index else 1
 
         data["index"] = index
-
         if data.get("default_name") is not None and data.get("name") is None:
             data["name"] = data.pop("default_name") + " " + str(index)
-
         db["variant"].insert_one(data)
         del data["_id"]
 
+        if index == 1:
+            for coll in self._get_net_collections(db):
+                update = {"$set": {"var_type": "base", "not_in_var": []}}
+                db[coll].update_many(
+                    {"$or": [{"var_type": None}, {"var_type": np.nan}]},
+                    {"$set": {"var_type": "base"}}
+                )
         return data
 
     def delete_variant(self, net_id, index):
@@ -1742,7 +1741,6 @@ class PandaHub:
                     "$or": [
                         {"var_type": "base", "not_in_var": {"$nin": variants}},
                         {
-                            # redundant?
                             "var_type": {"$in": ["change", "addition"]},
                             "variant": {"$in": variants},
                         },
