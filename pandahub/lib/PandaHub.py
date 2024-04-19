@@ -8,7 +8,7 @@ import traceback
 import warnings
 from inspect import signature, _empty
 from collections.abc import Callable
-from typing import Optional, Union
+from typing import Optional, Union, TypeVar
 
 import numpy as np
 import pandas as pd
@@ -61,6 +61,8 @@ class PandaHubError(Exception):
 # PandaHub
 # -------------------------
 
+ProjectID = TypeVar("ProjectID", str, int, ObjectId)
+SettingsValue = TypeVar("SettingsValue", str, int, float, list, dict)
 
 class PandaHub:
     permissions = {
@@ -282,7 +284,7 @@ class PandaHub:
             for p in projects
         ]
 
-    def set_active_project(self, project_name, realm=None):
+    def set_active_project(self, project_name:str, realm=None):
         projects = self.get_projects()
         active_projects = [
             project for project in projects if project["name"] == project_name
@@ -295,7 +297,7 @@ class PandaHub:
             project_id = active_projects[0]["id"]
             self.set_active_project_by_id(project_id)
 
-    def set_active_project_by_id(self, project_id):
+    def set_active_project_by_id(self, project_id:ProjectID):
         try:
             project_id = ObjectId(project_id)
         except InvalidId:
@@ -304,7 +306,7 @@ class PandaHub:
         if self.active_project is None:
             raise PandaHubError("Project not found!", 404)
 
-    def rename_project(self, project_name):
+    def rename_project(self, project_name:str):
         self.has_permission("write")
         project_collection = self.mongo_client["user_management"].projects
         realm = self.active_project["realm"]
@@ -363,7 +365,7 @@ class PandaHub:
         else:
             raise PandaHubError("You don't have rights to access this project", 403)
 
-    def project_exists(self, project_name=None, realm=None):
+    def project_exists(self, project_name:Optional[str]=None, realm=None):
         project_collection = self.mongo_client["user_management"].projects
         project = project_collection.find_one({"name": project_name, "realm": realm})
         return project is not None
