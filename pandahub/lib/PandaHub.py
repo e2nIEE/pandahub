@@ -1355,9 +1355,6 @@ class PandaHub:
         project_id=None,
         **kwargs,
     ):
-        logger.info(
-            f"Setting  {parameter} = {value} in {element_type} with index {element_index} and variant {variant}"
-        )
         if variant is not None:
             variant = int(variant)
         if project_id:
