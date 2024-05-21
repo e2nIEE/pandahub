@@ -392,7 +392,25 @@ class PandaHub:
             return project_doc
 
     def _get_project_database(self) -> MongoClient:
-        return self.mongo_client[str(self.active_project["_id"])]
+        return self.get_project_database()
+
+    def get_project_database(self, collection: Optional[str] = None) -> MongoClient:
+        """
+        Get a MongoClient instance connected to the database for the current active project, optionally set to the given collection.
+
+        Parameters
+        ----------
+        collection
+            Name of document collection
+
+        Returns
+        -------
+        MongoClient
+        """
+        project_db = self.mongo_client[str(self.active_project["_id"])]
+        if collection is None:
+            return project_db
+        return project_db[collection]
 
     def _get_global_database(self) -> MongoClient:
         if (
@@ -413,6 +431,19 @@ class PandaHub:
             return self.mongo_client["global_data"]
         else:
             return self.mongo_client_global_db["global_data"]
+
+    def get_network_ids(self) -> list[int]:
+        """
+        Retrieve the id's of all networks in the active project.
+
+        Returns
+        -------
+        list
+            network ids
+        """
+        if not self.active_project:
+            raise PandaHubError("No project activated!")
+        return self.get_project_database("_network").find({}, {"_id:": 1}).distinct("_id")
 
     def get_project_version(self):
         return self.active_project.get("version", "0.2.2")
