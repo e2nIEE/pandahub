@@ -9,6 +9,7 @@ from fastapi_users_db_beanie.access_token import (
     BeanieBaseAccessToken,
 )
 
+from pandahub.api.internal.settings import REGISTRATION_ADMIN_APPROVAL
 from pandahub.api.internal import settings
 from pydantic import Field
 
@@ -22,6 +23,7 @@ db = client["user_management"]
 
 class User(BeanieBaseUser, Document):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    is_active: bool = not REGISTRATION_ADMIN_APPROVAL
     class Settings(BeanieBaseUser.Settings):
         name = "users"
 
