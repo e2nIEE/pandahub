@@ -10,6 +10,7 @@ mongodb_indexes = {
     "net_bus": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("geo", GEOSPHERE)]),
+        IndexModel([("substation", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
     "net_line": [
