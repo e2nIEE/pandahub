@@ -837,7 +837,14 @@ class PandaHub:
             )
         buses = net.bus.index.tolist()
 
-        branch_operator = "$or" if add_edge_branches else "$and"
+        if isinstance(add_edge_branches, bool):
+            if add_edge_branches:
+                add_edge_branches = ["line", "trafo", "switch"]
+            else:
+                add_edge_branches = []
+        elif not isinstance(add_edge_branches, list):
+            raise ValueError("add_edge_branches must be a list or a boolean")
+        line_operator = "$or" if "line" in add_edge_branches else "$and"
         # Add branch elements connected to at least one bus
         self._add_element_from_collection(
             net,
@@ -845,7 +852,7 @@ class PandaHub:
             "line",
             net_id,
             {
-                branch_operator: [
+                line_operator: [
                     {"from_bus": {"$in": buses}},
                     {"to_bus": {"$in": buses}},
                 ]
@@ -854,12 +861,13 @@ class PandaHub:
             variants=variants,
             dtypes=dtypes,
         )
+        trafo_operator = "$or" if "trafo" in add_edge_branches else "$and"
         self._add_element_from_collection(
             net,
             db,
             "trafo",
             net_id,
-            {branch_operator: [{"hv_bus": {"$in": buses}}, {"lv_bus": {"$in": buses}}]},
+            {trafo_operator: [{"hv_bus": {"$in": buses}}, {"lv_bus": {"$in": buses}}]},
             geo_mode=geo_mode,
             variants=variants,
             dtypes=dtypes,
@@ -870,7 +878,7 @@ class PandaHub:
             "trafo3w",
             net_id,
             {
-                branch_operator: [
+                trafo_operator: [
                     {"hv_bus": {"$in": buses}},
                     {"mv_bus": {"$in": buses}},
                     {"lv_bus": {"$in": buses}},
@@ -880,7 +888,7 @@ class PandaHub:
             variants=variants,
             dtypes=dtypes,
         )
-
+        switch_operator = "$or" if "switch" in add_edge_branches else "$and"
         self._add_element_from_collection(
             net,
             db,
@@ -890,7 +898,7 @@ class PandaHub:
                 "$and": [
                     {"et": "b"},
                     {
-                        branch_operator: [
+                        switch_operator: [
                             {"bus": {"$in": buses}},
                             {"element": {"$in": buses}},
                         ]
