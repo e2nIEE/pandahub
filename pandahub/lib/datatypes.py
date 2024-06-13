@@ -1,5 +1,5 @@
 
-datatypes = {
+DATATYPES = {
     "bus": {
         "name": str,
         "vn_kv": float,

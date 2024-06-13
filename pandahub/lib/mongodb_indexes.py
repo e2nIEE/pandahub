@@ -5,7 +5,7 @@ VARIANT_INDEXES = [
     IndexModel([("var_type", DESCENDING)]),
     IndexModel([("not_in_var", DESCENDING)]),
 ]
-mongodb_indexes = {
+MONGODB_INDEXES = {
     # pandapower
     "net_bus": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
