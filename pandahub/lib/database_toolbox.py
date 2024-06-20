@@ -3,7 +3,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from pandahub.api.internal import settings
+from pandahub.lib.datatypes import DATATYPES
 import base64
 import hashlib
 import logging
@@ -128,7 +128,7 @@ def compress_timeseries_data(timeseries_data, ts_format):
 def decompress_timeseries_data(timeseries_data, ts_format, num_timestamps):
     import blosc
     if ts_format == "timestamp_value":
-        data = np.frombuffer(blosc.decompress(timeseries_data), 
+        data = np.frombuffer(blosc.decompress(timeseries_data),
                              dtype=np.float64).reshape((num_timestamps, 2),
                                                        order="F")
         return pd.Series(data[:,1], index=pd.to_datetime(data[:,0]))
@@ -233,10 +233,8 @@ def convert_element_to_dict(element_data, net_id, default_dtypes=None):
     load_geojsons(element_data)
     return element_data.to_dict(orient="records")
 
-def convert_dataframes_to_dicts(net, net_id, version_, datatypes=None):
-    if datatypes is None:
-        datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
 
+def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
     dataframes = {}
     other_parameters = {}
     types = {}

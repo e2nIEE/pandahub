@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 import builtins
-import importlib
 import json
 import logging
-import pymongo
-import traceback
 import warnings
 from inspect import signature, _empty
 from collections.abc import Callable
@@ -24,7 +21,8 @@ import pandapipes as pps
 from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
 import pandapower as pp
 import pandapower.io_utils as io_pp
-import pandahub.api.internal.settings as SETTINGS
+from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
+    MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT
 from pandahub.lib.database_toolbox import (
     create_timeseries_document,
     convert_timeseries_to_subdocuments,
@@ -35,10 +33,11 @@ from pandahub.lib.database_toolbox import (
     decompress_timeseries_data,
     convert_geojsons,
 )
-from pandahub.lib.mongodb_indexes import mongodb_indexes
+from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 
 logger = logging.getLogger(__name__)
 from pandahub import __version__
+from pandahub.lib.datatypes import DATATYPES
 from packaging import version
 
 
@@ -71,21 +70,19 @@ class PandaHub:
         "user_management": ["owner"],
     }
 
-    _datatypes = getattr(
-        importlib.import_module(SETTINGS.DATATYPES_MODULE), "datatypes"
-    )
-
     # -------------------------
     # Initialization
     # -------------------------
 
     def __init__(
         self,
-        connection_url=SETTINGS.MONGODB_URL,
-        connection_user=SETTINGS.MONGODB_USER,
-        connection_password=SETTINGS.MONGODB_PASSWORD,
+        connection_url=MONGODB_URL,
+        connection_user=MONGODB_USER,
+        connection_password=MONGODB_PASSWORD,
         check_server_available=False,
         user_id=None,
+        datatypes=DATATYPES,
+        mongodb_indexes=MONGODB_INDEXES,
     ):
         mongo_client_args = {
             "host": connection_url,
@@ -97,6 +94,8 @@ class PandaHub:
                 "username": connection_user,
                 "password": connection_password,
             }
+        self._datatypes = datatypes
+        self.mongodb_indexes = mongodb_indexes
         self.mongo_client = MongoClient(**mongo_client_args)
         self.mongo_client_global_db = None
         self.active_project = None
@@ -108,7 +107,6 @@ class PandaHub:
                 {"var_type": np.nan},
             ]
         }
-        self.mongodb_indexes = mongodb_indexes
         if check_server_available:
             self.server_is_available()
 
@@ -237,7 +235,7 @@ class PandaHub:
         if self.user_id is not None:
             project_data["users"] = {self.user_id: "owner"}
         self.mongo_client["user_management"]["projects"].insert_one(project_data)
-        if SETTINGS.CREATE_INDEXES_WITH_PROJECT:
+        if CREATE_INDEXES_WITH_PROJECT:
             self._create_mongodb_indexes(project_data["_id"])
         if activate:
             self.set_active_project_by_id(project_data["_id"])
@@ -275,6 +273,7 @@ class PandaHub:
                 "settings": p["settings"],
                 "locked": p.get("locked"),
                 "locked_by": p.get("locked_by"),
+                "locked_reason": p.get("locked_reason"),
                 "permissions": self.get_permissions_by_role(
                     p.get("users").get(self.user_id)
                 )
@@ -339,6 +338,20 @@ class PandaHub:
             {"$set": {"locked": True, "locked_by": self.user_id}},
         )
         return result.acknowledged and result.modified_count > 0
+
+
+    # def lock_project(self):
+    #     db = self.mongo_client["user_management"]["projects"]
+    #     result = db.update_one(
+    #
+    #     result = db.find_one_and_update(
+    #         {
+    #             "_id": self.active_project["_id"],
+    #             "_id": self.active_project["_id"], "locked": False
+    #         },
+    #         {"$set": {"locked": True, "locked_by": self.user_id}},
+    #     )
+    #     return result.acknowledged and result.modified_count > 0
 
     def unlock_project(self):
         db = self.mongo_client["user_management"]["projects"]
@@ -415,16 +428,16 @@ class PandaHub:
     def _get_global_database(self) -> MongoClient:
         if (
             self.mongo_client_global_db is None
-            and SETTINGS.MONGODB_GLOBAL_DATABASE_URL is not None
+            and MONGODB_GLOBAL_DATABASE_URL is not None
         ):
             mongo_client_args = {
-                "host": SETTINGS.MONGODB_GLOBAL_DATABASE_URL,
+                "host": MONGODB_GLOBAL_DATABASE_URL,
                 "uuidRepresentation": "standard",
             }
-            if SETTINGS.MONGODB_GLOBAL_DATABASE_USER:
+            if MONGODB_GLOBAL_DATABASE_USER:
                 mongo_client_args |= {
-                    "username": SETTINGS.MONGODB_GLOBAL_DATABASE_USER,
-                    "password": SETTINGS.MONGODB_GLOBAL_DATABASE_PASSWORD,
+                    "username": MONGODB_GLOBAL_DATABASE_USER,
+                    "password": MONGODB_GLOBAL_DATABASE_PASSWORD,
                 }
             self.mongo_client_global_db = MongoClient(**mongo_client_args)
         if self.mongo_client_global_db is None:
