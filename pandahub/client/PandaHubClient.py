@@ -1,22 +1,27 @@
-import warnings
-
 import requests
 import pandapower as pp
 import pandas as pd
-import numpy as np
 from pathlib import Path
 import os
 import json
 from fastapi.encoders import jsonable_encoder
 
+
 class PandaHubClient:
-    def __init__(self):
-        config = os.path.join(Path.home(), "pandahub.config")
+    def __init__(self, config=None):
+        d = None
+        if config is None:
+            config = os.path.join(Path.home(), "pandahub.config")
+        elif type(config) == dict:
+            d = config
+
         try:
-            with open(config, "r") as f:
-                d = json.load(f)
+            if d is None:
+                with open(config, "r") as f:
+                    d = json.load(f)
         except FileNotFoundError:
             raise UserWarning("No pandahub configuration file found - log in first")
+
         self.url = d["url"]
         self.token = d["token"]
         self.cert = None

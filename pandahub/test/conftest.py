@@ -1,11 +1,11 @@
 import pytest
 from pandahub import PandaHub
 from pandahub import PandaHubClient
-from pandahub.client.user_management import _login
+from pandahub.api.internal import settings
 
 @pytest.fixture(scope="session")
 def ph():
-    ph = PandaHub(connection_url="mongodb://localhost:27017")
+    ph = PandaHub(connection_url=settings.MONGODB_URL)
 
     project_name = "pytest"
 
@@ -23,7 +23,17 @@ def ph():
 
 @pytest.fixture(scope="session")
 def phc():
-    phc = PandaHubClient()
+    url = settings.PANDAHUB_SERVER_URL
+
+    if url == "0.0.0.0":
+        url = "127.0.0.1"
+
+    phc = PandaHubClient(
+        config={
+            "url": f"http://{url}:{settings.PANDAHUB_SERVER_PORT}",
+            "token": settings.SECRET
+        }
+    )
 
     project_name = "pandahubclienttest"
 

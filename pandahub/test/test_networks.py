@@ -142,7 +142,7 @@ def test_pandapipes(ph):
     ph.set_active_project('pytest')
     net = nw_pps.gas_versatility()
     ph.write_network_to_db(net, 'versatility')
-    net2 = ph.get_net_from_db('versatility')
+    net2 = ph.get_net_from_db('versatility', convert=False)
     pps.pipeflow(net)
     pps.pipeflow(net2)
     assert nets_equal(net, net2, check_only_results=True)

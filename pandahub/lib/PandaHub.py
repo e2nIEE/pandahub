@@ -709,6 +709,7 @@ class PandaHub:
         project_id=None,
         geo_mode="string",
         variants=None,
+        convert=True,
     ):
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -718,7 +719,7 @@ class PandaHub:
         if _id is None:
             return None
         return self.get_net_from_db_by_id(
-            _id, include_results, only_tables, geo_mode=geo_mode, variants=variants
+            _id, include_results, only_tables, geo_mode=geo_mode, variants=variants, convert=convert
         )
 
     def get_net_from_db_by_id(
