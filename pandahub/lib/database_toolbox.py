@@ -244,7 +244,7 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
         if isinstance(data, pd.core.frame.DataFrame):
             # ------------
             # create type lookup
-            types[key] = get_dtypes(key, data, datatypes.get(key))
+            types[key] = get_dtypes(key, data)
             if data.empty:
                 continue
             # ------------
