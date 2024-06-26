@@ -234,11 +234,14 @@ class PandaHub:
             project_data["_id"] = project_id
         if self.user_id is not None:
             project_data["users"] = {self.user_id: "owner"}
-        self.mongo_client["user_management"]["projects"].insert_one(project_data)
+        id = self.mongo_client["user_management"]["projects"].insert_one(project_data)
         if CREATE_INDEXES_WITH_PROJECT:
             self._create_mongodb_indexes(project_data["_id"])
         if activate:
-            self.set_active_project_by_id(project_data["_id"])
+            if "_id" in project_data.keys():
+                id = project_data["_id"]
+
+            self.set_active_project_by_id(id)
         return project_data
 
     def delete_project(self, i_know_this_action_is_final=False, project_id=None):
