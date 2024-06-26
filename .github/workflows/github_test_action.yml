@@ -28,7 +28,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install -U pytest
-        pip install .["all"]
+        python -m pip install .["all"]
     - name: List of installed packages
       run: |
         pip list
