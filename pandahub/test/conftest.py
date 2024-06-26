@@ -13,7 +13,7 @@ def ph():
         ph.set_active_project(project_name)
         ph.delete_project(i_know_this_action_is_final=True)
 
-    ph.create_project(project_name)
+    ph.create_project(name=project_name, activate=False)
     ph.set_active_project(project_name)
 
     yield ph
@@ -31,7 +31,7 @@ def phc():
     #    phc.set_active_project(project_name)
     #    phc.delete_project(i_know_this_action_is_final=True)
 
-    phc.create_project(project_name)
+    phc.create_project(name=project_name)
     phc.set_active_project(project_name)
 
     yield phc
