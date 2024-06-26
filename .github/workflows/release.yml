@@ -26,10 +26,10 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       # Sets up python3
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       # Installs and upgrades pip, installs other dependencies and installs the package from setup.py
@@ -80,7 +80,7 @@ jobs:
         os:  [ ubuntu-latest, windows-latest ]
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
@@ -94,10 +94,10 @@ jobs:
       - name: Install pandahub from PyPI
         if: ${{ inputs.upload_server == 'pypi'}}
         run: |
-          pip install pandahub
+          python -m pip install pandahub
       - name: List all installed packages
         run: |
-          pip list
+          python -m pip list
       - name: Test with pytest
         run: |
-          pytest --pyargs pandahub.test
+          python -m pytest --pyargs pandahub.test
