@@ -11,7 +11,7 @@ with open('requirements.txt') as req_file:
 
 long_description = '\n\n'.join((readme, changelog))
 
-test_requirements = ['pytest>=3', 'pytest-xdist', 'nbmake']
+test_requirements = ['pytest>=3', 'pytest-xdist', 'nbmake', 'simbench', 'line_profiler']
 
 setup(
     author="Jan Ulffers, Leon Thurner, Jannis Kupka, Mike Vogt, Joschka Thurner, Alexander Scheidler",
