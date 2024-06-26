@@ -1,8 +1,8 @@
 # Change Log
 
 ## [0.2.4]
-    - BREAKING drops index argument from create_variant() function
 
+    - BREAKING drops index argument from create_variant() function
 
 ## [0.2.3]- 2022-08-04
 
