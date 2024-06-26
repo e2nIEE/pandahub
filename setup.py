@@ -11,7 +11,7 @@ with open('requirements.txt') as req_file:
 
 long_description = '\n\n'.join((readme, changelog))
 
-test_requirements = ['pytest>=3', ]
+test_requirements = ['pytest>=3', 'pytest-xdist', 'nbmake']
 
 setup(
     author="Jan Ulffers, Leon Thurner, Jannis Kupka, Mike Vogt, Joschka Thurner, Alexander Scheidler",
@@ -28,6 +28,7 @@ setup(
     ],
     description="Data hub for pandapower and pandapipes networks based on MongoDB",
     install_requires=requirements,
+    test_requirements=test_requirements,
     long_description=readme,
     entry_points = {
     'console_scripts': ['pandahub-login=pandahub.client.user_management:login'],
