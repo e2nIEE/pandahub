@@ -48,3 +48,5 @@ REGISTRATION_ENABLED = settings_bool("REGISTRATION_ENABLED", default=True)
 REGISTRATION_ADMIN_APPROVAL = settings_bool("REGISTRATION_ADMIN_APPROVAL", default=False)
 
 CREATE_INDEXES_WITH_PROJECT = settings_bool("CREATE_INDEXES_WITH_PROJECT", default=True)
+
+DEBUG = os.getenv("DEBUG") or False
