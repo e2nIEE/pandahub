@@ -139,7 +139,7 @@ def test_access_and_set_single_values(ph):
 
 
 def test_pandapipes(ph):
-    ph.set_active_project('Awesome')
+    ph.set_active_project('pytest')
     net = nw_pps.gas_versatility()
     ph.write_network_to_db(net, 'versatility')
     net2 = ph.get_net_from_db('versatility')
@@ -163,7 +163,7 @@ if __name__ == '__main__':
     from pandahub import PandaHub
 
     ph = PandaHub(connection_url="mongodb://localhost:27017")
-    ph.create_project('Awesome')
+    ph.create_project('pytest')
     net = nw_pps.gas_versatility()
     ph.write_network_to_db(net, 'versatility')
     net2 = ph.get_net_from_db('versatility')
