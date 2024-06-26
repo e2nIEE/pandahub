@@ -234,7 +234,7 @@ class PandaHub:
             project_data["_id"] = project_id
         if self.user_id is not None:
             project_data["users"] = {self.user_id: "owner"}
-        id = self.mongo_client["user_management"]["projects"].insert_one(project_data)
+        id = self.mongo_client["user_management"]["projects"].insert_one(project_data).inserted_id
         if CREATE_INDEXES_WITH_PROJECT:
             self._create_mongodb_indexes(project_data["_id"])
         if activate:
