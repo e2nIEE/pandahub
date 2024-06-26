@@ -29,7 +29,6 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install -U pytest
         pip install -r requirements.txt
-        pip install -r requirements_dev.txt
         pip install .["all"]
     - name: List of installed packages
       run: |
