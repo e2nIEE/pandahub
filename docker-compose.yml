@@ -1,15 +1,34 @@
-version: '3.7'
+version: '3'
+
+networks:
+  test:
+    external: false
+
 services:
-  pandahub:
-    image: dev/pandahub
-    build: .
+  db:
+    user: ${CURRENT_UID}
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    networks:
+        - test
+    ports:
+        - "27017:27017"
+
+  pandahub_server:
+    user: ${CURRENT_UID}
+    container_name: pandahub
+    build:
+        context: .
+        dockerfile: Dockerfile
     environment:
         - SECRET=devonly!
         - MONGODB_URL=${MONGODB_URL:-mongodb://db:27017}
     ports:
         - "8002:8002"
-    volumes:
-        - ./pandahub:/code/pandahub
-
-
-
+#    volumes:
+#        - ./:/code/pandahub
+    networks:
+        - test
+    depends_on:
+        - db
