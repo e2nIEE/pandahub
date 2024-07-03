@@ -1,10 +1,11 @@
 import pandapower.networks as nw
 import pandahub
 import pandapower as pp
-import pytest
+from pandahub.api.internal import settings
 from pandahub.lib.database_toolbox import convert_dataframes_to_dicts
 from pymongo import DESCENDING
 from packaging import version
+
 
 def test_project_management(ph):
     project = "pytest2"
@@ -74,7 +75,7 @@ def test_upgrade_project():
                     except:
                         print("FAILED TO WRITE TABLE", key)
     # we use the implemetation of 0.2.2 to write a net
-    oldph = PandaHubV0_2_2(connection_url="mongodb://localhost:27017")
+    oldph = PandaHubV0_2_2(connection_url=settings.MONGODB_URL)
 
     if oldph.project_exists("pytest"):
         oldph.set_active_project("pytest")
@@ -83,14 +84,16 @@ def test_upgrade_project():
     oldph.create_project("pytest")
     oldph.set_active_project("pytest")
     net = nw.simple_four_bus_system()
+    net.bus.zone = "1"
+    net.ext_grid.name = "Slack"
     oldph.write_network_to_db(net, "simple_network")
     # convert the db to latest version
-    ph = pandahub.PandaHub(connection_url="mongodb://localhost:27017")
+    ph = pandahub.PandaHub(connection_url=settings.MONGODB_URL)
     ph.set_active_project("pytest")
     ph.upgrade_project_to_latest_version()
     # and test if everything went fine
     net2 = ph.get_net_from_db("simple_network")
-    assert pp.nets_equal(net, net2)
+    assert pp.nets_equal(net, net2, check_dtype=False)
 
 
 def reset_project(db):

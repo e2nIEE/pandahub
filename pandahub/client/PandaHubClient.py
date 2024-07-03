@@ -1,20 +1,27 @@
 import requests
 import pandapower as pp
 import pandas as pd
-import numpy as np
 from pathlib import Path
 import os
 import json
 from fastapi.encoders import jsonable_encoder
 
+
 class PandaHubClient:
-    def __init__(self):
-        config = os.path.join(Path.home(), "pandahub.config")
+    def __init__(self, config=None):
+        d = None
+        if config is None:
+            config = os.path.join(Path.home(), "pandahub.config")
+        elif type(config) == dict:
+            d = config
+
         try:
-            with open(config, "r") as f:
-                d = json.load(f)
+            if d is None:
+                with open(config, "r") as f:
+                    d = json.load(f)
         except FileNotFoundError:
             raise UserWarning("No pandahub configuration file found - log in first")
+
         self.url = d["url"]
         self.token = d["token"]
         self.cert = None
@@ -74,17 +81,33 @@ class PandaHubClient:
     def get_net_value_from_db(self, net_name, element, element_index, parameter):
         return self._post("/net/get_net_value_from_db", json=locals()).json()
 
-    def set_net_value_in_db(self, net_name, element, element_index, parameter, value):
+    def set_net_value_in_db(self, net_name, element_type, element_index, parameter, value):
         return self._post("/net/set_net_value_in_db", json=locals())
 
-    def create_element_in_db(self, net_name, element, element_index, data):
-        return self._post("/net/create_element_in_db", json=locals())
+    def create_element(self, net, element_type, element_index, element_data):
+        return self._post("/net/create_element", json=locals())
 
-    def create_elements_in_db(self, net_name, element_type, elements_data):
-        return self._post("/net/create_elements_in_db", json=locals())
+    def create_elements(self, net, element_type, elements_data):
+        return self._post("/net/create_elements", json=locals())
 
-    def delete_net_element(self, net_name, element, element_index):
-        return self._post("/net/delete_net_element", json=locals())
+    def delete_element(self, net, element_type, element_index):
+        return self._post("/net/delete_element", json=locals())
+
+    def delete_elements(self, net, element_type, element_index):
+        return self._post("/net/delete_elements", json=locals())
+
+
+    ### deprecated functions
+
+    def create_element_in_db(self, *args, **kwargs):
+        raise RuntimeError("create_element_in_db was deprecated - use create_element instead!")
+
+    def create_elements_in_db(self, *args, **kwargs):
+        raise RuntimeError("ph.create_elements_in_db was deprecated - use ph.create_elements instead! "
+                      "Watch out for changed order of project_id and variant args")
+
+    def delete_net_element(self, *args, **kwargs):
+        raise RuntimeError("ph.delete_net_element was deprecated - use ph.delete_element instead!")
 
 
     ### TIMESERIES

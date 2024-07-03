@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
+from typing import Optional
 
 import numpy as np
 import pandas as pd
-from pandahub.api.internal import settings
+from pandahub.lib.datatypes import DATATYPES
 import base64
 import hashlib
 import logging
 import json
 import importlib
+import blosc
 logger = logging.getLogger(__name__)
 from pandapower.io_utils import PPJSONEncoder
 from packaging import version
@@ -111,9 +113,8 @@ def convert_timeseries_to_subdocuments(timeseries):
 
 
 def compress_timeseries_data(timeseries_data, ts_format):
-    import blosc
     if ts_format == "timestamp_value":
-        timeseries_data = np.array([timeseries_data.index.astype(int),
+        timeseries_data = np.array([timeseries_data.index.astype("int64"),
                                     timeseries_data.values])
         return blosc.compress(timeseries_data.tobytes(),
                               shuffle=blosc.SHUFFLE,
@@ -124,11 +125,10 @@ def compress_timeseries_data(timeseries_data, ts_format):
                               cname="zlib")
 
 
-def decompress_timeseries_data(timeseries_data, ts_format):
-    import blosc
+def decompress_timeseries_data(timeseries_data, ts_format, num_timestamps):
     if ts_format == "timestamp_value":
         data = np.frombuffer(blosc.decompress(timeseries_data),
-                             dtype=np.float64).reshape((35040,2),
+                             dtype=np.float64).reshape((num_timestamps, 2),
                                                        order="F")
         return pd.Series(data[:,1], index=pd.to_datetime(data[:,0]))
     elif ts_format == "array":
@@ -232,10 +232,8 @@ def convert_element_to_dict(element_data, net_id, default_dtypes=None):
     load_geojsons(element_data)
     return element_data.to_dict(orient="records")
 
-def convert_dataframes_to_dicts(net, net_id, version_, datatypes=None):
-    if datatypes is None:
-        datatypes = getattr(importlib.import_module(settings.DATATYPES_MODULE), "datatypes")
 
+def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
     dataframes = {}
     other_parameters = {}
     types = {}
@@ -245,7 +243,7 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes=None):
         if isinstance(data, pd.core.frame.DataFrame):
             # ------------
             # create type lookup
-            types[key] = get_dtypes(key, data, datatypes.get(key))
+            types[key] = get_dtypes(data, datatypes.get(key))
             if data.empty:
                 continue
             # ------------
@@ -379,3 +377,47 @@ def object_to_json(obj):
         "_class": obj.__class__.__name__,
         "_object": obj.to_json()
     }
+
+def migrate_userdb_to_beanie(ph):
+    """Migrate existing users to beanie backend used by pandahub >= 0.3.0.
+
+    Will raise an exception if the user database is inconsistent, and return silently if no users need to be migrated.
+    See pandahub v0.3.0 release notes for details!
+
+    Parameters
+    ----------
+    ph: pandahub.PandaHub
+        PandaHub instance with connected mongodb database to apply migrations to.
+    Returns
+    -------
+    None
+    """
+    from datetime import datetime
+    from pymongo.errors import OperationFailure
+    userdb_backup = ph.mongo_client["user_management"][datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")]
+    userdb = ph.mongo_client["user_management"]["users"]
+    old_users = list(userdb.find({"_id": {"$type": "objectId"}}))
+    new_users = list(userdb.find({"_id": {"$not": {"$type": "objectId"}}}))
+    if old_users and new_users:
+        old_users = [user.get("email") for user in old_users]
+        new_users = [user.get("email") for user in new_users]
+        raise RuntimeError("Inconsistent user database - you need to resolve conflicts manually! "
+                           "See pandahub v0.3.0 release notes for details."
+                           f"pandahub < 0.3.0 users: {old_users}"
+                           f"pandahub >= 0.3.0 users: {new_users}"
+                           )
+    elif not old_users:
+        return
+    userdb_backup.insert_many(old_users)
+    try:
+        userdb.drop_index("id_1")
+    except OperationFailure as e:
+        if e.code == 27:
+            pass
+        else:
+            raise e
+
+    migration = [{'$addFields': {'_id': '$id'}},
+                 {'$unset': 'id'},
+                 {'$out': 'users'}]
+    userdb.aggregate(migration)

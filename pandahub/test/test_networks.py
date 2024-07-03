@@ -6,6 +6,7 @@ import pandapower as pp
 import pandapower.networks as nw_pp
 from pandahub import PandaHubError
 from pandapipes.toolbox import nets_equal
+from pandahub.api.internal import settings
 
 
 def test_additional_res_tables(ph):
@@ -131,7 +132,7 @@ def test_access_and_set_single_values(ph):
     value = ph.get_net_value_from_db(name, element, index, parameter)
     assert value == p_mw_new
 
-    ph.delete_net_element(name, element, index)
+    ph.delete_element(name, element, index)
     with pytest.raises(PandaHubError):
         ph.get_net_value_from_db(name, element, index, parameter)
     net = ph.get_net_from_db(name)
@@ -139,10 +140,10 @@ def test_access_and_set_single_values(ph):
 
 
 def test_pandapipes(ph):
-    ph.set_active_project('Awesome')
+    ph.set_active_project('pytest')
     net = nw_pps.gas_versatility()
     ph.write_network_to_db(net, 'versatility')
-    net2 = ph.get_net_from_db('versatility')
+    net2 = ph.get_net_from_db('versatility', convert=False)
     pps.pipeflow(net)
     pps.pipeflow(net2)
     assert nets_equal(net, net2, check_only_results=True)
@@ -162,8 +163,8 @@ def test_get_set_single_value(ph):
 if __name__ == '__main__':
     from pandahub import PandaHub
 
-    ph = PandaHub(connection_url="mongodb://localhost:27017")
-    ph.create_project('Awesome')
+    ph = PandaHub(connection_url=settings.MONGODB_URL)
+    ph.create_project('pytest')
     net = nw_pps.gas_versatility()
     ph.write_network_to_db(net, 'versatility')
     net2 = ph.get_net_from_db('versatility')

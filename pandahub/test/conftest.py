@@ -1,11 +1,11 @@
 import pytest
 from pandahub import PandaHub
 from pandahub import PandaHubClient
-from pandahub.client.user_management import _login
+from pandahub.api.internal import settings
 
 @pytest.fixture(scope="session")
 def ph():
-    ph = PandaHub(connection_url="mongodb://localhost:27017")
+    ph = PandaHub(connection_url=settings.MONGODB_URL)
 
     project_name = "pytest"
 
@@ -13,7 +13,7 @@ def ph():
         ph.set_active_project(project_name)
         ph.delete_project(i_know_this_action_is_final=True)
 
-    ph.create_project(project_name)
+    ph.create_project(name=project_name, activate=False)
     ph.set_active_project(project_name)
 
     yield ph
@@ -23,7 +23,17 @@ def ph():
 
 @pytest.fixture(scope="session")
 def phc():
-    phc = PandaHubClient()
+    url = settings.PANDAHUB_SERVER_URL
+
+    if url == "0.0.0.0":
+        url = "127.0.0.1"
+
+    phc = PandaHubClient(
+        config={
+            "url": f"http://{url}:{settings.PANDAHUB_SERVER_PORT}",
+            "token": settings.SECRET
+        }
+    )
 
     project_name = "pandahubclienttest"
 
@@ -31,7 +41,7 @@ def phc():
     #    phc.set_active_project(project_name)
     #    phc.delete_project(i_know_this_action_is_final=True)
 
-    phc.create_project(project_name)
+    phc.create_project(name=project_name)
     phc.set_active_project(project_name)
 
     yield phc
