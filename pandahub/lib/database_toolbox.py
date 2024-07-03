@@ -9,6 +9,7 @@ import hashlib
 import logging
 import json
 import importlib
+import blosc
 logger = logging.getLogger(__name__)
 from pandapower.io_utils import PPJSONEncoder
 from packaging import version
@@ -112,7 +113,6 @@ def convert_timeseries_to_subdocuments(timeseries):
 
 
 def compress_timeseries_data(timeseries_data, ts_format):
-    import blosc
     if ts_format == "timestamp_value":
         timeseries_data = np.array([timeseries_data.index.astype("int64"),
                                     timeseries_data.values])
@@ -126,7 +126,6 @@ def compress_timeseries_data(timeseries_data, ts_format):
 
 
 def decompress_timeseries_data(timeseries_data, ts_format, num_timestamps):
-    import blosc
     if ts_format == "timestamp_value":
         data = np.frombuffer(blosc.decompress(timeseries_data),
                              dtype=np.float64).reshape((num_timestamps, 2),
@@ -244,7 +243,7 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
         if isinstance(data, pd.core.frame.DataFrame):
             # ------------
             # create type lookup
-            types[key] = get_dtypes(key, data)
+            types[key] = get_dtypes(data, datatypes.get(key))
             if data.empty:
                 continue
             # ------------
