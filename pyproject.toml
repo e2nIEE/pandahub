@@ -47,7 +47,8 @@ dependencies = [
     "simplejson",
     "requests",
     "python-dotenv",
-    "pymongoarrow"
+    "pymongoarrow",
+    "blosc"
 ]
 keywords = [
     "network", "analysis", "optimization", "automation", "grid", "energy", "engineering", "simulation",
