@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pandahub"
-version = "0.3.4"  # File format version '__format_version__' is tracked in __init__.py
+version = "0.3.5"  # File format version '__format_version__' is tracked in __init__.py
 authors=[
     { name = "Jan Ulffers", email = "jan.ulffers@iee.fraunhofer.de" },
     { name = "Leon Thurner", email = "leon.thurner@retoflow.de" },
@@ -45,10 +45,13 @@ dependencies = [
     "pymongo",
     "pydantic",
     "simplejson",
-    "requests",
+    "requests<2.28.0",
     "python-dotenv",
     "pymongoarrow",
-    "blosc"
+    "blosc",
+    "motor<3.0.0",
+    "hypothesis-graphql<0.10.0",
+    "attrs>=22.2.0"
 ]
 keywords = [
     "network", "analysis", "optimization", "automation", "grid", "energy", "engineering", "simulation",
@@ -68,9 +71,8 @@ docs = ["numpydoc", "sphinx", "sphinx_rtd_theme", "sphinxcontrib.bibtex", "sphin
 test = ["pytest", "pytest-xdist", "nbmake", "simbench", "line_profiler"]
 all = [
     "numpydoc", "sphinx", "sphinx_rtd_theme", "sphinxcontrib.bibtex", "sphinx-pyproject",
-    "pytest", "pytest-xdist", "nbmake", "simbench", "line_profiler",
+    "pytest<8.0.0", "pytest-xdist", "nbmake", "simbench", "line_profiler",
 ]
 
-[tool.setuptools.packages.find]
-where = ["pandahub"]
-include = ["*"]
+[tool.setuptools.packages]
+find = {}

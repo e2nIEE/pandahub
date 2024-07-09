@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.3.5]
+
+    - Fixed version and repaired pyproject.toml
+
 ## [0.2.4]
 
     - BREAKING drops index argument from create_variant() function
