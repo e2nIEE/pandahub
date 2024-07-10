@@ -71,6 +71,5 @@ all = [
     "pytest", "pytest-xdist", "nbmake", "simbench", "line_profiler",
 ]
 
-[tool.setuptools.packages.find]
-where = ["pandahub"]
-include = ["*"]
+[tool.setuptools.packages]
+find = {}
