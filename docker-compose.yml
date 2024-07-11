@@ -6,6 +6,8 @@ services:
   db:
     image: mongo:latest
     restart: always
+    volumes:
+        - mongodb_pandahub:/data/db
     networks:
         - test
     ports:
@@ -34,3 +36,4 @@ services:
         - db
 volumes:
   pycache:
+  mongodb_pandahub:
