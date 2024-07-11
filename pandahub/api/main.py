@@ -61,7 +61,7 @@ async def ready():
 
 
 if __name__ == "__main__":
-    uvicorn.run("main:app",
+    uvicorn.run("pandahub.api.main:app",
                 host=settings.PANDAHUB_SERVER_URL,
                 port=settings.PANDAHUB_SERVER_PORT,
                 log_level="info",

@@ -21,9 +21,9 @@ def get_secret(key, default=None):
 # load variables from .env to environment variables
 load_dotenv()
 
-MONGODB_URL = get_secret("MONGODB_URL") or "mongodb://localhost:27017"
-MONGODB_USER = get_secret("MONGODB_USER") or None
-MONGODB_PASSWORD = get_secret("MONGODB_PASSWORD") or None
+MONGODB_URL = get_secret("MONGODB_URL", "mongodb://localhost:27017")
+MONGODB_USER = get_secret("MONGODB_USER")
+MONGODB_PASSWORD = get_secret("MONGODB_PASSWORD")
 
 MONGODB_GLOBAL_DATABASE_URL = get_secret("MONGODB_GLOBAL_DATABASE_URL") or None
 MONGODB_GLOBAL_DATABASE_USER = get_secret("MONGODB_GLOBAL_DATABASE_USER") or None
