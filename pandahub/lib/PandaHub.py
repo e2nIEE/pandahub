@@ -6,6 +6,7 @@ import warnings
 from inspect import signature, _empty
 from collections.abc import Callable
 from typing import Optional, Union, TypeVar
+from datetime import timezone
 
 import numpy as np
 import pandas as pd
@@ -2214,6 +2215,7 @@ class PandaHub:
         collection_name="timeseries",
         include_metadata=False,
         project_id=None,
+        as_utc=False,
         **kwargs,
     ):
         """
@@ -2350,6 +2352,8 @@ class PandaHub:
                 timeseries_data = pd.Series(
                     data["values"], index=data["timestamps"], dtype="float64"
                 )
+                if as_utc:
+                    timeseries_data = timeseries_data.tz_localize("UTC")
             elif ts_format == "array":
                 timeseries_data = data["timeseries_data"]
         if include_metadata:
@@ -2487,6 +2491,7 @@ class PandaHub:
         global_database=False,
         collection_name="timeseries",
         project_id=None,
+        as_utc=False,
         **kwargs,
     ):
         if project_id:
@@ -2649,12 +2654,14 @@ class PandaHub:
                 continue
             data = ts["timeseries_data"]
             if compressed_ts_data:
-                timeseries_data = decompress_timeseries_data(data, ts_format)
+                timeseries_data = decompress_timeseries_data(data, ts_format, as_utc)
                 ts["timeseries_data"] = timeseries_data
             else:
                 if ts_format == "timestamp_value":
                     timeseries_data = pd.DataFrame(ts["timeseries_data"])
                     timeseries_data.set_index("timestamp", inplace=True)
+                    if as_utc:
+                        timeseries_data = timeseries_data.tz_localize("UTC")
                     timeseries_data.index.name = None
                     ts["timeseries_data"] = timeseries_data.value
             if include_metadata:
