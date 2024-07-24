@@ -9,13 +9,12 @@ from fastapi_users_db_beanie.access_token import (
     BeanieBaseAccessToken,
 )
 
-from pandahub.api.internal.settings import REGISTRATION_ADMIN_APPROVAL
-from pandahub.api.internal import settings
+from pandahub.api.internal.settings import REGISTRATION_ADMIN_APPROVAL, MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD
 from pydantic import Field
 
-mongo_client_args = {"host": settings.MONGODB_URL, "uuidRepresentation": "standard", "connect": False}
-if settings.MONGODB_USER:
-    mongo_client_args |= {"username": settings.MONGODB_USER, "password": settings.MONGODB_PASSWORD}
+mongo_client_args = {"host": MONGODB_URL, "uuidRepresentation": "standard", "connect": False}
+if MONGODB_USER:
+    mongo_client_args |= {"username": MONGODB_USER, "password": MONGODB_PASSWORD}
 
 client = motor.motor_asyncio.AsyncIOMotorClient(**mongo_client_args)
 client.get_io_loop = asyncio.get_event_loop

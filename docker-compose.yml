@@ -1,34 +1,39 @@
-version: '3'
-
 networks:
   test:
     external: false
 
 services:
   db:
-    user: ${CURRENT_UID}
     image: mongo:latest
-    container_name: mongodb
     restart: always
+    volumes:
+        - mongodb_pandahub:/data/db
     networks:
         - test
     ports:
-        - "27017:27017"
+        - "127.0.0.1:27017:27017"
 
-  pandahub_server:
-    user: ${CURRENT_UID}
-    container_name: pandahub
+  pandahub-dev:
+    image: dev/pandahub
     build:
         context: .
         dockerfile: Dockerfile
+        target: dev
+    env_file:
+        - .env
     environment:
         - SECRET=devonly!
         - MONGODB_URL=${MONGODB_URL:-mongodb://db:27017}
+        - PYTHONPYCACHEPREFIX=/pycache
     ports:
-        - "8002:8002"
-#    volumes:
-#        - ./:/code/pandahub
+        - "127.0.0.1:8002:8002"
+    volumes:
+        - ./:/src/
+        - pycache:/pycache
     networks:
         - test
     depends_on:
         - db
+volumes:
+  pycache:
+  mongodb_pandahub:

@@ -1,19 +1,18 @@
-FROM python:3.10 as dev
+# dev stage
+FROM python:3.11 AS dev
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/opt/venv/bin:$PATH"
+WORKDIR /src
+COPY requirements.txt .
+RUN python -m venv /opt/venv && \
+    python -m pip install -r requirements.txt
+CMD ["python",  "-m", "pandahub.api.main"]
 
-ENV PYTHONUNBUFFERED 1
-ENV PYTHONPATH /code/pandahub
-
-ENV DEBUG False
-ENV PANDAHUB_SERVER_URL 0.0.0.0
-ENV PANDAHUB_SERVER_PORT 8002
-ENV WORKERS 2
-
-COPY ./ /code/pandahub/
-WORKDIR /code/pandahub
-
-RUN python -m pip install --upgrade pip
-RUN python -m pip install .["all"]
-RUN python -m pip install watchdog pyyaml
-
-# CMD uvicorn --host "0.0.0.0" --port "8002" "pandahub.api.main:app" --reload
-ENTRYPOINT ["python", "pandahub/api/main.py"]
+# production stage
+FROM python:3.11-slim AS production-stage
+ENV PATH="/opt/venv/bin:$PATH"
+WORKDIR /src
+# copy files from build stage
+COPY --from=dev /opt/venv /opt/venv
+COPY . .
+CMD ["uvicorn", "--host", "127.0.0.1", "--port", "8080", "pandahub.api.main:app"]
