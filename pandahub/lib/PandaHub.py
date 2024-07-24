@@ -254,15 +254,16 @@ class PandaHub:
         self.mongo_client.user_management.projects.delete_one({"_id": project_id})
         self.active_project = None
 
-    def get_projects(self):
+    def get_projects(self, realm: Optional[str] = None):
+        filter_dict = {}
         if self.user_id is not None:
             user = self._get_user()
-            if user["is_superuser"]:
-                filter_dict = {}
-            else:
+            if not user["is_superuser"]:
                 filter_dict = {"users.{}".format(self.user_id): {"$exists": True}}
         else:
             filter_dict = {"users": {"$exists": False}}
+        if realm is not None:
+            filter_dict["realm"] = realm
         db = self.mongo_client["user_management"]
         projects = list(db["projects"].find(filter_dict))
         return [
@@ -284,7 +285,7 @@ class PandaHub:
         ]
 
     def set_active_project(self, project_name:str, realm=None):
-        projects = self.get_projects()
+        projects = self.get_projects(realm=realm)
         active_projects = [
             project for project in projects if project["name"] == project_name
         ]
