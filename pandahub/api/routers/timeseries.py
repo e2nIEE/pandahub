@@ -22,6 +22,7 @@ class GetTimeSeriesModel(BaseModel):
     timestamp_range: Optional[tuple] = None
     exclude_timestamp_range: Optional[tuple] = None
     collection_name: Optional[str] = "timeseries"
+    as_utc: Optional[bool] = False
 
 
 @router.post("/get_timeseries_from_db")
@@ -39,6 +40,7 @@ class MultiGetTimeSeriesModel(BaseModel):
     timestamp_range: Optional[tuple] = None
     exclude_timestamp_range: Optional[tuple] = None
     collection_name: Optional[str] = "timeseries"
+    as_utc: Optional[bool] = False
 
 
 @router.post("/multi_get_timeseries_from_db")
