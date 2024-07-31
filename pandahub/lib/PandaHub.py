@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import builtins
 import json
 import logging
@@ -9,6 +12,7 @@ from typing import Optional, Union, TypeVar
 
 import numpy as np
 import pandas as pd
+from bson import CodecOptions
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
 from functools import reduce
@@ -83,11 +87,14 @@ class PandaHub:
         user_id=None,
         datatypes=DATATYPES,
         mongodb_indexes=MONGODB_INDEXES,
+        tzinfo="UTC"
     ):
         mongo_client_args = {
             "host": connection_url,
             "uuidRepresentation": "standard",
             "connect": False,
+            "tz_aware": True,
+            "tzinfo": ZoneInfo(tzinfo),
         }
         if connection_user:
             mongo_client_args |= {
@@ -3046,6 +3053,64 @@ class PandaHub:
             variant=variant,
             project_id=project_id,
         )
+
+
+
+    def test_get_timestamp(self, _id: int, target_timezone: str | None = None):
+        """Get a timestamp from the database.
+
+        Parameters
+        ----------
+        _id: int
+            index of the timestamp
+        target_timezone
+            timezone to convert the timestamp to. If None, the timestamp is returned in the default timezone of the PandaHub instance.
+        Returns
+        -------
+
+        """
+        ts_coll = self.mongo_client.test.timestamps
+        if target_timezone is not None:
+            if target_timezone == "ORIGIN":
+                md = ts_coll.find_one({"_id": _id})
+                if "tz" not in md:
+                    raise RuntimeError("Timestamp has no timezone metadata but ORIGIN was requested")
+                target_timezone = md["tz"]
+            if target_timezone != self.mongo_client.codec_options.tzinfo.key:
+                ts_coll = ts_coll.with_options(
+                    codec_options=CodecOptions(tz_aware=True, tzinfo=ZoneInfo(target_timezone)))
+        return ts_coll.find_one({"_id": _id})["timestamp"]
+
+
+    def test_save_timestamp(
+        self, ts: datetime, tz_strict: bool = False
+    ):
+        """Save a timestamp to the database.
+
+        Parameters
+        ----------
+        idx: int
+            index of the timestamp
+        ts: datetime
+            timestamp to save
+        tz_strict: bool
+            if the timestamp is naive: raise an error if True, assume UTC if False
+
+        Returns
+        -------
+        ObjectID
+        """
+        if ts.tzinfo is None:
+            if tz_strict:
+                raise RuntimeError("Timestamp has no timezone information")
+            tz = ZoneInfo("UTC")
+        else:
+            tz = ts.tzinfo.key
+        ts_coll = self.mongo_client.test.timestamps
+        data = {"timestamp": ts, "tz": tz}
+        ts_coll.insert_one(data)
+        return data["_id"]
+
 
 
 if __name__ == "__main__":
