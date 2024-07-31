@@ -3103,7 +3103,7 @@ class PandaHub:
         if ts.tzinfo is None:
             if tz_strict:
                 raise RuntimeError("Timestamp has no timezone information")
-            tz = ZoneInfo("UTC")
+            tz = "UTC"
         else:
             tz = ts.tzinfo.key
         ts_coll = self.mongo_client.test.timestamps
