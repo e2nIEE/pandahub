@@ -457,7 +457,7 @@ class PandaHub:
         """
         if not self.active_project:
             raise PandaHubError("No project activated!")
-        return self.get_project_database("_network").find({}, {"_id:": 1}).distinct("_id")
+        return self.get_project_database("_networks").find({}, {"_id:": 1}).distinct("_id")
 
     def get_project_version(self):
         return self.active_project.get("version", "0.2.2")
