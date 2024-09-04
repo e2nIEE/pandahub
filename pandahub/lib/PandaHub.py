@@ -2428,7 +2428,7 @@ class PandaHub:
                 if key == "timestamp_range":
                     continue
                 filter_value = filter_document[key]
-                if type(filter_value) == list:
+                if isinstance(filter_value, list) and key not in ["$or", "$and"]:
                     match_filter.append({key: {"$in": filter_value}})
                 else:
                     match_filter.append({key: filter_value})
