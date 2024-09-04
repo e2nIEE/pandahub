@@ -467,6 +467,9 @@ class PandaHub:
         # TODO these operations should be encapsulated in a transaction in order to avoid
         #      inconsistent Database states in case of occuring errors
 
+        if self.active_project["version"] == __version__:
+            return
+
         if version.parse(self.get_project_version()) < version.parse("0.2.3"):
             db = self._get_project_database()
             all_collection_names = db.list_collection_names()
@@ -480,9 +483,6 @@ class PandaHub:
 
             for element in old_net_collections:
                 db[element].rename(self._collection_name_of_element(element))
-
-        if version.parse(self.get_project_version()) < version.parse("0.2.3"):
-            db = self._get_project_database()
             # for all networks
             for d in list(
                 db["_networks"].find({}, projection={"sector": 1, "data": 1})
@@ -502,16 +502,16 @@ class PandaHub:
                     except:
                         dat = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
                     data[key] = dat
-
                 db["_networks"].update_one({"_id": d["_id"]}, {"$set": {"data": data}})
+
+            logger.info(
+                f"upgraded projekt '{self.active_project['name']}' from version"
+                f" {self.get_project_version()} to version 0.2.3"
+            )
 
         project_collection = self.mongo_client["user_management"].projects
         project_collection.update_one(
             {"_id": self.active_project["_id"]}, {"$set": {"version": __version__}}
-        )
-        logger.info(
-            f"upgraded projekt '{self.active_project['name']}' from version"
-            f" {self.get_project_version()} to version {__version__}"
         )
         self.active_project["version"] = __version__
 
