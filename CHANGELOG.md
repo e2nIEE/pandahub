@@ -1,5 +1,12 @@
 # Change Log
 
+## [0.3.6]
+
+    -  IMPROVED consider realm when activating project by name
+    -  IMPROVED housekeeping: clean up project layout, Docker, settings and remove PandaHubClient
+    -  IMPROVED access of correct collection in get_net_ids
+    -  IMPROVED cleaner project version upgrades (early exit, log spam)
+
 ## [0.3.5]
 
     - Fixed version and repaired pyproject.toml
