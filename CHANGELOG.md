@@ -1,6 +1,12 @@
 # Change Log
 
+## [0.3.7]
+
+    -  FIXED: changes introduced in 0.3.6 removed all dependencies from the project
+    -  IMPROVED: allow $or and $and in timeseries metadata query
+
 ## [0.3.6]
+    ! yanked, see 0.3.7
 
     -  IMPROVED consider realm when activating project by name
     -  IMPROVED housekeeping: clean up project layout, Docker, settings and remove PandaHubClient
