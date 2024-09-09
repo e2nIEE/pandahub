@@ -706,7 +706,7 @@ class PandaHub:
         only_tables=None,
         project_id=None,
         geo_mode="string",
-        variants=None,
+        variant=None,
         convert=True,
     ):
         if project_id:
@@ -717,7 +717,7 @@ class PandaHub:
         if _id is None:
             return None
         return self.get_net_from_db_by_id(
-            _id, include_results, only_tables, geo_mode=geo_mode, variants=variants, convert=convert
+            _id, include_results, only_tables, geo_mode=geo_mode, variant=variant, convert=convert
         )
 
     def get_net_from_db_by_id(
@@ -727,7 +727,7 @@ class PandaHub:
         only_tables=None,
         convert=True,
         geo_mode="string",
-        variants=None,
+        variant=None,
     ):
         self.check_permission("read")
         return self._get_net_from_db_by_id(
@@ -736,7 +736,7 @@ class PandaHub:
             only_tables,
             convert=convert,
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
         )
 
     def _get_net_from_db_by_id(
@@ -746,7 +746,7 @@ class PandaHub:
         only_tables=None,
         convert=True,
         geo_mode="string",
-        variants=None,
+        variant=None,
     ):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id_)
@@ -766,7 +766,7 @@ class PandaHub:
                 include_results=include_results,
                 only_tables=only_tables,
                 geo_mode=geo_mode,
-                variants=variants,
+                variant=variant,
             )
         # add data that is not stored in dataframes
         self.deserialize_and_update_data(net, meta)
@@ -796,7 +796,7 @@ class PandaHub:
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
-        variants=None,
+        variant=None,
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet], dict]
         ] = {},
@@ -812,7 +812,7 @@ class PandaHub:
             include_results=include_results,
             add_edge_branches=add_edge_branches,
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             additional_filters=additional_filters,
         )
 
@@ -823,7 +823,7 @@ class PandaHub:
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
-        variants=None,
+        variant=None,
         ignore_elements=[],
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet], dict]
@@ -847,7 +847,7 @@ class PandaHub:
                 net_id,
                 bus_filter,
                 geo_mode=geo_mode,
-                variants=variants,
+                variant=variant,
                 dtypes=dtypes,
             )
         buses = net.bus.index.tolist()
@@ -873,7 +873,7 @@ class PandaHub:
                 ]
             },
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
         trafo_operator = "$or" if "trafo" in add_edge_branches else "$and"
@@ -884,7 +884,7 @@ class PandaHub:
             net_id,
             {trafo_operator: [{"hv_bus": {"$in": buses}}, {"lv_bus": {"$in": buses}}]},
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
         self._add_element_from_collection(
@@ -900,7 +900,7 @@ class PandaHub:
                 ]
             },
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
         switch_operator = "$or" if "switch" in add_edge_branches else "$and"
@@ -921,7 +921,7 @@ class PandaHub:
                 ]
             },
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
         if add_edge_branches:
@@ -944,7 +944,7 @@ class PandaHub:
                 "bus",
                 net_id,
                 geo_mode=geo_mode,
-                variants=variants,
+                variant=variant,
                 filter={"index": {"$in": branch_buses_outside}},
                 dtypes=dtypes,
             )
@@ -969,7 +969,7 @@ class PandaHub:
             net_id,
             switch_filter,
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
 
@@ -1004,7 +1004,7 @@ class PandaHub:
                 filter=element_filter,
                 geo_mode=geo_mode,
                 include_results=include_results,
-                variants=variants,
+                variant=variant,
                 dtypes=dtypes,
             )
 
@@ -1021,7 +1021,7 @@ class PandaHub:
                 filter=element_filter,
                 geo_mode=geo_mode,
                 include_results=include_results,
-                variants=variants,
+                variant=variant,
                 dtypes=dtypes,
             )
 
@@ -1050,7 +1050,7 @@ class PandaHub:
                 filter=element_filter,
                 geo_mode=geo_mode,
                 include_results=include_results,
-                variants=variants,
+                variant=variant,
                 dtypes=dtypes,
             )
         self.deserialize_and_update_data(net, meta)
@@ -1201,15 +1201,14 @@ class PandaHub:
         include_results=True,
         only_tables=None,
         geo_mode="string",
-        variants=None,
+        variant=None,
         dtypes=None,
     ):
-        if only_tables is not None and not element_type in only_tables:
+        if only_tables is not None and element_type not in only_tables:
             return
         if not include_results and element_type.startswith("res_"):
             return
-        variants_filter = self.get_variant_filter(variants)
-        filter_dict = {"net_id": net_id, **variants_filter}
+        filter_dict = {"net_id": net_id, **self.get_variant_filter(variant)}
         if filter is not None:
             if "$or" in filter_dict.keys() and "$or" in filter.keys():
                 # if 'or' is in both filters create 'and' with
@@ -1614,11 +1613,11 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        if not variant:
-            var_data = {"var_type": "base", "not_in_var": []}
+        if variant is None:
+            var_data = {"var_type": "base", "not_in_var": [], "variant": None}
         else:
-            var_data = {"var_type": "addition", "variant": int(variant)}
-        if type(net) == str:
+            var_data = {"var_type": "addition", "not_in_var": [], "variant": int(variant)}
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1730,7 +1729,7 @@ class PandaHub:
             for coll in self._get_net_collections(db):
                 db[coll].update_many(
                     {"$or": [{"var_type": None}, {"var_type": np.nan}]},
-                    {"$set": {"var_type": "base", "not_in_var": []}}
+                    {"$set": {"var_type": "base", "not_in_var": [], "variant": None}},
                 )
         return data
 
@@ -1758,58 +1757,31 @@ class PandaHub:
         db = self._get_project_database()
         db["variant"].update_one({"net_id": net_id, "index": index}, {"$set": data})
 
-    def get_variant_filter(self, variants: Optional[int]) -> dict:
+    def get_variant_filter(self, variant: int | None) -> dict:
         """
         Creates a mongodb query filter to retrieve pandapower elements for the given variant(s).
 
         Parameters
         ----------
-        variants : int or list of int or None
-                None or an empty list represent the base variant, ints specify variant indices.
+        variant : int or None
+                None represent the base variant, ints specify variant indices.
 
         Returns
         -------
         dict
-            mongodb query filter for the given variant(s)
+            mongodb query filter for the given variant
         """
-        if isinstance(variants, list):
-            warnings.warn(
-                f"Passing variants as list is deprecated, use None or int instead (variants: {variants})",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if len(variants) == 0:
-                variants = None
-            elif len(variants) == 1:
-                variants = variants[0]
-            elif len(variants) > 1:
-                warnings.warn(
-                    f"Passing multiple variants is deprecated, use None or int instead (variants: {variants})",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-                variants = [
-                    int(var) for var in variants
-                ]  # make sure variants are of type int
-                return {
-                    "$or": [
-                        {"var_type": "base", "not_in_var": {"$nin": variants}},
-                        {
-                            "var_type": {"$in": ["change", "addition"]},
-                            "variant": {"$in": variants},
-                        },
-                    ]
-                }
-        if variants:
-            variants = int(variants)
-            return {
-                "$or": [
-                    {"var_type": "base", "not_in_var": {"$ne": variants}},
-                    {"var_type": {"$in": ["change", "addition"]}, "variant": variants},
-                ]
-            }
-        else:
+        if isinstance(variant, list):
+            msg = f"Passing variants as list is not supported, use None or int instead (variants: {variant})"
+            raise ValueError(msg)
+        if variant is None:
             return self.base_variant_filter
+        if not isinstance(variant, int):
+            msg = f"variant argument has to be int | None, but got {variant} of {type(variant)}"
+            raise RuntimeError(msg)
+        return {"$or": [{"var_type": "base", "not_in_var": {"$ne": variant}},
+                        {"var_type": {"$in": ["change", "addition"]}, "variant": variant}, ]}
+
 
     # -------------------------
     # Bulk operations

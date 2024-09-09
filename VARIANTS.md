@@ -14,7 +14,7 @@ variants in which the element has been removed or changed.
 
 Elements with var_types "change" and "addition" have an additional field "variant" referencing the variant index for the change/addition.
 
-`PandaHub.get_variant_filter(variants)` can be used to generate a mongodb query filter mixin which restricts query results to a given variant or variants.
+`PandaHub.get_variant_filter(variant)` can be used to generate a mongodb query filter mixin which restricts query results to a given variant or variants.
 
 Example variant filter for single variant with index 1:
 
