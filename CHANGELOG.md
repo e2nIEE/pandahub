@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.3.8]
+
+    -  BREAKING: specifying variant as list will raise an error instead of a deprecation warning
+
 ## [0.3.7]
 
     -  FIXED: changes introduced in 0.3.6 removed all dependencies from the project
