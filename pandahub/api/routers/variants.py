@@ -25,10 +25,7 @@ def get_variants(data: GetVariantsModel, ph=Depends(pandahub)):
     variants_collection = ph.get_project_database("variant")
 
     variants = variants_collection.find({"net_id": data.net_id}, projection={"_id": 0})
-    response = {}
-    for var in variants:
-        response[var.pop("index")] = var
-    return response
+    return {variant.pop("index"): variant for variant in variants}
 
 
 class CreateVariantModel(BaseModel):

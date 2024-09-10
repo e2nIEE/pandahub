@@ -5,6 +5,7 @@ import logging
 import warnings
 from inspect import signature, _empty
 from collections.abc import Callable
+from types import NoneType
 from typing import Optional, Union, TypeVar
 
 import numpy as np
@@ -62,6 +63,13 @@ class PandaHubError(Exception):
 
 ProjectID = TypeVar("ProjectID", str, int, ObjectId)
 SettingsValue = TypeVar("SettingsValue", str, int, float, list, dict)
+
+
+def validate_variant_type(variant: int | None):
+    """Raise a ValueError if variant is not int | None."""
+    if not isinstance(variant, (int, NoneType)):
+        msg = f"variant must be int or None, but got {variant} of type {type(variant)}"
+        raise ValueError(msg)
 
 class PandaHub:
     permissions = {
@@ -706,7 +714,7 @@ class PandaHub:
         only_tables=None,
         project_id=None,
         geo_mode="string",
-        variants=None,
+        variant=None,
         convert=True,
     ):
         if project_id:
@@ -717,7 +725,7 @@ class PandaHub:
         if _id is None:
             return None
         return self.get_net_from_db_by_id(
-            _id, include_results, only_tables, geo_mode=geo_mode, variants=variants, convert=convert
+            _id, include_results, only_tables, geo_mode=geo_mode, variant=variant, convert=convert
         )
 
     def get_net_from_db_by_id(
@@ -727,7 +735,7 @@ class PandaHub:
         only_tables=None,
         convert=True,
         geo_mode="string",
-        variants=None,
+        variant=None,
     ):
         self.check_permission("read")
         return self._get_net_from_db_by_id(
@@ -736,7 +744,7 @@ class PandaHub:
             only_tables,
             convert=convert,
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
         )
 
     def _get_net_from_db_by_id(
@@ -746,7 +754,7 @@ class PandaHub:
         only_tables=None,
         convert=True,
         geo_mode="string",
-        variants=None,
+        variant=None,
     ):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, id_)
@@ -766,7 +774,7 @@ class PandaHub:
                 include_results=include_results,
                 only_tables=only_tables,
                 geo_mode=geo_mode,
-                variants=variants,
+                variant=variant,
             )
         # add data that is not stored in dataframes
         self.deserialize_and_update_data(net, meta)
@@ -796,7 +804,7 @@ class PandaHub:
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
-        variants=None,
+        variant=None,
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet], dict]
         ] = {},
@@ -812,7 +820,7 @@ class PandaHub:
             include_results=include_results,
             add_edge_branches=add_edge_branches,
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             additional_filters=additional_filters,
         )
 
@@ -823,7 +831,7 @@ class PandaHub:
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
-        variants=None,
+        variant=None,
         ignore_elements=[],
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet], dict]
@@ -847,7 +855,7 @@ class PandaHub:
                 net_id,
                 bus_filter,
                 geo_mode=geo_mode,
-                variants=variants,
+                variant=variant,
                 dtypes=dtypes,
             )
         buses = net.bus.index.tolist()
@@ -873,7 +881,7 @@ class PandaHub:
                 ]
             },
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
         trafo_operator = "$or" if "trafo" in add_edge_branches else "$and"
@@ -884,7 +892,7 @@ class PandaHub:
             net_id,
             {trafo_operator: [{"hv_bus": {"$in": buses}}, {"lv_bus": {"$in": buses}}]},
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
         self._add_element_from_collection(
@@ -900,7 +908,7 @@ class PandaHub:
                 ]
             },
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
         switch_operator = "$or" if "switch" in add_edge_branches else "$and"
@@ -921,7 +929,7 @@ class PandaHub:
                 ]
             },
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
         if add_edge_branches:
@@ -944,7 +952,7 @@ class PandaHub:
                 "bus",
                 net_id,
                 geo_mode=geo_mode,
-                variants=variants,
+                variant=variant,
                 filter={"index": {"$in": branch_buses_outside}},
                 dtypes=dtypes,
             )
@@ -969,7 +977,7 @@ class PandaHub:
             net_id,
             switch_filter,
             geo_mode=geo_mode,
-            variants=variants,
+            variant=variant,
             dtypes=dtypes,
         )
 
@@ -1004,7 +1012,7 @@ class PandaHub:
                 filter=element_filter,
                 geo_mode=geo_mode,
                 include_results=include_results,
-                variants=variants,
+                variant=variant,
                 dtypes=dtypes,
             )
 
@@ -1021,7 +1029,7 @@ class PandaHub:
                 filter=element_filter,
                 geo_mode=geo_mode,
                 include_results=include_results,
-                variants=variants,
+                variant=variant,
                 dtypes=dtypes,
             )
 
@@ -1050,7 +1058,7 @@ class PandaHub:
                 filter=element_filter,
                 geo_mode=geo_mode,
                 include_results=include_results,
-                variants=variants,
+                variant=variant,
                 dtypes=dtypes,
             )
         self.deserialize_and_update_data(net, meta)
@@ -1201,15 +1209,14 @@ class PandaHub:
         include_results=True,
         only_tables=None,
         geo_mode="string",
-        variants=None,
+        variant=None,
         dtypes=None,
     ):
-        if only_tables is not None and not element_type in only_tables:
+        if only_tables is not None and element_type not in only_tables:
             return
         if not include_results and element_type.startswith("res_"):
             return
-        variants_filter = self.get_variant_filter(variants)
-        filter_dict = {"net_id": net_id, **variants_filter}
+        filter_dict = {"net_id": net_id, **self.get_variant_filter(variant)}
         if filter is not None:
             if "$or" in filter_dict.keys() and "$or" in filter.keys():
                 # if 'or' is in both filters create 'and' with
@@ -1263,13 +1270,11 @@ class PandaHub:
     def get_net_value_from_db(
         self, net, element_type, element_index, parameter, variant=None, project_id=None
     ):
-        if variant is not None:
-            variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        if type(net) == str:
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1334,7 +1339,7 @@ class PandaHub:
         net: Union[int, str],
         element_type: str,
         element_indexes: list[int],
-        variant: Union[int, list[int], None] = None,
+        variant: Union[int, None] = None,
         project_id: Union[str, None] = None,
         **kwargs,
     ) -> list[dict]:
@@ -1360,9 +1365,7 @@ class PandaHub:
         """
         if not isinstance(element_indexes, list):
             raise TypeError("Parameter element_indexes must be a list of ints!")
-
-        if variant is not None:
-            variant = int(variant)
+        validate_variant_type(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
 
@@ -1370,7 +1373,7 @@ class PandaHub:
         db = self._get_project_database()
         collection = self._collection_name_of_element(element_type)
 
-        if type(net) == str:
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1385,7 +1388,7 @@ class PandaHub:
         if not deletion_targets:
             return []
 
-        if variant:
+        if variant is not None:
             delete_ids_variant, delete_ids = [], []
             for target in deletion_targets:
                 delete_ids_variant.append(target["_id"]) if target[
@@ -1411,8 +1414,7 @@ class PandaHub:
         project_id=None,
         **kwargs,
     ):
-        if variant is not None:
-            variant = int(variant)
+        validate_variant_type(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -1421,7 +1423,7 @@ class PandaHub:
         if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element_type)
-        if type(net) == str:
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1484,6 +1486,7 @@ class PandaHub:
         variant=None,
         project_id=None,
     ):
+        validate_variant_type(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -1492,7 +1495,7 @@ class PandaHub:
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element_type)
-        if type(net) == str:
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1518,7 +1521,6 @@ class PandaHub:
                 {"$set": {"object._object": obj.to_json()}},
             )
         else:
-            variant = int(variant)
             element_filter = {**element_filter, **self.get_variant_filter(variant)}
             document = db[collection].find_one({**element_filter})
             if not document:
@@ -1586,7 +1588,7 @@ class PandaHub:
         net: Union[int, str],
         element_type: str,
         elements_data: list[dict],
-        variant: int = None,
+        variant: int | None = None,
         project_id: str = None,
         **kwargs,
     ) -> list[dict]:
@@ -1610,15 +1612,16 @@ class PandaHub:
         list
             A list of the created elements (elements_data with added _id fields)
         """
+        validate_variant_type(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        if not variant:
-            var_data = {"var_type": "base", "not_in_var": []}
+        if variant is None:
+            var_data = {"var_type": "base", "not_in_var": [], "variant": None}
         else:
-            var_data = {"var_type": "addition", "variant": int(variant)}
-        if type(net) == str:
+            var_data = {"var_type": "addition", "not_in_var": [], "variant": variant}
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1730,7 +1733,7 @@ class PandaHub:
             for coll in self._get_net_collections(db):
                 db[coll].update_many(
                     {"$or": [{"var_type": None}, {"var_type": np.nan}]},
-                    {"$set": {"var_type": "base", "not_in_var": []}}
+                    {"$set": {"var_type": "base", "not_in_var": [], "variant": None}},
                 )
         return data
 
@@ -1758,58 +1761,26 @@ class PandaHub:
         db = self._get_project_database()
         db["variant"].update_one({"net_id": net_id, "index": index}, {"$set": data})
 
-    def get_variant_filter(self, variants: Optional[int]) -> dict:
+    def get_variant_filter(self, variant: int | None) -> dict:
         """
         Creates a mongodb query filter to retrieve pandapower elements for the given variant(s).
 
         Parameters
         ----------
-        variants : int or list of int or None
-                None or an empty list represent the base variant, ints specify variant indices.
+        variant : int or None
+                None represent the base variant, ints specify variant indices.
 
         Returns
         -------
         dict
-            mongodb query filter for the given variant(s)
+            mongodb query filter for the given variant
         """
-        if isinstance(variants, list):
-            warnings.warn(
-                f"Passing variants as list is deprecated, use None or int instead (variants: {variants})",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            if len(variants) == 0:
-                variants = None
-            elif len(variants) == 1:
-                variants = variants[0]
-            elif len(variants) > 1:
-                warnings.warn(
-                    f"Passing multiple variants is deprecated, use None or int instead (variants: {variants})",
-                    DeprecationWarning,
-                    stacklevel=2,
-                )
-                variants = [
-                    int(var) for var in variants
-                ]  # make sure variants are of type int
-                return {
-                    "$or": [
-                        {"var_type": "base", "not_in_var": {"$nin": variants}},
-                        {
-                            "var_type": {"$in": ["change", "addition"]},
-                            "variant": {"$in": variants},
-                        },
-                    ]
-                }
-        if variants:
-            variants = int(variants)
-            return {
-                "$or": [
-                    {"var_type": "base", "not_in_var": {"$ne": variants}},
-                    {"var_type": {"$in": ["change", "addition"]}, "variant": variants},
-                ]
-            }
-        else:
+        validate_variant_type(variant)
+        if variant is None:
             return self.base_variant_filter
+        return {"$or": [{"var_type": "base", "not_in_var": {"$ne": variant}},
+                        {"var_type": {"$in": ["change", "addition"]}, "variant": variant}, ]}
+
 
     # -------------------------
     # Bulk operations
@@ -3019,7 +2990,7 @@ class PandaHub:
         element_type: str,
         elements_data: list[dict],
         project_id: str = None,
-        variant: int = None,
+        variant: int | None = None,
     ):
         warnings.warn(
             "ph.create_elements_in_db was renamed - use ph.create_elements instead! "
