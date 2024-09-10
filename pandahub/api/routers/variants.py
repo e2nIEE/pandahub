@@ -30,13 +30,23 @@ def get_variants(data: GetVariantsModel, ph=Depends(pandahub)):
 
 class CreateVariantModel(BaseModel):
     project_id: str
-    variant_data: dict
+    net_id: int
+    name: str | None = None
+    default_name: str | None = None
+
+
+class CreateVariantResponseModel(BaseModel):
+    net_id: int
+    index: int
+    name: str | None = None
+    date_created: int
+    date_changed: int
+
 
 @router.post("/create_variant")
-def create_variant(data: CreateVariantModel, ph=Depends(pandahub)):
-    project_id = data.project_id
-    ph.set_active_project_by_id(project_id)
-    return ph.create_variant(data.variant_data)
+def create_variant(data: CreateVariantModel, ph=Depends(pandahub)) -> CreateVariantResponseModel:
+    ph.set_active_project_by_id(data.project_id)
+    return ph.create_variant(net_id=data.net_id, name=data.name, default_name=data.default_name)
 
 class DeleteVariantModel(BaseModel):
     project_id: str

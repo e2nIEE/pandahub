@@ -2,6 +2,7 @@
 import builtins
 import json
 import logging
+import time
 import warnings
 from inspect import signature, _empty
 from collections.abc import Callable
@@ -1711,31 +1712,36 @@ class PandaHub:
     # Variants
     # -------------------------
 
-    def create_variant(self, data, index: Optional[int] = None):
+    def create_variant(
+        self,
+        net_id: int,
+        name: str | None = None,
+        default_name: str = "Variant",
+        index: int | None = None,
+    ) -> dict:
         db = self._get_project_database()
-        net_id = int(data["net_id"])
         if index is None:
-            max_index = list(
-                db["variant"]
-                .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
-                .sort("index", -1)
-                .limit(1)
-            )
-            index = int(max_index[0]["index"]) + 1 if max_index else 1
+            max_index = next(db["variant"]
+                             .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
+                             .sort("index", -1)
+                             .limit(1),
+                             None)
+            index = 0 if max_index is None else int(max_index[0]["index"]) + 1
 
-        data["index"] = index
-        if data.get("default_name") is not None and data.get("name") is None:
-            data["name"] = data.pop("default_name") + " " + str(index)
-        db["variant"].insert_one(data)
-        del data["_id"]
+        if name is None:
+            name = f"{default_name}  {index + 1}"
+        now = int(time.time())
+        variant = {
+            "net_id": net_id,
+            "index": index,
+            "name": name,
+            "date_created": now,
+            "date_changed": now,
+        }
+        db["variant"].insert_one(variant)
+        del variant["_id"]
+        return variant
 
-        if index == 1:
-            for coll in self._get_net_collections(db):
-                db[coll].update_many(
-                    {"$or": [{"var_type": None}, {"var_type": np.nan}]},
-                    {"$set": {"var_type": "base", "not_in_var": [], "variant": None}},
-                )
-        return data
 
     def delete_variant(self, net_id, index):
         db = self._get_project_database()
