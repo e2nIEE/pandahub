@@ -5,6 +5,7 @@ import logging
 import warnings
 from inspect import signature, _empty
 from collections.abc import Callable
+from types import NoneType
 from typing import Optional, Union, TypeVar
 
 import numpy as np
@@ -62,6 +63,13 @@ class PandaHubError(Exception):
 
 ProjectID = TypeVar("ProjectID", str, int, ObjectId)
 SettingsValue = TypeVar("SettingsValue", str, int, float, list, dict)
+
+
+def validate_variant_type(variant: int | None):
+    """Raise a ValueError if variant is not int | None."""
+    if not isinstance(variant, (int, NoneType)):
+        msg = f"variant must be int or None, but got {variant} of type {type(variant)}"
+        raise ValueError(msg)
 
 class PandaHub:
     permissions = {
@@ -1262,13 +1270,11 @@ class PandaHub:
     def get_net_value_from_db(
         self, net, element_type, element_index, parameter, variant=None, project_id=None
     ):
-        if variant is not None:
-            variant = int(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        if type(net) == str:
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1333,7 +1339,7 @@ class PandaHub:
         net: Union[int, str],
         element_type: str,
         element_indexes: list[int],
-        variant: Union[int, list[int], None] = None,
+        variant: Union[int, None] = None,
         project_id: Union[str, None] = None,
         **kwargs,
     ) -> list[dict]:
@@ -1359,9 +1365,7 @@ class PandaHub:
         """
         if not isinstance(element_indexes, list):
             raise TypeError("Parameter element_indexes must be a list of ints!")
-
-        if variant is not None:
-            variant = int(variant)
+        validate_variant_type(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
 
@@ -1369,7 +1373,7 @@ class PandaHub:
         db = self._get_project_database()
         collection = self._collection_name_of_element(element_type)
 
-        if type(net) == str:
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1384,7 +1388,7 @@ class PandaHub:
         if not deletion_targets:
             return []
 
-        if variant:
+        if variant is not None:
             delete_ids_variant, delete_ids = [], []
             for target in deletion_targets:
                 delete_ids_variant.append(target["_id"]) if target[
@@ -1410,8 +1414,7 @@ class PandaHub:
         project_id=None,
         **kwargs,
     ):
-        if variant is not None:
-            variant = int(variant)
+        validate_variant_type(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -1420,7 +1423,7 @@ class PandaHub:
         if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element_type)
-        if type(net) == str:
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1483,6 +1486,7 @@ class PandaHub:
         variant=None,
         project_id=None,
     ):
+        validate_variant_type(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -1491,7 +1495,7 @@ class PandaHub:
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element_type)
-        if type(net) == str:
+        if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
             net_id = net
@@ -1517,7 +1521,6 @@ class PandaHub:
                 {"$set": {"object._object": obj.to_json()}},
             )
         else:
-            variant = int(variant)
             element_filter = {**element_filter, **self.get_variant_filter(variant)}
             document = db[collection].find_one({**element_filter})
             if not document:
@@ -1585,7 +1588,7 @@ class PandaHub:
         net: Union[int, str],
         element_type: str,
         elements_data: list[dict],
-        variant: int = None,
+        variant: int | None = None,
         project_id: str = None,
         **kwargs,
     ) -> list[dict]:
@@ -1609,6 +1612,7 @@ class PandaHub:
         list
             A list of the created elements (elements_data with added _id fields)
         """
+        validate_variant_type(variant)
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
@@ -1616,7 +1620,7 @@ class PandaHub:
         if variant is None:
             var_data = {"var_type": "base", "not_in_var": [], "variant": None}
         else:
-            var_data = {"var_type": "addition", "not_in_var": [], "variant": int(variant)}
+            var_data = {"var_type": "addition", "not_in_var": [], "variant": variant}
         if isinstance(net, str):
             net_id = self._get_id_from_name(net, db)
         else:
@@ -1771,14 +1775,9 @@ class PandaHub:
         dict
             mongodb query filter for the given variant
         """
-        if isinstance(variant, list):
-            msg = f"Passing variants as list is not supported, use None or int instead (variants: {variant})"
-            raise ValueError(msg)
+        validate_variant_type(variant)
         if variant is None:
             return self.base_variant_filter
-        if not isinstance(variant, int):
-            msg = f"variant argument has to be int | None, but got {variant} of {type(variant)}"
-            raise RuntimeError(msg)
         return {"$or": [{"var_type": "base", "not_in_var": {"$ne": variant}},
                         {"var_type": {"$in": ["change", "addition"]}, "variant": variant}, ]}
 
@@ -2991,7 +2990,7 @@ class PandaHub:
         element_type: str,
         elements_data: list[dict],
         project_id: str = None,
-        variant: int = None,
+        variant: int | None = None,
     ):
         warnings.warn(
             "ph.create_elements_in_db was renamed - use ph.create_elements instead! "
