@@ -1122,7 +1122,7 @@ class PandaHub:
                         element_data["var_type"] = element_data["var_type"].fillna("base")
                     else:
                         element_data["var_type"] = "base"
-                        # element_data["not_in_var"] = []
+                        element_data["not_in_var"] = np.empty((len(element_data.index), 0)).tolist()
                         element_data["variant"] = None
                 element_data = convert_element_to_dict(element_data, net_id, self._datatypes.get(element))
                 self._write_element_to_db(db, element, element_data)
