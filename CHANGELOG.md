@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.3.9]
+
+    -  BREAKING: changed signatures of create_variant function and route
+
 ## [0.3.8]
 
     -  BREAKING: specifying variant as list will raise an error instead of a deprecation warning
