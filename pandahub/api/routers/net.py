@@ -25,7 +25,7 @@ class GetNetFromDB(BaseModel):
 
 @router.post("/get_net_from_db")
 def get_net_from_db(data: GetNetFromDB, ph=Depends(pandahub)):
-    net = ph.get_net_from_db(**data.model_dump())
+    net = ph.get_network_by_name(**data.model_dump())
     return pp.to_json(net)
 
 

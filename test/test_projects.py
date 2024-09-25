@@ -92,7 +92,7 @@ def test_upgrade_project():
     ph.set_active_project("pytest")
     ph.upgrade_project_to_latest_version()
     # and test if everything went fine
-    net2 = ph.get_net_from_db("simple_network")
+    net2 = ph.get_network_by_name("simple_network")
     assert pp.nets_equal(net, net2, check_dtype=False)
 
 

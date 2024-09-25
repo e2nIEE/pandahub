@@ -707,7 +707,8 @@ class PandaHub:
         db = self._get_project_database()
         return list(db["_networks"].find())
 
-    def get_net_from_db(
+
+    def get_network_by_name(
         self,
         name,
         include_results=True,
@@ -724,13 +725,13 @@ class PandaHub:
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_net_from_db_by_id(
+        return self.get_network(
             _id, include_results, only_tables, geo_mode=geo_mode, variant=variant, convert=convert
         )
 
-    def get_net_from_db_by_id(
+    def get_network(
         self,
-        id,
+        _id,
         include_results=True,
         only_tables=None,
         convert=True,
@@ -739,7 +740,7 @@ class PandaHub:
     ):
         self.check_permission("read")
         return self._get_net_from_db_by_id(
-            id,
+            _id,
             include_results,
             only_tables,
             convert=convert,
@@ -797,7 +798,8 @@ class PandaHub:
                     value = json.loads(value[11:], cls=io_pp.PPJSONDecoder, registry_class=registry)
                 net[key] = value
 
-    def get_subnet_from_db(
+
+    def get_subnet_by_name(
         self,
         name,
         bus_filter=None,
@@ -814,7 +816,7 @@ class PandaHub:
         _id = self._get_id_from_name(name, db)
         if _id is None:
             return None
-        return self.get_subnet_from_db_by_id(
+        return self.get_subnet(
             _id,
             bus_filter=bus_filter,
             include_results=include_results,
@@ -824,7 +826,7 @@ class PandaHub:
             additional_filters=additional_filters,
         )
 
-    def get_subnet_from_db_by_id(
+    def get_subnet(
         self,
         net_id,
         bus_filter=None,
@@ -3017,6 +3019,32 @@ class PandaHub:
             variant=variant,
             project_id=project_id,
         )
+
+    def get_net_from_db(self, *args, **kwargs):
+        msg = ("Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
+               "given name exists. Preferably, switch to get_network() and pass the network id. "
+               "If you want to continue to retrieve a network by its name, switch to get_network_by_name(). "
+               "This function will be removed in future versions.")
+        warnings.warn(msg, DeprecationWarning)
+        return self.get_network_by_name(*args, **kwargs)
+
+    def get_net_from_db_by_id(self, *args, **kwargs):
+        msg = "Renamed - use get_network() as drop-in replacement. This function will be removed in future versions."
+        warnings.warn(msg, DeprecationWarning)
+        self.get_network(*args, **kwargs)
+
+    def get_subnet_from_db(*args, **kwargs):
+        msg = ("Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
+               "given name exists. Preferably, switch to get_subnet() and pass the network id. "
+               "If you want to continue to retrieve a subnet by its name, switch to get_subnet_by_name(). "
+               "This function will be removed in future versions.")
+        warnings.warn(msg, DeprecationWarning)
+        return self.get_subnet_by_name(*args, **kwargs)
+
+    def get_subnet_from_db_by_id(*args, **kwargs):
+        msg = "Renamed - use get_subnet() as drop-in replacement. This function will be removed in future versions."
+        warnings.warn(msg, DeprecationWarning)
+        return self.get_subnet(*args, **kwargs)
 
 
 if __name__ == "__main__":
