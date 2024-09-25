@@ -50,7 +50,7 @@ def test_network_io(ph):
     # we check storing two different networks consecutively to ensure the nets are properly separated
     for net, name in [(net1, name1), (net2, name2)]:
         if ph.network_with_name_exists(name):
-            ph.delete_net_from_db(name)
+            ph.delete_network_by_name(name)
 
         assert ph.network_with_name_exists(name) == False
 
@@ -72,7 +72,7 @@ def test_network_io(ph):
         assert len(net3.load) == 0
 
     # delete first network
-    ph.delete_net_from_db(name1)
+    ph.delete_network_by_name(name1)
     assert ph.network_with_name_exists(name1) == False
 
     # check that second network is still in database

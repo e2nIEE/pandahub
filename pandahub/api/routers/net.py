@@ -49,7 +49,7 @@ def write_network_to_db(data: WriteNetwork, ph=Depends(pandahub)):
 
 class BaseCRUDModel(BaseModel):
     project_id: str
-    net: str
+    net_id: int | str
     element_type: str
 
 class GetNetValueModel(BaseCRUDModel):

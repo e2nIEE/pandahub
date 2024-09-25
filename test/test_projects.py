@@ -53,7 +53,7 @@ def test_upgrade_project():
                 raise pandahub.PandaHubError("net must be a pandapower or pandapipes object")
             if self._network_with_name_exists(name, db):
                 if overwrite:
-                    self.delete_net_from_db(name)
+                    self.delete_network_by_name(name)
                 else:
                     raise pandahub.PandaHubError("Network name already exists")
             max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
