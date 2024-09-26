@@ -722,16 +722,16 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
         db = self._get_project_database()
-        _id = self._get_net_id_from_name(name, db)
-        if _id is None:
+        net_id = self._get_net_id_from_name(name, db)
+        if net_id is None:
             return None
         return self.get_network(
-            _id, include_results, only_tables, geo_mode=geo_mode, variant=variant, convert=convert
+            net_id, include_results, only_tables, geo_mode=geo_mode, variant=variant, convert=convert
         )
 
     def get_network(
         self,
-        _id,
+        net_id,
         include_results=True,
         only_tables=None,
         convert=True,
@@ -740,7 +740,7 @@ class PandaHub:
     ):
         self.check_permission("read")
         return self._get_net_from_db_by_id(
-            _id,
+            net_id,
             include_results,
             only_tables,
             convert=convert,
@@ -750,7 +750,7 @@ class PandaHub:
 
     def _get_net_from_db_by_id(
         self,
-        id_,
+        net_id,
         include_results=True,
         only_tables=None,
         convert=True,
@@ -758,7 +758,7 @@ class PandaHub:
         variant=None,
     ):
         db = self._get_project_database()
-        meta = self._get_network_metadata(db, id_)
+        meta = self._get_network_metadata(db, net_id)
 
         package = pp if meta.get("sector", "power") == "power" else pps
         net = package.create_empty_network()
@@ -771,7 +771,7 @@ class PandaHub:
                 net,
                 db,
                 el,
-                id_,
+                net_id,
                 include_results=include_results,
                 only_tables=only_tables,
                 geo_mode=geo_mode,
@@ -813,11 +813,11 @@ class PandaHub:
     ):
         self.check_permission("read")
         db = self._get_project_database()
-        _id = self._get_net_id_from_name(name, db)
-        if _id is None:
+        net_id = self._get_net_id_from_name(name, db)
+        if net_id is None:
             return None
         return self.get_subnet(
-            _id,
+            net_id,
             bus_filter=bus_filter,
             include_results=include_results,
             add_edge_branches=add_edge_branches,
