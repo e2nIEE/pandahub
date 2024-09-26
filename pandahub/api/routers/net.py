@@ -1,6 +1,7 @@
 from typing import Optional, Any
 
 import pandapower as pp
+import pandapipes as pps
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -31,7 +32,7 @@ def get_net_from_db(data: GetNetFromDB, ph=Depends(pandahub)):
 
 class WriteNetwork(BaseModel):
     project_id: str
-    net: str
+    net: pp.pandapowerNet | pps.pandapipesNet
     name: str
     overwrite: Optional[bool] = True
 

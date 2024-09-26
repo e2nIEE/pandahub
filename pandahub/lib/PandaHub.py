@@ -16,7 +16,7 @@ from functools import reduce
 from operator import getitem
 from uuid import UUID
 from pymongo import MongoClient, ReplaceOne
-from pymongo.errors import ServerSelectionTimeoutError
+from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
 import pandapipes as pps
 from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
@@ -1074,33 +1074,67 @@ class PandaHub:
 
     def write_network_to_db(
         self,
-        net,
-        name,
+        net: pp.pandapowerNet | pps.pandapipesNet,
+        name: str,
         sector="power",
-        overwrite=True,
-        project_id=None,
-        metadata=None,
-        skip_results=False,
-        net_id=None,
-    ):
+        overwrite: bool = True,
+        project_id: str = None,
+        metadata: dict = None,
+        skip_results: bool = False,
+        net_id: int | str = None,
+    ) -> dict:
+        """
+        Write a pandapower or pandapipes network to the database.
+
+        A network is uniquely identified only by its net_id (multiple networks with the same name are allowed).
+        If no net_id is passed, an incrementing integer id is generated.
+        Raises an error if a passed net_id already exists in the database unless overwrite is set to True.
+
+
+        Parameters
+        ----------
+        net:
+            pandapower or pandapipes network
+        name:
+            name of the network
+        sector:
+            sector of the network
+        overwrite:
+            if True, an existing network with the same net_id will be overwritten
+        project_id:
+            id of the project (defaults to active project)
+        metadata:
+            additional metadata to be stored with the network
+        skip_results:
+            if True, results tables are not stored in the database
+        net_id:
+            id of the network. If None, a new integer id is generated
+
+        Returns
+        -------
+        dict
+            metadata of the created network
+        """
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-
-        #         if not isinstance(net, pp.pandapowerNet) and not isinstance(net, pps.pandapipesNet):
-        #             raise PandaHubError("net must be a pandapower or pandapipes object")
-
-        if self._network_with_name_exists(name, db):
-            if overwrite:
-                self.delete_network_by_name(name)
-            else:
-                raise PandaHubError("Network name already exists")
+        networks_coll = db["_networks"]
 
         if net_id is None:
-            max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
-            net_id = 0 if max_id_network is None else max_id_network["_id"] + 1
-        db["_networks"].insert_one({"_id": net_id})
+            net_id = self._get_int_index("_networks")
+        else:
+            try:
+                networks_coll.insert_one({"_id": net_id})
+            except DuplicateKeyError:
+                if overwrite:
+                    self.delete_network(net_id)
+                    networks_coll.insert_one({"_id": net_id})
+                else:
+                    msg = f"Network with net_id {net_id} already exists"
+                    raise PandaHubError(msg)
+
+        networks_coll.update_one({"_id": net_id}, {"name": name, "sector": sector})
 
         data = {}
         dtypes = {}
@@ -1130,14 +1164,12 @@ class PandaHub:
 
         # write network metadata
         network_data = {
-            "name": name,
-            "sector": sector,
             "dtypes": dtypes,
             "data": data,
         }
         if metadata is not None:
             network_data.update(metadata)
-        db["_networks"].update_one({"_id": net_id}, {"$set": network_data})
+        networks_coll.update_one({"_id": net_id}, {"$set": network_data})
         return network_data | {"_id": net_id}
 
     def _write_net_collections_to_db(self, db, collections):
@@ -1695,6 +1727,46 @@ class PandaHub:
             logger.info(f"creating indexes in {collection} collection")
             project_db[collection].create_indexes(indexes)
 
+    def _get_int_index(self, collection: str, index_field: str = "_id", query_filter: dict | None = None,
+                       retries: int = 10) -> int:
+        """Create a document in a collection with an incrementing integer value for the index_field key.
+
+        ! This function expects a unique index set in the database on collection.index_field, compound with the keys in query_filter (if not None) !
+
+        Parameters
+        ----------
+        collection:
+            The collection to create the document in.
+        index_field:
+            The field holding the incrementing integer index.
+        query_filter:
+            A query filter to apply when searching for the highest existing index.
+        retries:
+            Number of retries to create the index in case of a race condition.
+
+        Returns
+        -------
+            The value of the created index.
+        """
+        query_filter = query_filter if query_filter is not None else {}
+        coll = self.get_project_database(collection)
+        for retry in range(retries):
+            try:
+                max_index = next(coll.find(query_filter, projection={index_field: 1})
+                                 .sort(index_field, -1)
+                                 .limit(1),
+                                 None)
+                index = 0 if max_index is None else int(max_index[0][index_field]) + 1
+                coll.insert_one({index_field: index})
+                break
+            except DuplicateKeyError:
+                continue
+        else:
+            msg = f"Failed to create integer index for field {index_field} in {collection}!"
+            raise PandaHubError(msg)
+        return index
+
+
     # -------------------------
     # Variants
     # -------------------------
@@ -1703,14 +1775,7 @@ class PandaHub:
         db = self._get_project_database()
         net_id = int(data["net_id"])
         if index is None:
-            max_index = list(
-                db["variant"]
-                .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
-                .sort("index", -1)
-                .limit(1)
-            )
-            index = int(max_index[0]["index"]) + 1 if max_index else 1
-
+            index = self._get_int_index("variant", index_field="index", query_filter={"net_id": net_id})
         data["index"] = index
         if data.get("default_name") is not None and data.get("name") is None:
             data["name"] = data.pop("default_name") + " " + str(index)
