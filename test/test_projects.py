@@ -25,17 +25,19 @@ def test_upgrade_project():
             if self.project_exists(name, realm):
                 raise pandahub.PandaHubError("Project already exists")
             if settings is None:
-                 settings = {}
+                settings = {}
             if metadata is None:
                 metadata = {}
-            project_data = {"name": name,
-                            "realm": realm,
-                            "settings": settings,
-                            "metadata": metadata}
+            project_data = {
+                "name": name,
+                "realm": realm,
+                "settings": settings,
+                "metadata": metadata,
+            }
             if project_id:
                 project_data["_id"] = project_id
             if self.user_id is not None:
-                 project_data["users"] = {self.user_id: "owner"}
+                project_data["users"] = {self.user_id: "owner"}
             self.mongo_client["user_management"]["projects"].insert_one(project_data)
             self.set_active_project(name, realm)
             return project_data
@@ -61,19 +63,24 @@ def test_upgrade_project():
             dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, version.parse("0.2.1"))
             self._write_net_collections_to_db(db, dataframes)
 
-            net_dict = {"_id": _id, "name": name, "dtypes": types,
-                        "net_type": net_type,
-                        "data": other_parameters}
+            net_dict = {
+                "_id": _id,
+                "name": name,
+                "dtypes": types,
+                "net_type": net_type,
+                "data": other_parameters,
+            }
             db["_networks"].insert_one(net_dict)
 
         def _write_net_collections_to_db(self, db, collections):
             for key, item in collections.items():
                 if len(item) > 0:
                     try:
-                        db[key].insert_many(item, ordered= True)
+                        db[key].insert_many(item, ordered=True)
                         db[key].create_index([("net_id", DESCENDING)])
                     except:
                         print("FAILED TO WRITE TABLE", key)
+
     # we use the implemetation of 0.2.2 to write a net
     oldph = PandaHubV0_2_2(connection_url=settings.MONGODB_URL)
 
@@ -101,12 +108,5 @@ def reset_project(db):
         db.drop_collection(cname)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_upgrade_project()
-
-
-
-
-
-
-

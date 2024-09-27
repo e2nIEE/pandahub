@@ -29,12 +29,7 @@ If you didn't request a reset you can ignore this email. But be aware that
 someone is trying to reset your password!
     """
 
-    message = MessageSchema(
-        subject=subject,
-        recipients=[to_address],
-        body=template,
-        subtype="plain"
-    )
+    message = MessageSchema(subject=subject, recipients=[to_address], body=template, subtype="plain")
 
     await fast_mail.send_message(message)
 
@@ -50,11 +45,6 @@ the following link: \n\n
 {verification_link}
     """
 
-    message = MessageSchema(
-        subject=subject,
-        recipients=[to_address],
-        body=template,
-        subtype="plain"
-    )
+    message = MessageSchema(subject=subject, recipients=[to_address], body=template, subtype="plain")
 
     await fast_mail.send_message(message)

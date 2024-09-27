@@ -2,6 +2,7 @@ import pytest
 from pandahub import PandaHub
 from pandahub.api.internal import settings
 
+
 @pytest.fixture(scope="session")
 def ph():
     ph = PandaHub(connection_url=settings.MONGODB_URL)
@@ -17,5 +18,3 @@ def ph():
     yield ph
 
     ph.delete_project(i_know_this_action_is_final=True)
-
-
