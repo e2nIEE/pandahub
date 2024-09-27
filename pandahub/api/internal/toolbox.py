@@ -30,10 +30,7 @@ someone is trying to reset your password!
     """
 
     message = MessageSchema(
-        subject=subject,
-        recipients=[to_address],
-        body=template,
-        subtype="plain"
+        subject=subject, recipients=[to_address], body=template, subtype="plain"
     )
 
     await fast_mail.send_message(message)
@@ -51,10 +48,7 @@ the following link: \n\n
     """
 
     message = MessageSchema(
-        subject=subject,
-        recipients=[to_address],
-        body=template,
-        subtype="plain"
+        subject=subject, recipients=[to_address], body=template, subtype="plain"
     )
 
     await fast_mail.send_message(message)

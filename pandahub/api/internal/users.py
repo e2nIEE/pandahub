@@ -18,9 +18,7 @@ from ..internal.toolbox import send_password_reset_mail, send_verification_email
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     if settings.SECRET is None:
-        raise UserWarning(
-            "You must specify a SECRET in the environment variables or .env file"
-        )
+        raise UserWarning("You must specify a SECRET in the environment variables or .env file")
     reset_password_token_secret = settings.SECRET
     verification_token_secret = settings.SECRET
 
@@ -45,7 +43,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
 #         print(f"Verification requested for user {user.id}. Verification token: {token}")
 
 
-async def get_user_manager(user_db:BeanieUserDatabase = Depends(get_user_db)):
+async def get_user_manager(user_db: BeanieUserDatabase = Depends(get_user_db)):
     yield UserManager(user_db)
 
 

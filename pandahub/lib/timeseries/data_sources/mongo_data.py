@@ -6,6 +6,7 @@ import pandas as pd
 
 try:
     import pplog
+
     logger = pplog.getLogger(__name__)
 except ImportError:
     import logging
@@ -16,10 +17,18 @@ class MongoData(DataSource):
     Fetches timeseries data from a mongodb
     """
 
-    def __init__(self, io_methods: MongoIOMethods, netname: str, db_name: str, element_index: list,
-                 data_type='p_mw', element_type='load', collection_name='timeseries_data', prefetch_count=1000,
-                 **kwargs):
-
+    def __init__(
+        self,
+        io_methods: MongoIOMethods,
+        netname: str,
+        db_name: str,
+        element_index: list,
+        data_type="p_mw",
+        element_type="load",
+        collection_name="timeseries_data",
+        prefetch_count=1000,
+        **kwargs,
+    ):
         super(MongoData, self).__init__()
         self.db_name = db_name
         self.collection_name = collection_name
@@ -40,10 +49,11 @@ class MongoData(DataSource):
         self.tseries = None
         self.prefetch_count = prefetch_count
         self.current_fetch_position = -1
-        self.metadata = self.io_methods.get_timeseries_metadata(filter_document=self.filter, db_name=self.db_name,
-                                                                collection_name=self.collection_name)
+        self.metadata = self.io_methods.get_timeseries_metadata(
+            filter_document=self.filter, db_name=self.db_name, collection_name=self.collection_name
+        )
 
-        first_timestamp = self.metadata['first_timestamp'].values[0]
+        first_timestamp = self.metadata["first_timestamp"].values[0]
 
         if type(first_timestamp) == str:
             self.first_timestamp = datetime.datetime.fromisoformat(first_timestamp)
@@ -57,11 +67,14 @@ class MongoData(DataSource):
         if time_step >= self.current_fetch_position:
             self.current_fetch_position = time_step + self.prefetch_count
             # fs = self.first_timestamp + datetime.timedelta(minutes=15*time_step)
-            es = self.first_timestamp + datetime.timedelta(minutes=15*self.current_fetch_position)
-            self.tseries = self.io_methods.bulk_get_timeseries_from_db(filter_document=self.filter, db_name=self.db_name,
-                                                                       collection_name=self.collection_name,
-                                                                       timestamp_range=[fs, es],
-                                                                       pivot_by_column="element_index")
+            es = self.first_timestamp + datetime.timedelta(minutes=15 * self.current_fetch_position)
+            self.tseries = self.io_methods.bulk_get_timeseries_from_db(
+                filter_document=self.filter,
+                db_name=self.db_name,
+                collection_name=self.collection_name,
+                timestamp_range=[fs, es],
+                pivot_by_column="element_index",
+            )
 
         try:
             return self.tseries.loc[fs.isoformat(), profile_name] * scale_factor

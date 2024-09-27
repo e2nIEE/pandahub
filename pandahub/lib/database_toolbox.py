@@ -10,6 +10,7 @@ import logging
 import json
 import importlib
 import blosc
+
 logger = logging.getLogger(__name__)
 from pandapower.io_utils import PPJSONEncoder
 from packaging import version
@@ -35,6 +36,7 @@ def get_document_hash(task):
     hasher.update(repr(make_task_hashable(task)).encode())
     return base64.urlsafe_b64encode(hasher.digest()).decode()
 
+
 def make_task_hashable(task):
     """
     Makes a task dict hashable.
@@ -51,7 +53,7 @@ def make_task_hashable(task):
         return tuple((make_task_hashable(e) for e in task))
 
     if isinstance(task, dict):
-        return tuple(sorted((k,make_task_hashable(v)) for k,v in task.items()))
+        return tuple(sorted((k, make_task_hashable(v)) for k, v in task.items()))
 
     if isinstance(task, (set, frozenset)):
         return tuple(sorted(make_task_hashable(e) for e in task))
@@ -107,40 +109,33 @@ def convert_timeseries_to_subdocuments(timeseries):
     """
     subdocuments = []
     for timestamp, value in list(timeseries.items()):
-        subdocuments.append({"timestamp": timestamp,
-                             "value": value})
+        subdocuments.append({"timestamp": timestamp, "value": value})
     return subdocuments
 
 
 def compress_timeseries_data(timeseries_data, ts_format):
     if ts_format == "timestamp_value":
-        timeseries_data = np.array([timeseries_data.index.astype("int64"),
-                                    timeseries_data.values])
-        return blosc.compress(timeseries_data.tobytes(),
-                              shuffle=blosc.SHUFFLE,
-                              cname="zlib")
+        timeseries_data = np.array([timeseries_data.index.astype("int64"), timeseries_data.values])
+        return blosc.compress(timeseries_data.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
     elif ts_format == "array":
-        return blosc.compress(timeseries_data.astype(float).values.tobytes(),
-                              shuffle=blosc.SHUFFLE,
-                              cname="zlib")
+        return blosc.compress(
+            timeseries_data.astype(float).values.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib"
+        )
 
 
 def decompress_timeseries_data(timeseries_data, ts_format, num_timestamps):
     if ts_format == "timestamp_value":
-        data = np.frombuffer(blosc.decompress(timeseries_data),
-                             dtype=np.float64).reshape((num_timestamps, 2),
-                                                       order="F")
-        return pd.Series(data[:,1], index=pd.to_datetime(data[:,0]))
+        data = np.frombuffer(blosc.decompress(timeseries_data), dtype=np.float64).reshape(
+            (num_timestamps, 2), order="F"
+        )
+        return pd.Series(data[:, 1], index=pd.to_datetime(data[:, 0]))
     elif ts_format == "array":
-        return np.frombuffer(blosc.decompress(timeseries_data),
-                             dtype=np.float64)
+        return np.frombuffer(blosc.decompress(timeseries_data), dtype=np.float64)
 
 
-def create_timeseries_document(timeseries,
-                               data_type,
-                               ts_format="timestamp_value",
-                               compress_ts_data=False,
-                               **kwargs):
+def create_timeseries_document(
+    timeseries, data_type, ts_format="timestamp_value", compress_ts_data=False, **kwargs
+):
     """
     Creates a document that contains timeseries metadata as well as the timeseries
     itself. Uses the function 'add_timestamp_info_to_document' to add information
@@ -179,13 +174,15 @@ def create_timeseries_document(timeseries,
         dict, representing a timeseries.
 
     """
-    document = {"data_type": data_type,
-                "ts_format": ts_format,
-                "compressed_ts_data": compress_ts_data}
+    document = {
+        "data_type": data_type,
+        "ts_format": ts_format,
+        "compressed_ts_data": compress_ts_data,
+    }
     document = add_timestamp_info_to_document(document, timeseries, ts_format)
     document = {**document, **kwargs}
 
-    if not "_id" in document: # IDs set by users will not be overwritten
+    if not "_id" in document:  # IDs set by users will not be overwritten
         document["_id"] = get_document_hash(document)
 
     if compress_ts_data:
@@ -198,8 +195,9 @@ def create_timeseries_document(timeseries,
 
     return document
 
+
 def convert_element_to_dict(element_data, net_id, default_dtypes=None):
-    '''
+    """
     Converts a pandapower pandas.DataFrame element into dictonary, casting columns to default dtypes.
     * Columns of type Object are serialized to json
     * Columns named "geo" or "*_geo" containing strings are parsed into dicts
@@ -219,11 +217,13 @@ def convert_element_to_dict(element_data, net_id, default_dtypes=None):
     dict
         Record-orientated dict representation of element_data
 
-    '''
+    """
     if default_dtypes is not None:
         for column in element_data.columns:
             if column in default_dtypes:
-                element_data[column] = element_data[column].astype(default_dtypes[column], errors="ignore")
+                element_data[column] = element_data[column].astype(
+                    default_dtypes[column], errors="ignore"
+                )
 
     if "object" in element_data.columns:
         element_data["object"] = element_data["object"].apply(object_to_json)
@@ -248,7 +248,9 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
                 continue
             # ------------
             # convert pandapower objects in dataframes to dict
-            dataframes[key] = convert_element_to_dict(net[key].copy(deep=True), net_id, datatypes.get(key))
+            dataframes[key] = convert_element_to_dict(
+                net[key].copy(deep=True), net_id, datatypes.get(key)
+            )
         else:
             data = serialize_object_data(key, data, version_)
             if data:
@@ -256,8 +258,9 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
 
     return dataframes, other_parameters, types
 
+
 def serialize_object_data(element, element_data, version_):
-    '''
+    """
     Serialize a pandapower element which is not of type pandas.DataFrame into json.
 
     Parameters
@@ -273,13 +276,16 @@ def serialize_object_data(element, element_data, version_):
     -------
     json
         A json representation of the pandapower element
-    '''
+    """
     if version_ <= version.parse("0.2.3"):
         try:
             element_data = json.dumps(element_data, cls=PPJSONEncoder)
         except:
             print(
-                "Data in net[{}] is not JSON serializable and was therefore omitted on import".format(element))
+                "Data in net[{}] is not JSON serializable and was therefore omitted on import".format(
+                    element
+                )
+            )
         else:
             return element_data
     else:
@@ -291,7 +297,7 @@ def serialize_object_data(element, element_data, version_):
 
 
 def get_dtypes(element_data, default_dtypes):
-    '''
+    """
     Construct data types from a pandas.DataFrame, with given defaults taking precedence.
 
     Parameters
@@ -307,15 +313,12 @@ def get_dtypes(element_data, default_dtypes):
         Datatypes for all columns present in element_data. Column type is taken from default_dtypes if defined,
         otherwise directly from element_data
 
-    '''
+    """
     types = {}
     if default_dtypes is not None:
         types.update({key: dtype.__name__ for key, dtype in default_dtypes.items()})
     types.update(
-        {
-            column: str(dtype) for column, dtype in element_data.dtypes.items()
-            if column not in types
-        }
+        {column: str(dtype) for column, dtype in element_data.dtypes.items() if column not in types}
     )
     return types
 
@@ -325,8 +328,8 @@ def load_geojsons(df):
         if column == "geo" or column.endswith("_geo"):
             df[column] = df[column].apply(lambda a: json.loads(a) if isinstance(a, str) else a)
 
-def convert_geojsons(df, geo_mode="string"):
 
+def convert_geojsons(df, geo_mode="string"):
     def to_dict(geo):
         if isinstance(geo, dict):
             return geo
@@ -345,6 +348,7 @@ def convert_geojsons(df, geo_mode="string"):
 
     def to_shapely(geo):
         from shapely.geometry import shape
+
         if hasattr(geo, "coords"):
             return geo
         elif isinstance(geo, str):
@@ -366,17 +370,20 @@ def convert_geojsons(df, geo_mode="string"):
         if column == "geo" or column.endswith("_geo"):
             df[column] = df[column].apply(conv_func)
 
+
 def json_to_object(js):
     _module = importlib.import_module(js["_module"])
     _class = getattr(_module, js["_class"])
     return _class.from_json(js["_object"])
 
+
 def object_to_json(obj):
     return {
         "_module": obj.__class__.__module__,
         "_class": obj.__class__.__name__,
-        "_object": obj.to_json()
+        "_object": obj.to_json(),
     }
+
 
 def migrate_userdb_to_beanie(ph):
     """Migrate existing users to beanie backend used by pandahub >= 0.3.0.
@@ -394,18 +401,22 @@ def migrate_userdb_to_beanie(ph):
     """
     from datetime import datetime
     from pymongo.errors import OperationFailure
-    userdb_backup = ph.mongo_client["user_management"][datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")]
+
+    userdb_backup = ph.mongo_client["user_management"][
+        datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")
+    ]
     userdb = ph.mongo_client["user_management"]["users"]
     old_users = list(userdb.find({"_id": {"$type": "objectId"}}))
     new_users = list(userdb.find({"_id": {"$not": {"$type": "objectId"}}}))
     if old_users and new_users:
         old_users = [user.get("email") for user in old_users]
         new_users = [user.get("email") for user in new_users]
-        raise RuntimeError("Inconsistent user database - you need to resolve conflicts manually! "
-                           "See pandahub v0.3.0 release notes for details."
-                           f"pandahub < 0.3.0 users: {old_users}"
-                           f"pandahub >= 0.3.0 users: {new_users}"
-                           )
+        raise RuntimeError(
+            "Inconsistent user database - you need to resolve conflicts manually! "
+            "See pandahub v0.3.0 release notes for details."
+            f"pandahub < 0.3.0 users: {old_users}"
+            f"pandahub >= 0.3.0 users: {new_users}"
+        )
     elif not old_users:
         return
     userdb_backup.insert_many(old_users)
@@ -417,7 +428,5 @@ def migrate_userdb_to_beanie(ph):
         else:
             raise e
 
-    migration = [{'$addFields': {'_id': '$id'}},
-                 {'$unset': 'id'},
-                 {'$out': 'users'}]
+    migration = [{"$addFields": {"_id": "$id"}}, {"$unset": "id"}, {"$out": "users"}]
     userdb.aggregate(migration)
