@@ -118,9 +118,7 @@ def compress_timeseries_data(timeseries_data, ts_format):
         timeseries_data = np.array([timeseries_data.index.astype("int64"), timeseries_data.values])
         return blosc.compress(timeseries_data.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
     elif ts_format == "array":
-        return blosc.compress(
-            timeseries_data.astype(float).values.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib"
-        )
+        return blosc.compress(timeseries_data.astype(float).values.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
 
 
 def decompress_timeseries_data(timeseries_data, ts_format, num_timestamps):
@@ -133,9 +131,7 @@ def decompress_timeseries_data(timeseries_data, ts_format, num_timestamps):
         return np.frombuffer(blosc.decompress(timeseries_data), dtype=np.float64)
 
 
-def create_timeseries_document(
-    timeseries, data_type, ts_format="timestamp_value", compress_ts_data=False, **kwargs
-):
+def create_timeseries_document(timeseries, data_type, ts_format="timestamp_value", compress_ts_data=False, **kwargs):
     """
     Creates a document that contains timeseries metadata as well as the timeseries
     itself. Uses the function 'add_timestamp_info_to_document' to add information
@@ -221,9 +217,7 @@ def convert_element_to_dict(element_data, net_id, default_dtypes=None):
     if default_dtypes is not None:
         for column in element_data.columns:
             if column in default_dtypes:
-                element_data[column] = element_data[column].astype(
-                    default_dtypes[column], errors="ignore"
-                )
+                element_data[column] = element_data[column].astype(default_dtypes[column], errors="ignore")
 
     if "object" in element_data.columns:
         element_data["object"] = element_data["object"].apply(object_to_json)
@@ -248,9 +242,7 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
                 continue
             # ------------
             # convert pandapower objects in dataframes to dict
-            dataframes[key] = convert_element_to_dict(
-                net[key].copy(deep=True), net_id, datatypes.get(key)
-            )
+            dataframes[key] = convert_element_to_dict(net[key].copy(deep=True), net_id, datatypes.get(key))
         else:
             data = serialize_object_data(key, data, version_)
             if data:
@@ -281,11 +273,7 @@ def serialize_object_data(element, element_data, version_):
         try:
             element_data = json.dumps(element_data, cls=PPJSONEncoder)
         except:
-            print(
-                "Data in net[{}] is not JSON serializable and was therefore omitted on import".format(
-                    element
-                )
-            )
+            print("Data in net[{}] is not JSON serializable and was therefore omitted on import".format(element))
         else:
             return element_data
     else:
@@ -317,9 +305,7 @@ def get_dtypes(element_data, default_dtypes):
     types = {}
     if default_dtypes is not None:
         types.update({key: dtype.__name__ for key, dtype in default_dtypes.items()})
-    types.update(
-        {column: str(dtype) for column, dtype in element_data.dtypes.items() if column not in types}
-    )
+    types.update({column: str(dtype) for column, dtype in element_data.dtypes.items() if column not in types})
     return types
 
 
@@ -402,9 +388,7 @@ def migrate_userdb_to_beanie(ph):
     from datetime import datetime
     from pymongo.errors import OperationFailure
 
-    userdb_backup = ph.mongo_client["user_management"][
-        datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")
-    ]
+    userdb_backup = ph.mongo_client["user_management"][datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")]
     userdb = ph.mongo_client["user_management"]["users"]
     old_users = list(userdb.find({"_id": {"$type": "objectId"}}))
     new_users = list(userdb.find({"_id": {"$not": {"$type": "objectId"}}}))

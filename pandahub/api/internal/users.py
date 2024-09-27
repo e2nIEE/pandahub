@@ -27,16 +27,12 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             await self.request_verify(user)
         print(f"User {user.id} has registered.")
 
-    async def on_after_forgot_password(
-        self, user: User, token: str, request: Optional[Request] = None
-    ):
+    async def on_after_forgot_password(self, user: User, token: str, request: Optional[Request] = None):
         await send_password_reset_mail(user, token)
 
     #         print(f"User {user.id} has forgot their password. Reset token: {token}")
 
-    async def on_after_request_verify(
-        self, user: User, token: str, request: Optional[Request] = None
-    ):
+    async def on_after_request_verify(self, user: User, token: str, request: Optional[Request] = None):
         await send_verification_email(user, token)
 
 

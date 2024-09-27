@@ -33,9 +33,7 @@ class OutputWriterMongoDB(OutputWriter):
         collection_name="timeseries_data",
         **kwargs,
     ):
-        super().__init__(
-            net, time_steps=time_steps, write_time=write_time, log_variables=log_variables
-        )
+        super().__init__(net, time_steps=time_steps, write_time=write_time, log_variables=log_variables)
         self.io_methods = io_methods
         self.args = kwargs
         self.NET_NAME = netname
@@ -163,8 +161,7 @@ class OutputWriterMongoDB(OutputWriter):
                         collection_name=self.collection_name,
                         db_name=self.db_name,
                         return_ids=True,
-                        last_timestamp=self.start_date
-                        + pd.Timedelta(self.freq) * len(self.time_steps),
+                        last_timestamp=self.start_date + pd.Timedelta(self.freq) * len(self.time_steps),
                         num_timestamps=len(self.time_steps),
                         **self.args,
                     )

@@ -16,9 +16,7 @@ project = "pytest"
 def test_from_tutorial(ph):
     ph.set_active_project(project)
     net = nw.simple_mv_open_ring_net()
-    p_mw_profiles = (
-        np.random.randint(low=0, high=100, size=(35041, len(net.load))) / 100 * net.load.p_mw.values
-    )
+    p_mw_profiles = np.random.randint(low=0, high=100, size=(35041, len(net.load))) / 100 * net.load.p_mw.values
     q_mvar_profiles = np.ones((35041, len(net.load)))
     timestamps = pd.date_range(start="01/01/2020", end="31/12/2020", freq="15min")
     p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
@@ -190,7 +188,9 @@ def test_del_single_ts_on_db(ph):
             data_type="p_mw",
             collection_name="test_collection",
         )
-        assert False  # this line shouldnt be reached, because the function triggers KeyError when no timeseries is found
+        assert (
+            False
+        )  # this line shouldnt be reached, because the function triggers KeyError when no timeseries is found
     except:
         assert True
 

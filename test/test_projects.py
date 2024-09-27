@@ -60,9 +60,7 @@ def test_upgrade_project():
                     raise pandahub.PandaHubError("Network name already exists")
             max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
             _id = 0 if max_id_network is None else max_id_network["_id"] + 1
-            dataframes, other_parameters, types = convert_dataframes_to_dicts(
-                net, _id, version.parse("0.2.1")
-            )
+            dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, version.parse("0.2.1"))
             self._write_net_collections_to_db(db, dataframes)
 
             net_dict = {
