@@ -32,7 +32,7 @@ def get_net_from_db(data: GetNetFromDB, ph=Depends(pandahub)):
 
 class WriteNetwork(BaseModel):
     project_id: str
-    net: pp.pandapowerNet | pps.pandapipesNet
+    net: str
     name: str
     overwrite: Optional[bool] = True
 
