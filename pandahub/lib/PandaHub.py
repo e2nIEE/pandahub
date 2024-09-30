@@ -1134,7 +1134,7 @@ class PandaHub:
                     msg = f"Network with net_id {net_id} already exists"
                     raise PandaHubError(msg)
 
-        networks_coll.update_one({"_id": net_id}, {"name": name, "sector": sector})
+        networks_coll.update_one({"_id": net_id}, {"$set": {"name": name, "sector": sector}})
 
         data = {}
         dtypes = {}
@@ -3084,7 +3084,7 @@ class PandaHub:
         warnings.warn(msg, DeprecationWarning)
         self.get_network(*args, **kwargs)
 
-    def get_subnet_from_db(*args, **kwargs):
+    def get_subnet_from_db(self, *args, **kwargs):
         msg = ("Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
                "given name exists. Preferably, switch to get_subnet() and pass the network id. "
                "If you want to continue to retrieve a subnet by its name, switch to get_subnet_by_name(). "
@@ -3092,7 +3092,7 @@ class PandaHub:
         warnings.warn(msg, DeprecationWarning)
         return self.get_subnet_by_name(*args, **kwargs)
 
-    def get_subnet_from_db_by_id(*args, **kwargs):
+    def get_subnet_from_db_by_id(self,*args, **kwargs):
         msg = "Renamed - use get_subnet() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning)
         return self.get_subnet(*args, **kwargs)
