@@ -21,7 +21,7 @@ def test_additional_res_tables(ph):
     net1 = pp.create_empty_network()
     net1['res_test'] = pd.DataFrame(data={'col1': [1, 2], 'col2': [3, 4]})
     ph.write_network_to_db(net1, 'test')
-    net2 = ph.get_net_from_db('test')
+    net2 = ph.get_network_by_name('test')
 
     assert('res_test' in net2)
     assert(net1.res_test.shape == (2,2))
@@ -50,14 +50,14 @@ def test_network_io(ph):
     # we check storing two different networks consecutively to ensure the nets are properly separated
     for net, name in [(net1, name1), (net2, name2)]:
         if ph.network_with_name_exists(name):
-            ph.delete_net_from_db(name)
+            ph.delete_network_by_name(name)
 
         assert ph.network_with_name_exists(name) == False
 
         ph.write_network_to_db(net, name)
         assert ph.network_with_name_exists(name) == True
 
-        net_loaded = ph.get_net_from_db(name)
+        net_loaded = ph.get_network_by_name(name)
 
         pp.runpp(net)
         pp.runpp(net_loaded)
@@ -66,18 +66,18 @@ def test_network_io(ph):
         # doesn't compare to itself
         # assert pp.nets_equal(net, net_loaded, check_dtype=False)
 
-        net3 = ph.get_net_from_db(name, only_tables=["bus"])
+        net3 = ph.get_network_by_name(name, only_tables=["bus"])
         assert len(net3.bus) == len(net.bus)
         assert len(net3.line) == 0
         assert len(net3.load) == 0
 
     # delete first network
-    ph.delete_net_from_db(name1)
+    ph.delete_network_by_name(name1)
     assert ph.network_with_name_exists(name1) == False
 
     # check that second network is still in database
     assert ph.network_with_name_exists(name2) == True
-    net2_loaded = ph.get_net_from_db(name2)
+    net2_loaded = ph.get_network_by_name(name2)
     pp.runpp(net2_loaded)
     assert pp.nets_equal(net2, net2_loaded, check_only_results=True)
 
@@ -90,20 +90,20 @@ def test_load_subnetwork(ph):
         net = nw_pp.mv_oberrhein()
         ph.write_network_to_db(net, name)
 
-    subnet = ph.get_subnet_from_db(name, bus_filter={"vn_kv": 110})
+    subnet = ph.get_subnet_by_name(name, bus_filter={"vn_kv": 110})
     expected_sizes = [("bus", 4), ("line", 0), ("trafo", 2), ("ext_grid", 2)]
 
     for element, size in expected_sizes:
         assert len(subnet[element]) == size
         assert len(subnet["res_" + element]) == size
 
-    subnet = ph.get_subnet_from_db(name, bus_filter={"vn_kv": 110},
+    subnet = ph.get_subnet_by_name(name, bus_filter={"vn_kv": 110},
                                    include_results=False)
     for element, size in expected_sizes:
         assert len(subnet[element]) == size
         assert len(subnet["res_" + element]) == 0
 
-    subnet = ph.get_subnet_from_db(name, bus_filter={"vn_kv": 110},
+    subnet = ph.get_subnet_by_name(name, bus_filter={"vn_kv": 110},
                                    add_edge_branches=False)
     expected_sizes = [("bus", 2), ("line", 0), ("trafo", 0), ("ext_grid", 2)]
 
@@ -135,7 +135,7 @@ def test_access_and_set_single_values(ph):
     ph.delete_element(name, element, index)
     with pytest.raises(PandaHubError):
         ph.get_net_value_from_db(name, element, index, parameter)
-    net = ph.get_net_from_db(name)
+    net = ph.get_network_by_name(name)
     assert index not in net[element].index
 
 
@@ -143,7 +143,7 @@ def test_pandapipes(ph):
     ph.set_active_project('pytest')
     net = nw_pps.gas_versatility()
     ph.write_network_to_db(net, 'versatility')
-    net2 = ph.get_net_from_db('versatility', convert=False)
+    net2 = ph.get_network_by_name('versatility', convert=False)
     pps.pipeflow(net)
     pps.pipeflow(net2)
     assert nets_equal(net, net2, check_only_results=True)
@@ -167,7 +167,7 @@ if __name__ == '__main__':
     ph.create_project('pytest')
     net = nw_pps.gas_versatility()
     ph.write_network_to_db(net, 'versatility')
-    net2 = ph.get_net_from_db('versatility')
+    net2 = ph.get_network_by_name('versatility')
     pps.pipeflow(net)
     pps.pipeflow(net2)
     # test_network_io(ph)

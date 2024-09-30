@@ -17,7 +17,7 @@ router = APIRouter(
 
 class GetVariantsModel(BaseModel):
     project_id: str
-    net_id: int
+    net_id: int | str
 
 @router.post("/get_variants")
 def get_variants(data: GetVariantsModel, ph=Depends(pandahub)):
@@ -40,7 +40,7 @@ def create_variant(data: CreateVariantModel, ph=Depends(pandahub)):
 
 class DeleteVariantModel(BaseModel):
     project_id: str
-    net_id: int
+    net_id: int | str
     index: int
 
 @router.post("/delete_variant")
@@ -51,7 +51,7 @@ def delete_variant(data: DeleteVariantModel, ph=Depends(pandahub)):
 
 class UpdateVariantModel(BaseModel):
     project_id: str
-    net_id: int
+    net_id: int | str
     index: int
     data: dict
 

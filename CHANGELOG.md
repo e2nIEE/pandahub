@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.3.9]
+
+    -  BREAKING: inserting multiple networks with the same name does not represent an error anymore, networks are only unique by their net_id (_id field of the collection)
+    -  BREAKING: passing net_id as str will not remap to the project name internally but look up on the _id field
+    -  IMPROVED: fix race condition when calling write_network_to_db without net_id
+
 ## [0.3.8]
 
     -  BREAKING: specifying variant as list will raise an error instead of a deprecation warning
