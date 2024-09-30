@@ -764,7 +764,7 @@ class PandaHub:
         net = package.create_empty_network()
 
         # add all elements that are stored as dataframes
-        collection_names = self._get_net_collections(db)
+        collection_names = self.get_net_collections(db)
         for collection_name in collection_names:
             el = self._element_name_of_collection(collection_name)
             self._add_element_from_collection(
@@ -1036,7 +1036,7 @@ class PandaHub:
             )
 
         # add all other collections
-        collection_names = self._get_net_collections(db)
+        collection_names = self.get_net_collections(db)
         for collection in collection_names:
             table_name = self._element_name_of_collection(collection)
             # skip all element tables that we have already added
@@ -1783,7 +1783,7 @@ class PandaHub:
         del data["_id"]
 
         if index == 1:
-            for coll in self._get_net_collections(db):
+            for coll in self.get_net_collections(db):
                 db[coll].update_many(
                     {"$or": [{"var_type": None}, {"var_type": np.nan}]},
                     {"$set": {"var_type": "base", "not_in_var": [], "variant": None}},
@@ -1792,7 +1792,7 @@ class PandaHub:
 
     def delete_variant(self, net_id, index):
         db = self._get_project_database()
-        collection_names = self._get_net_collections(db)
+        collection_names = self.get_net_collections(db)
         for coll in collection_names:
             # remove references to deleted objects
             db[coll].update_many(
@@ -3075,12 +3075,12 @@ class PandaHub:
         msg = ("Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
                "given name exists. Preferably, switch to get_network() and pass the network id. "
                "If you want to continue to retrieve a network by its name, switch to get_network_by_name(). "
-               "This function will be removed in future versions.")
+               "get_net_from_db() will be removed in future versions.")
         warnings.warn(msg, DeprecationWarning)
         return self.get_network_by_name(*args, **kwargs)
 
     def get_net_from_db_by_id(self, *args, **kwargs):
-        msg = "Renamed - use get_network() as drop-in replacement. This function will be removed in future versions."
+        msg = "get_net_from_db_by_id() has been renamed - use get_network() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning)
         self.get_network(*args, **kwargs)
 
@@ -3088,12 +3088,12 @@ class PandaHub:
         msg = ("Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
                "given name exists. Preferably, switch to get_subnet() and pass the network id. "
                "If you want to continue to retrieve a subnet by its name, switch to get_subnet_by_name(). "
-               "This function will be removed in future versions.")
+               "get_subnet_from_db() will be removed in future versions.")
         warnings.warn(msg, DeprecationWarning)
         return self.get_subnet_by_name(*args, **kwargs)
 
     def get_subnet_from_db_by_id(self,*args, **kwargs):
-        msg = "Renamed - use get_subnet() as drop-in replacement. This function will be removed in future versions."
+        msg = "get_subnet_from_db_by_id() has been renamed - use get_subnet() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning)
         return self.get_subnet(*args, **kwargs)
 
@@ -3101,12 +3101,12 @@ class PandaHub:
         msg = ("Deleting a network by name can be ambiguous and will throw an error if more than one Network with the "
                "given name exists. Preferably, switch to delete_network() and pass the network id. "
                "If you want to continue to delete a net by its name, switch to delete_network_by_name(). "
-               "This function will be removed in future versions.")
+               "delete_net_from_db() will be removed in future versions.")
         warnings.warn(msg, DeprecationWarning)
         return self.delete_network_by_name(name)
 
     def _get_net_collections(self, db, with_areas=True):
-        msg = "Renamed - use get_net_collections() as drop-in replacement. This function will be removed in future versions."
+        msg = "_get_net_collections() has been made public - use get_net_collections() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning)
         return self.get_net_collections(db, with_areas)
 
