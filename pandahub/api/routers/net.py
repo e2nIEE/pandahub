@@ -1,6 +1,7 @@
 from typing import Optional, Any
 
 import pandapower as pp
+import pandapipes as pps
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -25,7 +26,7 @@ class GetNetFromDB(BaseModel):
 
 @router.post("/get_net_from_db")
 def get_net_from_db(data: GetNetFromDB, ph=Depends(pandahub)):
-    net = ph.get_net_from_db(**data.model_dump())
+    net = ph.get_network_by_name(**data.model_dump())
     return pp.to_json(net)
 
 
@@ -49,7 +50,7 @@ def write_network_to_db(data: WriteNetwork, ph=Depends(pandahub)):
 
 class BaseCRUDModel(BaseModel):
     project_id: str
-    net: str
+    net_id: int | str
     element_type: str
 
 class GetNetValueModel(BaseCRUDModel):

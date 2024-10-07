@@ -17,7 +17,7 @@ from functools import reduce
 from operator import getitem
 from uuid import UUID
 from pymongo import MongoClient, ReplaceOne
-from pymongo.errors import ServerSelectionTimeoutError
+from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
 import pandapipes as pps
 from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
@@ -710,7 +710,8 @@ class PandaHub:
         db = self._get_project_database()
         return list(db["_networks"].find())
 
-    def get_net_from_db(
+
+    def get_network_by_name(
         self,
         name,
         include_results=True,
@@ -724,16 +725,16 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
         db = self._get_project_database()
-        _id = self._get_id_from_name(name, db)
-        if _id is None:
+        net_id = self._get_net_id_from_name(name, db)
+        if net_id is None:
             return None
-        return self.get_net_from_db_by_id(
-            _id, include_results, only_tables, geo_mode=geo_mode, variant=variant, convert=convert
+        return self.get_network(
+            net_id, include_results, only_tables, geo_mode=geo_mode, variant=variant, convert=convert
         )
 
-    def get_net_from_db_by_id(
+    def get_network(
         self,
-        id,
+        net_id,
         include_results=True,
         only_tables=None,
         convert=True,
@@ -742,7 +743,7 @@ class PandaHub:
     ):
         self.check_permission("read")
         return self._get_net_from_db_by_id(
-            id,
+            net_id,
             include_results,
             only_tables,
             convert=convert,
@@ -752,7 +753,7 @@ class PandaHub:
 
     def _get_net_from_db_by_id(
         self,
-        id_,
+        net_id,
         include_results=True,
         only_tables=None,
         convert=True,
@@ -760,20 +761,20 @@ class PandaHub:
         variant=None,
     ):
         db = self._get_project_database()
-        meta = self._get_network_metadata(db, id_)
+        meta = self._get_network_metadata(db, net_id)
 
         package = pp if meta.get("sector", "power") == "power" else pps
         net = package.create_empty_network()
 
         # add all elements that are stored as dataframes
-        collection_names = self._get_net_collections(db)
+        collection_names = self.get_net_collections(db)
         for collection_name in collection_names:
             el = self._element_name_of_collection(collection_name)
             self._add_element_from_collection(
                 net,
                 db,
                 el,
-                id_,
+                net_id,
                 include_results=include_results,
                 only_tables=only_tables,
                 geo_mode=geo_mode,
@@ -800,7 +801,8 @@ class PandaHub:
                     value = json.loads(value[11:], cls=io_pp.PPJSONDecoder, registry_class=registry)
                 net[key] = value
 
-    def get_subnet_from_db(
+
+    def get_subnet_by_name(
         self,
         name,
         bus_filter=None,
@@ -814,11 +816,11 @@ class PandaHub:
     ):
         self.check_permission("read")
         db = self._get_project_database()
-        _id = self._get_id_from_name(name, db)
-        if _id is None:
+        net_id = self._get_net_id_from_name(name, db)
+        if net_id is None:
             return None
-        return self.get_subnet_from_db_by_id(
-            _id,
+        return self.get_subnet(
+            net_id,
             bus_filter=bus_filter,
             include_results=include_results,
             add_edge_branches=add_edge_branches,
@@ -827,7 +829,7 @@ class PandaHub:
             additional_filters=additional_filters,
         )
 
-    def get_subnet_from_db_by_id(
+    def get_subnet(
         self,
         net_id,
         bus_filter=None,
@@ -1037,7 +1039,7 @@ class PandaHub:
             )
 
         # add all other collections
-        collection_names = self._get_net_collections(db)
+        collection_names = self.get_net_collections(db)
         for collection in collection_names:
             table_name = self._element_name_of_collection(collection)
             # skip all element tables that we have already added
@@ -1075,33 +1077,67 @@ class PandaHub:
 
     def write_network_to_db(
         self,
-        net,
-        name,
+        net: pp.pandapowerNet | pps.pandapipesNet,
+        name: str,
         sector="power",
-        overwrite=True,
-        project_id=None,
-        metadata=None,
-        skip_results=False,
-        net_id=None,
-    ):
+        overwrite: bool = True,
+        project_id: str = None,
+        metadata: dict = None,
+        skip_results: bool = False,
+        net_id: int | str = None,
+    ) -> dict:
+        """
+        Write a pandapower or pandapipes network to the database.
+
+        A network is uniquely identified only by its net_id (multiple networks with the same name are allowed).
+        If no net_id is passed, an incrementing integer id is generated.
+        Raises an error if a passed net_id already exists in the database unless overwrite is set to True.
+
+
+        Parameters
+        ----------
+        net:
+            pandapower or pandapipes network
+        name:
+            name of the network
+        sector:
+            sector of the network
+        overwrite:
+            if True, an existing network with the same net_id will be overwritten
+        project_id:
+            id of the project (defaults to active project)
+        metadata:
+            additional metadata to be stored with the network
+        skip_results:
+            if True, results tables are not stored in the database
+        net_id:
+            id of the network. If None, a new integer id is generated
+
+        Returns
+        -------
+        dict
+            metadata of the created network
+        """
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-
-        #         if not isinstance(net, pp.pandapowerNet) and not isinstance(net, pps.pandapipesNet):
-        #             raise PandaHubError("net must be a pandapower or pandapipes object")
-
-        if self._network_with_name_exists(name, db):
-            if overwrite:
-                self.delete_net_from_db(name)
-            else:
-                raise PandaHubError("Network name already exists")
+        networks_coll = db["_networks"]
 
         if net_id is None:
-            max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
-            net_id = 0 if max_id_network is None else max_id_network["_id"] + 1
-        db["_networks"].insert_one({"_id": net_id})
+            net_id = self._get_int_index("_networks")
+        else:
+            try:
+                networks_coll.insert_one({"_id": net_id})
+            except DuplicateKeyError:
+                if overwrite:
+                    self.delete_network(net_id)
+                    networks_coll.insert_one({"_id": net_id})
+                else:
+                    msg = f"Network with net_id {net_id} already exists"
+                    raise PandaHubError(msg)
+
+        networks_coll.update_one({"_id": net_id}, {"$set": {"name": name, "sector": sector}})
 
         data = {}
         dtypes = {}
@@ -1134,14 +1170,12 @@ class PandaHub:
 
         # write network metadata
         network_data = {
-            "name": name,
-            "sector": sector,
             "dtypes": dtypes,
             "data": data,
         }
         if metadata is not None:
             network_data.update(metadata)
-        db["_networks"].update_one({"_id": net_id}, {"$set": network_data})
+        networks_coll.update_one({"_id": net_id}, {"$set": network_data})
         return network_data | {"_id": net_id}
 
     def _write_net_collections_to_db(self, db, collections):
@@ -1157,16 +1191,22 @@ class PandaHub:
             db[collection_name].insert_many(element_data, ordered=False)
             # print(f"\nFAILED TO WRITE TABLE '{element_type}' TO DATABASE! (details above)")
 
-    def delete_net_from_db(self, name):
+    def delete_network(self, net_id):
+        if net_id is None:
+            raise PandaHubError(f"No net_id was passed", 404)
+        db = self._get_project_database()
+        collection_names = self.get_net_collections(db)
+        for collection_name in collection_names:
+            db[collection_name].delete_many({"net_id": net_id})
+        db["_networks"].delete_one({"_id": net_id})
+
+    def delete_network_by_name(self, name):
         self.check_permission("write")
         db = self._get_project_database()
-        _id = self._get_id_from_name(name, db)
-        if _id is None:
-            raise PandaHubError("Network does not exist", 404)
-        collection_names = self._get_net_collections(db)  # TODO
-        for collection_name in collection_names:
-            db[collection_name].delete_many({"net_id": _id})
-        db["_networks"].delete_one({"_id": _id})
+        net_id = self._get_net_id_from_name(name, db)
+        if net_id is None:
+            raise PandaHubError(f"Network with name {name} does not exist", 404)
+        self.delete_network(net_id)
 
     def network_with_name_exists(self, name):
         self.check_permission("read")
@@ -1183,17 +1223,16 @@ class PandaHub:
         nets = pd.DataFrame(list(db.find(fi, projection=proj)))
         return nets
 
-    def _get_metadata_from_name(self, name, db):
-        return list(db["_networks"].find({"name": name}))
-
-    def _get_id_from_name(self, name, db):
-        metadata = self._get_metadata_from_name(name, db)
+    def _get_net_id_from_name(self, name, db):
+        metadata = list(db["_networks"].find({"name": name}))
         if len(metadata) > 1:
-            raise PandaHubError("Duplicate Network!")
+            msg = (f"Multiple networks with the name {metadata[0]['name']} found in the database. "
+                   f"Use the corresponding function which selects the network by net_id instead.")
+            raise PandaHubError(msg)
         return None if len(metadata) == 0 else metadata[0]["_id"]
 
     def _network_with_name_exists(self, name, db):
-        return self._get_id_from_name(name, db) is not None
+        return self._get_net_id_from_name(name, db) is not None
 
     def _get_net_collections(self, db, with_areas=True):
         return self.get_net_collections(db, with_areas)
@@ -1279,16 +1318,12 @@ class PandaHub:
     # -------------------------
 
     def get_net_value_from_db(
-        self, net, element_type, element_index, parameter, variant=None, project_id=None
+        self, net_id, element_type, element_index, parameter, variant=None, project_id=None
     ):
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        if isinstance(net, str):
-            net_id = self._get_id_from_name(net, db)
-        else:
-            net_id = net
 
         collection = self._collection_name_of_element(element_type)
         dtypes = self._datatypes.get(element_type)
@@ -1314,14 +1349,14 @@ class PandaHub:
             return document[parameter]
 
     def delete_element(
-        self, net, element_type, element_index, variant=None, project_id=None, **kwargs
+        self, net_id, element_type, element_index, variant=None, project_id=None, **kwargs
     ) -> dict:
         """
         Delete an element from the database.
 
         Parameters
         ----------
-        net: str or int
+        net_id: str or int
             Network to add elements to, either a name or numeric id
         element_type: str
             Name of the element type (e.g. bus, line)
@@ -1337,7 +1372,7 @@ class PandaHub:
             The deleted element as dict with all fields
         """
         return self.delete_elements(
-            net=net,
+            net_id=net_id,
             element_type=element_type,
             element_indexes=[element_index],
             variant=variant,
@@ -1347,7 +1382,7 @@ class PandaHub:
 
     def delete_elements(
         self,
-        net: Union[int, str],
+        net_id: Union[int, str],
         element_type: str,
         element_indexes: list[int],
         variant: Union[int, None] = None,
@@ -1359,7 +1394,7 @@ class PandaHub:
 
         Parameters
         ----------
-        net: str or int
+        net_id: str or int
             Network to add elements to, either a name or numeric id
         element_type: str
             Name of the element type (e.g. bus, line)
@@ -1383,11 +1418,6 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         collection = self._collection_name_of_element(element_type)
-
-        if isinstance(net, str):
-            net_id = self._get_id_from_name(net, db)
-        else:
-            net_id = net
 
         element_filter = {
             "index": {"$in": element_indexes},
@@ -1416,7 +1446,7 @@ class PandaHub:
 
     def set_net_value_in_db(
         self,
-        net,
+        net_id,
         element_type,
         element_index,
         parameter,
@@ -1434,10 +1464,6 @@ class PandaHub:
         if value is not None and dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element_type)
-        if isinstance(net, str):
-            net_id = self._get_id_from_name(net, db)
-        else:
-            net_id = net
         element_filter = {
             "index": element_index,
             "net_id": int(net_id),
@@ -1489,7 +1515,7 @@ class PandaHub:
 
     def set_object_attribute(
         self,
-        net,
+        net_id,
         element_type,
         element_index,
         parameter,
@@ -1506,10 +1532,6 @@ class PandaHub:
         if dtypes is not None and parameter in dtypes:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element_type)
-        if isinstance(net, str):
-            net_id = self._get_id_from_name(net, db)
-        else:
-            net_id = net
 
         js = list(db[collection].find({"index": element_index, "net_id": net_id}))[0]
         obj = json_to_object(js["object"])
@@ -1555,7 +1577,7 @@ class PandaHub:
 
     def create_element(
         self,
-        net: Union[int, str],
+        net_id: Union[int, str],
         element_type: str,
         element_index: int,
         element_data: dict,
@@ -1568,7 +1590,7 @@ class PandaHub:
 
         Parameters
         ----------
-        net: str or int
+        net_id: str or int
             Network to add elements to, either as name or numeric id
         element_type: str
             Name of the element type (e.g. bus, line)
@@ -1586,7 +1608,7 @@ class PandaHub:
             The created element (element_data with added _id field)
         """
         return self.create_elements(
-            net=net,
+            net_id=net_id,
             element_type=element_type,
             elements_data=[{"index": element_index, **element_data}],
             variant=variant,
@@ -1596,7 +1618,7 @@ class PandaHub:
 
     def create_elements(
         self,
-        net: Union[int, str],
+        net_id: Union[int, str],
         element_type: str,
         elements_data: list[dict],
         variant: int | None = None,
@@ -1608,7 +1630,7 @@ class PandaHub:
 
         Parameters
         ----------
-        net: str or int
+        net_id: str or int
             Network to add elements to, either a name or numeric id
         element_type: str
             Name of the element type (e.g. bus, line)
@@ -1628,18 +1650,10 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         db = self._get_project_database()
-        if element_type in self._elements_without_vars:
-            var_data = {}
+        if variant is None:
+            var_data = {"var_type": "base", "not_in_var": [], "variant": None}
         else:
-            if variant is None:
-                var_data = {"var_type": "base", "not_in_var": [], "variant": None}
-            else:
-                var_data = {"var_type": "addition", "not_in_var": [], "variant": variant}
-
-        if isinstance(net, str):
-            net_id = self._get_id_from_name(net, db)
-        else:
-            net_id = net
+            var_data = {"var_type": "addition", "not_in_var": [], "variant": variant}
 
         data = []
         for elm_data in elements_data:
@@ -1722,6 +1736,46 @@ class PandaHub:
             logger.info(f"creating indexes in {collection} collection")
             project_db[collection].create_indexes(indexes)
 
+    def _get_int_index(self, collection: str, index_field: str = "_id", query_filter: dict | None = None,
+                       retries: int = 10) -> int:
+        """Create a document in a collection with an incrementing integer value for the index_field key.
+
+        ! This function expects a unique index set in the database on collection.index_field, compound with the keys in query_filter (if not None) !
+
+        Parameters
+        ----------
+        collection:
+            The collection to create the document in.
+        index_field:
+            The field holding the incrementing integer index.
+        query_filter:
+            A query filter to apply when searching for the highest existing index.
+        retries:
+            Number of retries to create the index in case of a race condition.
+
+        Returns
+        -------
+            The value of the created index.
+        """
+        query_filter = query_filter if query_filter is not None else {}
+        coll = self.get_project_database(collection)
+        for retry in range(retries):
+            try:
+                max_index = next(coll.find(query_filter, projection={index_field: 1})
+                                 .sort(index_field, -1)
+                                 .limit(1),
+                                 None)
+                index = 0 if max_index is None else int(max_index[0][index_field]) + 1
+                coll.insert_one({index_field: index})
+                break
+            except DuplicateKeyError:
+                continue
+        else:
+            msg = f"Failed to create integer index for field {index_field} in {collection}!"
+            raise PandaHubError(msg)
+        return index
+
+
     # -------------------------
     # Variants
     # -------------------------
@@ -1735,12 +1789,7 @@ class PandaHub:
     ) -> dict:
         db = self._get_project_database()
         if index is None:
-            max_index = next(db["variant"]
-                             .find({"net_id": net_id}, projection={"_id": 0, "index": 1})
-                             .sort("index", -1)
-                             .limit(1),
-                             None)
-            index = 0 if max_index is None else int(max_index[0]["index"]) + 1
+            index = self._get_int_index("variant", index_field="index", query_filter={"net_id": net_id})
 
         if name is None:
             name = f"{default_name}  {index + 1}"
@@ -1756,10 +1805,9 @@ class PandaHub:
         del variant["_id"]
         return variant
 
-
     def delete_variant(self, net_id, index):
         db = self._get_project_database()
-        collection_names = self._get_net_collections(db)
+        collection_names = self.get_net_collections(db)
         for coll in collection_names:
             # remove references to deleted objects
             db[coll].update_many(
@@ -3001,7 +3049,7 @@ class PandaHub:
             "ph.create_element_in_db was renamed - use ph.create_element instead!"
         )
         return self.create_element(
-            net=net,
+            net_id=net,
             element_type=element,
             element_index=element_index,
             element_data=data,
@@ -3022,7 +3070,7 @@ class PandaHub:
             "Watch out for changed order of project_id and variant args"
         )
         return self.create_elements(
-            net=net,
+            net_id=net,
             element_type=element_type,
             elements_data=elements_data,
             variant=variant,
@@ -3036,12 +3084,51 @@ class PandaHub:
             "ph.delete_net_element was renamed - use ph.delete_element instead!"
         )
         return self.delete_element(
-            net=net,
+            net_id=net,
             element_type=element,
             element_index=element_index,
             variant=variant,
             project_id=project_id,
         )
+
+    def get_net_from_db(self, *args, **kwargs):
+        msg = ("Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
+               "given name exists. Preferably, switch to get_network() and pass the network id. "
+               "If you want to continue to retrieve a network by its name, switch to get_network_by_name(). "
+               "get_net_from_db() will be removed in future versions.")
+        warnings.warn(msg, DeprecationWarning)
+        return self.get_network_by_name(*args, **kwargs)
+
+    def get_net_from_db_by_id(self, *args, **kwargs):
+        msg = "get_net_from_db_by_id() has been renamed - use get_network() as drop-in replacement. This function will be removed in future versions."
+        warnings.warn(msg, DeprecationWarning)
+        self.get_network(*args, **kwargs)
+
+    def get_subnet_from_db(self, *args, **kwargs):
+        msg = ("Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
+               "given name exists. Preferably, switch to get_subnet() and pass the network id. "
+               "If you want to continue to retrieve a subnet by its name, switch to get_subnet_by_name(). "
+               "get_subnet_from_db() will be removed in future versions.")
+        warnings.warn(msg, DeprecationWarning)
+        return self.get_subnet_by_name(*args, **kwargs)
+
+    def get_subnet_from_db_by_id(self,*args, **kwargs):
+        msg = "get_subnet_from_db_by_id() has been renamed - use get_subnet() as drop-in replacement. This function will be removed in future versions."
+        warnings.warn(msg, DeprecationWarning)
+        return self.get_subnet(*args, **kwargs)
+
+    def delete_net_from_db(self, name):
+        msg = ("Deleting a network by name can be ambiguous and will throw an error if more than one Network with the "
+               "given name exists. Preferably, switch to delete_network() and pass the network id. "
+               "If you want to continue to delete a net by its name, switch to delete_network_by_name(). "
+               "delete_net_from_db() will be removed in future versions.")
+        warnings.warn(msg, DeprecationWarning)
+        return self.delete_network_by_name(name)
+
+    def _get_net_collections(self, db, with_areas=True):
+        msg = "_get_net_collections() has been made public - use get_net_collections() as drop-in replacement. This function will be removed in future versions."
+        warnings.warn(msg, DeprecationWarning)
+        return self.get_net_collections(db, with_areas)
 
 
 if __name__ == "__main__":

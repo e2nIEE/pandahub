@@ -53,7 +53,7 @@ def test_upgrade_project():
                 raise pandahub.PandaHubError("net must be a pandapower or pandapipes object")
             if self._network_with_name_exists(name, db):
                 if overwrite:
-                    self.delete_net_from_db(name)
+                    self.delete_network_by_name(name)
                 else:
                     raise pandahub.PandaHubError("Network name already exists")
             max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
@@ -92,7 +92,7 @@ def test_upgrade_project():
     ph.set_active_project("pytest")
     ph.upgrade_project_to_latest_version()
     # and test if everything went fine
-    net2 = ph.get_net_from_db("simple_network")
+    net2 = ph.get_network_by_name("simple_network")
     assert pp.nets_equal(net, net2, check_dtype=False)
 
 
