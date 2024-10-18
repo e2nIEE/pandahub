@@ -2662,7 +2662,10 @@ class PandaHub:
             }
             pipeline.append({"$project": projection})
         if not include_metadata:
-            pipeline.append({"$project": {"timeseries_data": 1}})
+            if compressed_ts_data:
+                pipeline.append({"$project": {"timeseries_data": 1, "num_timestamps": 1}})
+            else:
+                pipeline.append({"$project": {"timeseries_data": 1}})
 
         timeseries = []
         for ts in db[collection_name].aggregate(pipeline):
@@ -2670,7 +2673,7 @@ class PandaHub:
                 continue
             data = ts["timeseries_data"]
             if compressed_ts_data:
-                timeseries_data = decompress_timeseries_data(data, ts_format)
+                timeseries_data = decompress_timeseries_data(data, ts_format, ts["num_timestamps"])
                 ts["timeseries_data"] = timeseries_data
             else:
                 if ts_format == "timestamp_value":
