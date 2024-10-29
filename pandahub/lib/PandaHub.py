@@ -3,28 +3,27 @@ import builtins
 import json
 import logging
 import warnings
-from datetime import datetime
-from inspect import signature, _empty
 from collections.abc import Callable
+from functools import reduce
+from inspect import signature, _empty
+from operator import getitem
 from types import NoneType
 from typing import Optional, Union, TypeVar
+from uuid import UUID
 
 import numpy as np
+import pandapipes as pps
+import pandapower as pp
+import pandapower.io_utils as io_pp
 import pandas as pd
-from attr.filters import exclude
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
-from functools import reduce
-from operator import getitem
-from uuid import UUID
+from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
 from pymongo import MongoClient, ReplaceOne
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
-import pandapipes as pps
-from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
-import pandapower as pp
-import pandapower.io_utils as io_pp
-from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
+from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, \
+    MONGODB_GLOBAL_DATABASE_URL, \
     MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT
 from pandahub.lib.database_toolbox import (
     create_timeseries_document,

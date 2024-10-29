@@ -10,7 +10,6 @@ from typing import Iterable
 import blosc
 import numpy as np
 import pandas as pd
-from bson import ObjectId
 
 from pandahub.lib.datatypes import DATATYPES
 
