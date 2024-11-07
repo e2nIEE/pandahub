@@ -2527,9 +2527,13 @@ class PandaHub:
                 )
             document_filter = None
             if filter_document is not None:
-                document_filter = {
-                    "metadata." + key: value for key, value in filter_document.items()
-                }
+                match_filters = []
+                for key, filter_value in filter_document.items():
+                    if type(filter_value) == list:
+                        match_filters.append({"metadata." + key: {"$in": filter_value}})
+                    else:
+                        match_filters.append({"metadata." + key: filter_value})
+                document_filter = {"$and": match_filters}
                 pipeline.append({"$match": document_filter})
 
             pipeline.append({"$addFields": {"_id": "$metadata._id"}})
