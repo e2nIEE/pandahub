@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
-from typing import Optional
 
-import numpy as np
-import pandas as pd
-from pandahub.lib.datatypes import DATATYPES
 import base64
 import hashlib
-import logging
-import json
 import importlib
+import json
+import logging
+from typing import Iterable
+
 import blosc
+import numpy as np
+import pandas as pd
+
+from pandahub.lib.datatypes import DATATYPES
+
 logger = logging.getLogger(__name__)
 from pandapower.io_utils import PPJSONEncoder
 from packaging import version
@@ -197,6 +200,119 @@ def create_timeseries_document(timeseries,
             document["timeseries_data"] = list(timeseries.values)
 
     return document
+
+
+def create_timeseries_documents_mongo_ts_format(timeseries: pd.Series | pd.DataFrame, data_type, **kwargs):
+    metadata = kwargs
+    if data_type is not None:
+        metadata["data_type"] = data_type
+    if "_id" not in metadata: # IDs set by users will not be overwritten
+        metadata["_id"] = get_document_hash(metadata)
+    if isinstance(timeseries, pd.Series):
+        value_key = "value" if not isinstance(timeseries.name, str) else timeseries.name
+        documents = [
+            {"metadata": metadata, "timestamp": idx, value_key: value}
+            for idx, value in timeseries.items()
+        ]
+    elif isinstance(timeseries, pd.DataFrame):
+        documents = [
+            {"metadata": metadata, "timestamp": idx, **row.to_dict()}
+            for idx, row in timeseries.iterrows()
+        ]
+    else:
+        msg = f"Not implemented for type {type(timeseries)}"
+        raise TypeError(msg)
+    return documents
+
+
+def generate_timeseries_metadata_pipeline(
+    document_filter: dict=None,
+    non_value_fields: Iterable | None =("timestamp", "metadata", "_id"),
+    value_fields: Iterable | None = None,
+):
+    """
+    Generates a pipeline that can be used to aggregate timeseries documents and extract
+    metadata information. The pipeline will return a document for each group of timeseries
+    documents that contains the metadata of the first document in the group as well as
+    the maximum and minimum values of the timeseries data, the first and last timestamp.
+
+    Parameters
+    ----------
+    document_filter : dict, optional
+        A filter that can be used to match only specific documents. The default is None.
+    non_value_fields : list, optional
+        A list that marks fields not containing relevant values. The default is\
+        ("timestamp", "metadata", "_id").
+    value_fields : list, optional
+        A list that marks fields containing relevant values. The default is None.
+
+    Returns
+    -------
+    meta_pipeline : list
+        A list of pipeline stages that can be used to aggregate timeseries documents.
+    """
+    meta_pipeline = []
+    if document_filter is not None:
+        meta_pipeline.append({"$match": document_filter})
+
+    field_selection = []
+    exclude = True
+    if value_fields is not None and non_value_fields is not None:
+        raise ValueError("Cannot specify both value_fields and non_value_fields")
+    if non_value_fields is not None:
+        field_selection = list(non_value_fields)
+    if value_fields is not None:
+        field_selection = list(value_fields)
+    meta_pipeline.append(
+        {
+            "$addFields": {
+                "filtered_values": {
+                    "$map": {
+                        # convert all fields to an array of key-value pairs
+                        "input": {"$objectToArray": "$$ROOT"},
+                        "as": "pair",
+                        "in": {
+                            "$cond": [
+                                {"$in": ["$$pair.k", field_selection]},  # check for excluded fields
+                                None if exclude else "$$pair.v",  # if excluded, set to None
+                                "$$pair.v" if exclude else None  # otherwise keep the value
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    )
+    meta_pipeline.append({
+        "$group": {
+            "_id": "$metadata._id",
+            "max_value": {"$max": {"$max": "$filtered_values"}},
+            "min_value": {"$min": {"$min": "$filtered_values"}},
+            "first_timestamp": {"$min": "$timestamp"},
+            "last_timestamp": {"$max": "$timestamp"},
+            "first_metadata": {"$first": "$metadata"}
+        }
+    })
+    # the following three stages are meant to get all metadata-entries
+    # of the first group-document on the root level (and drop
+    # entry for intermediate data)
+    meta_pipeline.append(
+        {
+            "$addFields": {
+                "first_document": {
+                    "$mergeObjects": ["$$ROOT", "$first_metadata"]
+                }
+            }
+        })
+    meta_pipeline.append(
+        {
+            "$replaceRoot": {
+                "newRoot": "$first_document"
+            }
+        })
+    meta_pipeline.append({"$project": {"first_metadata": 0}})
+    return meta_pipeline
+
 
 def convert_element_to_dict(element_data, net_id, default_dtypes=None):
     '''

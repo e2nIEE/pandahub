@@ -4,26 +4,27 @@ import json
 import logging
 import time
 import warnings
-from inspect import signature, _empty
 from collections.abc import Callable
+from functools import reduce
+from inspect import signature, _empty
+from operator import getitem
 from types import NoneType
 from typing import Optional, Union, TypeVar
+from uuid import UUID
 
 import numpy as np
+import pandapipes as pps
+import pandapower as pp
+import pandapower.io_utils as io_pp
 import pandas as pd
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
-from functools import reduce
-from operator import getitem
-from uuid import UUID
+from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
 from pymongo import MongoClient, ReplaceOne
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
-import pandapipes as pps
-from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
-import pandapower as pp
-import pandapower.io_utils as io_pp
-from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
+from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, \
+    MONGODB_GLOBAL_DATABASE_URL, \
     MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT
 from pandahub.lib.database_toolbox import (
     create_timeseries_document,
@@ -33,7 +34,7 @@ from pandahub.lib.database_toolbox import (
     serialize_object_data,
     get_dtypes,
     decompress_timeseries_data,
-    convert_geojsons,
+    convert_geojsons, generate_timeseries_metadata_pipeline, get_document_hash,
 )
 from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 
@@ -2033,9 +2034,12 @@ class PandaHub:
             metadata = kwargs
             if data_type is not None:
                 metadata["data_type"] = data_type
+            if "_id" not in metadata:
+                metadata["_id"] = get_document_hash(metadata)
             if isinstance(timeseries, pd.Series):
+                value_key = "value" if not isinstance(timeseries.name, str) else timeseries.name
                 documents = [
-                    {"metadata": metadata, "timestamp": idx, "value": value}
+                    {"metadata": metadata, "timestamp": idx, value_key: value}
                     for idx, value in timeseries.items()
                 ]
             elif isinstance(timeseries, pd.DataFrame):
@@ -2439,32 +2443,12 @@ class PandaHub:
             self.check_permission("read")
             db = self._get_project_database()
         if self.collection_is_timeseries(collection_name, project_id, global_database):
-            pipeline = []
+            document_filter = None
             if len(filter_document) > 0:
                 document_filter = {
                     "metadata." + key: value for key, value in filter_document.items()
                 }
-                pipeline.append({"$match": document_filter})
-            else:
-                document_filter = {}
-            document = db[collection_name].find_one(
-                document_filter, projection={"timestamp": 0, "_id": 0}
-            )
-            value_fields = ["$%s" % field for field in document.keys()]
-            group_dict = {
-                "_id": "$metadata._id",
-                "max_value": {"$max": {"$max": value_fields}},
-                "min_value": {"$min": {"$min": value_fields}},
-                "first_timestamp": {"$min": "$timestamp"},
-                "last_timestamp": {"$max": "$timestamp"},
-            }
-            metadata_fields = {
-                metadata_field: {"$first": "$metadata.%s" % metadata_field}
-                for metadata_field in document["metadata"].keys()
-                if metadata_field != "_id"
-            }
-            group_dict.update(metadata_fields)
-            pipeline.append({"$group": group_dict})
+            pipeline = generate_timeseries_metadata_pipeline(document_filter)
         else:
             match_filter = []
             pipeline = []
@@ -2561,38 +2545,22 @@ class PandaHub:
                         }
                     }
                 )
+            document_filter = None
             if filter_document is not None:
-                document_filter = {
-                    "metadata." + key: value for key, value in filter_document.items()
-                }
+                match_filters = []
+                for key, filter_value in filter_document.items():
+                    if type(filter_value) == list:
+                        match_filters.append({"metadata." + key: {"$in": filter_value}})
+                    else:
+                        match_filters.append({"metadata." + key: filter_value})
+                document_filter = {"$and": match_filters}
                 pipeline.append({"$match": document_filter})
 
             pipeline.append({"$addFields": {"_id": "$metadata._id"}})
             pipeline.append({"$project": {"metadata": 0}})
 
             if include_metadata:
-                document = db[collection_name].find_one(
-                    document_filter,
-                    projection={"timestamp": 0, "metadata": 0, "_id": 0},
-                )
-                meta_pipeline = []
-                meta_pipeline.append({"$match": document_filter})
-                value_fields = ["$%s" % field for field in document.keys()]
-                group_dict = {
-                    "_id": "$metadata._id",
-                    "max_value": {"$max": {"$max": value_fields}},
-                    "min_value": {"$min": {"$min": value_fields}},
-                    "first_timestamp": {"$min": "$timestamp"},
-                    "last_timestamp": {"$max": "$timestamp"},
-                }
-                document = db[collection_name].find_one(document_filter)
-                metadata_fields = {
-                    metadata_field: {"$first": "$metadata.%s" % metadata_field}
-                    for metadata_field in document["metadata"].keys()
-                    if metadata_field != "_id"
-                }
-                group_dict.update(metadata_fields)
-                meta_pipeline.append({"$group": group_dict})
+                meta_pipeline = generate_timeseries_metadata_pipeline(document_filter)
                 meta_data = {
                     d["_id"]: d for d in db[collection_name].aggregate(meta_pipeline)
                 }
