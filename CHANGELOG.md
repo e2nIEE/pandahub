@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.3.10]
+
+    -  BREAKING: changed signatures of create_variant function and route
+
 ## [0.3.9]
 
     -  BREAKING: inserting multiple networks with the same name does not represent an error anymore, networks are only unique by their net_id (_id field of the collection)
