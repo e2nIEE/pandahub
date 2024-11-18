@@ -23,12 +23,14 @@ import pandapipes as pps
 from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
 import pandapower as pp
 import pandapower.io_utils as io_pp
+
 from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
     MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT
 from pandahub.lib.database_toolbox import (
     create_timeseries_document,
     convert_timeseries_to_subdocuments,
     convert_element_to_dict,
+    get_mongo_client,
     json_to_object,
     serialize_object_data,
     get_dtypes,
@@ -94,19 +96,9 @@ class PandaHub:
         mongodb_indexes=MONGODB_INDEXES,
         elements_without_vars = None,
     ):
-        mongo_client_args = {
-            "host": connection_url,
-            "uuidRepresentation": "standard",
-            "connect": False,
-        }
-        if connection_user:
-            mongo_client_args |= {
-                "username": connection_user,
-                "password": connection_password,
-            }
         self._datatypes = datatypes
         self.mongodb_indexes = mongodb_indexes
-        self.mongo_client = MongoClient(**mongo_client_args)
+        self.mongo_client = get_mongo_client(connection_url, connection_user, connection_password)
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
