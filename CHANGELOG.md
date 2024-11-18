@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.3.11]
+
+    -  IMPROVED: add lib.database_toolbox.get_mongo_client function
+
 ## [0.3.10]
 
     -  BREAKING: changed signatures of create_variant function and route
