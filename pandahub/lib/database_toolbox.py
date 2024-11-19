@@ -3,6 +3,9 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+from pymongo import MongoClient
+
+from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD
 from pandahub.lib.datatypes import DATATYPES
 import base64
 import hashlib
@@ -421,3 +424,17 @@ def migrate_userdb_to_beanie(ph):
                  {'$unset': 'id'},
                  {'$out': 'users'}]
     userdb.aggregate(migration)
+
+def get_mongo_client(connection_url=MONGODB_URL, connection_user=MONGODB_USER,
+                     connection_password=MONGODB_PASSWORD) -> MongoClient:
+    mongo_client_args = {
+        "host": connection_url,
+        "uuidRepresentation": "standard",
+        "connect": False,
+    }
+    if connection_user:
+        mongo_client_args |= {
+            "username": connection_user,
+            "password": connection_password,
+        }
+    return MongoClient(**mongo_client_args)
