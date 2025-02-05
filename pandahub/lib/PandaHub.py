@@ -79,6 +79,7 @@ class PandaHub:
         "read": ["owner", "developer", "guest"],
         "write": ["owner", "developer"],
         "user_management": ["owner"],
+        "delete_project": ["owner"],
     }
 
     # -------------------------
@@ -248,7 +249,7 @@ class PandaHub:
         if project_id:
             self.set_active_project_by_id(project_id)
         project_id = self.active_project["_id"]
-        self.check_permission("write")
+        self.check_permission("delete_project")
         if not i_know_this_action_is_final:
             raise PandaHubError(
                 "Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm."
