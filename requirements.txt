@@ -2,7 +2,7 @@ uvicorn>=0.24.0
 fastapi-users[beanie]>=12.0
 fastapi>=0.104.0
 fastapi-mail>=1.4.1
-pandapower~=2.14
+pandapower~=3.0
 pandapipes>=0.7.0
 pymongo
 pydantic

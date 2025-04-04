@@ -7,7 +7,8 @@ DATATYPES = {
         "zone": str,
         "in_service": bool,
         "max_vm_pu": float,
-        "min_vm_pu": float
+        "min_vm_pu": float,
+        "geo": str
     },
     "load": {
         "name": str,
@@ -95,7 +96,8 @@ DATATYPES = {
         "type": str,
         "in_service": bool,
         "max_loading_percent": float,
-        "std_type": str
+        "std_type": str,
+        "geo": str
     },
     "trafo": {
         "name": str,
@@ -305,13 +307,5 @@ DATATYPES = {
         'level': str,
         'initial_run': bool,
         "recycle": str
-    },
-    "line_geodata": {
-        "coords": object
-    },
-    "bus_geodata": {
-        "x": float,
-        "y": float,
-        "coords": object
     },
 }
