@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import Optional
+from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
@@ -188,7 +188,7 @@ def create_timeseries_document(timeseries,
     document = add_timestamp_info_to_document(document, timeseries, ts_format)
     document = {**document, **kwargs}
 
-    if not "_id" in document: # IDs set by users will not be overwritten
+    if "_id" not in document: # IDs set by users will not be overwritten
         document["_id"] = get_document_hash(document)
 
     if compress_ts_data:
@@ -425,8 +425,8 @@ def migrate_userdb_to_beanie(ph):
                  {'$out': 'users'}]
     userdb.aggregate(migration)
 
-def get_mongo_client(connection_url=MONGODB_URL, connection_user=MONGODB_USER,
-                     connection_password=MONGODB_PASSWORD) -> MongoClient:
+def get_mongo_client(connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER,
+                     connection_password: str = MONGODB_PASSWORD) -> MongoClient:
     mongo_client_args = {
         "host": connection_url,
         "uuidRepresentation": "standard",
@@ -438,3 +438,21 @@ def get_mongo_client(connection_url=MONGODB_URL, connection_user=MONGODB_USER,
             "password": connection_password,
         }
     return MongoClient(**mongo_client_args)
+
+@contextmanager
+def mongo_client(database: str | None = None, collection: str | None = None, connection_url: str = MONGODB_URL,
+                 connection_user: str = MONGODB_USER, connection_password: str = MONGODB_PASSWORD) -> MongoClient:
+    if collection is not None and database is None:
+        raise ValueError("Must specify database to access a collection!")
+    client = get_mongo_client(connection_url, connection_user, connection_password)
+    try:
+        if database is not None and collection is not None:
+            yield client[database][collection]
+        elif database is not None:
+            yield client[database]
+        else:
+            yield client
+    finally:
+        client.close()
+
+
