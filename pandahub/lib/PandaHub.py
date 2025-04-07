@@ -17,6 +17,8 @@ from functools import reduce
 from operator import getitem
 from uuid import UUID
 from pymongo import MongoClient, ReplaceOne
+from pymongo.database import Database
+from pymongo.collection import Collection
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
 
 import pandapipes as pps
@@ -409,26 +411,42 @@ class PandaHub:
         else:
             return project_doc
 
-    def _get_project_database(self) -> MongoClient:
+    def _get_project_database(self) -> Database:
         return self.get_project_database()
 
-    def get_project_database(self, collection: Optional[str] = None) -> MongoClient:
+    def get_project_database(self, collection: Optional[str] = None) -> Database:
+        """
+        Get the database for the current active project.
+
+        Parameters
+        ----------
+        collection or None
+            Name of document collection (DEPRECATED)
+
+        Returns
+        -------
+        pymongo.database.Database
+        """
+        if collection is None:
+            return self.mongo_client[str(self.active_project["_id"])]
+        logger.warning(f"Passing a collection to get_project_database is deprecated. Use get_project_collection instead!")
+        return self.get_project_collection(collection)
+
+    def get_project_collection(self, collection_name: str) -> Collection:
         """
         Get a MongoClient instance connected to the database for the current active project, optionally set to the given collection.
 
         Parameters
         ----------
-        collection
+        collection_name
             Name of document collection
 
         Returns
         -------
-        MongoClient
+        pymongo.collection.Collection
         """
-        project_db = self.mongo_client[str(self.active_project["_id"])]
-        if collection is None:
-            return project_db
-        return project_db[collection]
+        return self.get_project_database()[collection_name]
+
 
     def _get_global_database(self) -> MongoClient:
         if (
@@ -461,7 +479,7 @@ class PandaHub:
         """
         if not self.active_project:
             raise PandaHubError("No project activated!")
-        return self.get_project_database("_networks").find({}, {"_id:": 1}).distinct("_id")
+        return self.get_project_collection("_networks").find({}, {"_id:": 1}).distinct("_id")
 
     def get_project_version(self):
         return self.active_project.get("version", "0.2.2")
@@ -1751,7 +1769,7 @@ class PandaHub:
             The value of the created index.
         """
         query_filter = query_filter if query_filter is not None else {}
-        coll = self.get_project_database(collection)
+        coll = self.get_project_collection(collection)
         for retry in range(retries):
             try:
                 max_index = next(coll.find(query_filter, projection={index_field: 1})
