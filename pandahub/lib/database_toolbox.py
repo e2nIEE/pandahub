@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 from contextlib import contextmanager
+from collections.abc import Iterator
 
 import numpy as np
 import pandas as pd
 from pymongo import MongoClient
+from pymongo.database import Database
+from pymongo.collection import Collection
 
 from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD
 from pandahub.lib.datatypes import DATATYPES
@@ -441,7 +444,26 @@ def get_mongo_client(connection_url: str = MONGODB_URL, connection_user: str = M
 
 @contextmanager
 def mongo_client(database: str | None = None, collection: str | None = None, connection_url: str = MONGODB_URL,
-                 connection_user: str = MONGODB_USER, connection_password: str = MONGODB_PASSWORD) -> MongoClient:
+                 connection_user: str = MONGODB_USER, connection_password: str = MONGODB_PASSWORD) -> Iterator[MongoClient | Database | Collection]:
+    """Contextmanager for pymongo MongoClient / Database / Collection with close after use.
+
+    Parameters
+    ----------
+    database: str or None
+        The database to connect to
+    collection: str or None
+        The collection to connect to
+    connection_url: str or None
+        Defaults to MONGODB_URL env var
+    connection_user: str or None
+        Defaults to MONGODB_USER env var
+    connection_password: str or None
+        Defaults to MONGODB_PASSWORD env var
+
+    Returns
+    -------
+        Contextmanager yielding MongoClient / Database / Collection
+    """
     if collection is not None and database is None:
         raise ValueError("Must specify database to access a collection!")
     client = get_mongo_client(connection_url, connection_user, connection_password)
