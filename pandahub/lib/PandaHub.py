@@ -1781,11 +1781,11 @@ class PandaHub:
         coll = self.get_project_collection(collection)
         for retry in range(retries):
             try:
-                max_index = next(coll.find(query_filter, projection={index_field: 1})
+                max_index_doc = next(coll.find(query_filter, projection={index_field: 1})
                                  .sort(index_field, -1)
                                  .limit(1),
                                  None)
-                index = 0 if max_index is None else int(max_index[0][index_field]) + 1
+                index = 0 if max_index_doc is None else int(max_index_doc[index_field]) + 1
                 coll.insert_one({index_field: index})
                 break
             except DuplicateKeyError:
