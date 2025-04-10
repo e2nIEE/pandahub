@@ -335,14 +335,23 @@ class PandaHub:
         self.set_active_project(project_name, realm)
 
     def lock_project(self):
-        db = self.mongo_client["user_management"]["projects"]
-        result = db.update_one(
+        coll = self.mongo_client["user_management"]["projects"]
+        result = coll.find_one_and_update(
             {
                 "_id": self.active_project["_id"],
+                "$or": [
+                    {"locked": {"$eq": False}},
+                    {
+                        "$and": [
+                            {"locked": {"$eq": True}},
+                            {"locked_by": str(self.user_id)},
+                        ]
+                    },
+                ],
             },
-            {"$set": {"locked": True, "locked_by": self.user_id}},
+            {"$set": {"locked": True, "locked_by": str(self.user_id)}},
         )
-        return result.acknowledged and result.modified_count > 0
+        return result is not None
 
 
     # def lock_project(self):
