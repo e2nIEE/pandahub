@@ -22,7 +22,7 @@ class GetVariantsModel(BaseModel):
 @router.post("/get_variants")
 def get_variants(data: GetVariantsModel, ph=Depends(pandahub)):
     ph.set_active_project_by_id(data.project_id)
-    variants_collection = ph.get_project_database("variant")
+    variants_collection = ph.get_project_collection("variant")
 
     variants = variants_collection.find({"net_id": data.net_id}, projection={"_id": 0})
     return {variant.pop("index"): variant for variant in variants}
