@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.3.13]
+    - FIXED: fetching integer index on empty collection
+    - IMPROVED: context manager for mongo client /database / collection
+    - IMPROVED: project locking returns True if user already holds a lock on the project
+
 ## [0.3.11]
 
     -  IMPROVED: add lib.database_toolbox.get_mongo_client function
