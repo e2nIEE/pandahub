@@ -1,5 +1,8 @@
 # Change Log
 
+## [0.4.0]
+    - IMPROVED: pandapower 3.0 support
+
 ## [0.3.13]
     - FIXED: fetching integer index on empty collection
     - IMPROVED: context manager for mongo client /database / collection
