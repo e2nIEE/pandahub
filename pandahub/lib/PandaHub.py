@@ -2053,6 +2053,17 @@ class PandaHub:
             metadata = kwargs
             if data_type is not None:
                 metadata["data_type"] = data_type
+            net_id = metadata.get('net_id', None)
+            if net_id is None:
+                net_ids = db["_networks"].distinct("_id")
+                if len(net_ids) == 1:
+                    net_id = net_ids[0]
+                else:
+                    raise ValueError(
+                        "No net_id was provided and multiple networks exist in the database. "
+                        "Please provide a net_id."
+                    )
+            metadata["_id"] = f"{net_id}_{metadata.get('element_type', None)}_{metadata.get('element_index', None)}_{data_type}"
             if isinstance(timeseries, pd.Series):
                 documents = [
                     {"metadata": metadata, "timestamp": idx, "value": value}
@@ -2063,7 +2074,10 @@ class PandaHub:
                     {"metadata": metadata, "timestamp": idx, **row.to_dict()}
                     for idx, row in timeseries.iterrows()
                 ]
-            return db[collection_name].insert_many(documents)
+            db[collection_name].insert_many(documents)
+            if kwargs.get("return_id"):
+                return metadata["_id"]
+            return None
         document = create_timeseries_document(
             timeseries=timeseries,
             data_type=data_type,
@@ -2335,12 +2349,17 @@ class PandaHub:
             pipeline.append({"$match": meta_filter})
             pipeline.append({"$project": {"_id": 0, "metadata": 0}})
             timeseries = db[collection_name].aggregate_pandas_all(pipeline)
+            if len(timeseries) == 0:
+                raise PandaHubError("no documents matching the provided filter found", 404)
             timeseries.set_index("timestamp", inplace=True)
             if include_metadata:
                 raise NotImplementedError(
                     "Not implemented yet for timeseries collections"
                 )
-            return timeseries
+            if len(timeseries.columns) == 1:
+                return timeseries[timeseries.columns[0]]
+            else:
+                return timeseries
         filter_document = {**filter_document, **kwargs}
         pipeline = [{"$match": filter_document}]
         if not compressed_ts_data:
@@ -2427,6 +2446,7 @@ class PandaHub:
         collection_name="timeseries",
         global_database=False,
         project_id=None,
+        timestamp_range=None,
     ):
         """
         Returns a DataFrame, containing all metadata matching the provided filter.
@@ -2467,10 +2487,17 @@ class PandaHub:
                 pipeline.append({"$match": document_filter})
             else:
                 document_filter = {}
+            if timestamp_range is not None:
+                document_filter["timestamp"] = {
+                    "$gte": timestamp_range[0],
+                    "$lt": timestamp_range[1],
+                }
             document = db[collection_name].find_one(
                 document_filter, projection={"timestamp": 0, "_id": 0}
             )
-            value_fields = ["$%s" % field for field in document.keys()]
+            if document is None:
+                return pd.DataFrame()
+            value_fields = ["$%s" % field for field in document.keys() if field != "metadata"]
             group_dict = {
                 "_id": "$metadata._id",
                 "max_value": {"$max": {"$max": value_fields}},
@@ -2595,27 +2622,30 @@ class PandaHub:
                     document_filter,
                     projection={"timestamp": 0, "metadata": 0, "_id": 0},
                 )
-                meta_pipeline = []
-                meta_pipeline.append({"$match": document_filter})
-                value_fields = ["$%s" % field for field in document.keys()]
-                group_dict = {
-                    "_id": "$metadata._id",
-                    "max_value": {"$max": {"$max": value_fields}},
-                    "min_value": {"$min": {"$min": value_fields}},
-                    "first_timestamp": {"$min": "$timestamp"},
-                    "last_timestamp": {"$max": "$timestamp"},
-                }
-                document = db[collection_name].find_one(document_filter)
-                metadata_fields = {
-                    metadata_field: {"$first": "$metadata.%s" % metadata_field}
-                    for metadata_field in document["metadata"].keys()
-                    if metadata_field != "_id"
-                }
-                group_dict.update(metadata_fields)
-                meta_pipeline.append({"$group": group_dict})
-                meta_data = {
-                    d["_id"]: d for d in db[collection_name].aggregate(meta_pipeline)
-                }
+                if document is None:
+                    meta_data = {}
+                else:
+                    meta_pipeline = []
+                    meta_pipeline.append({"$match": document_filter})
+                    value_fields = ["$%s" % field for field in document.keys()]
+                    group_dict = {
+                        "_id": "$metadata._id",
+                        "max_value": {"$max": {"$max": value_fields}},
+                        "min_value": {"$min": {"$min": value_fields}},
+                        "first_timestamp": {"$min": "$timestamp"},
+                        "last_timestamp": {"$max": "$timestamp"},
+                    }
+                    document = db[collection_name].find_one(document_filter)
+                    metadata_fields = {
+                        metadata_field: {"$first": "$metadata.%s" % metadata_field}
+                        for metadata_field in document["metadata"].keys()
+                        if metadata_field != "_id"
+                    }
+                    group_dict.update(metadata_fields)
+                    meta_pipeline.append({"$group": group_dict})
+                    meta_data = {
+                        d["_id"]: d for d in db[collection_name].aggregate(meta_pipeline)
+                    }
             timeseries = []
             ts_all = db[collection_name].aggregate_pandas_all(pipeline)
             if len(ts_all) == 0:
@@ -2961,7 +2991,16 @@ class PandaHub:
         """
         self.check_permission("write")
         db = self._get_project_database()
-
+        if self.collection_is_timeseries(collection_name):
+            meta_filter = {
+                "metadata.element_type": element_type,
+                "metadata.data_type": data_type,
+            }
+            if netname is not None:
+                meta_filter["metadata.netname"] = netname
+            if element_index is not None:
+                meta_filter["metadata.element_index"] = element_index
+            return db[collection_name].delete_many(meta_filter)
         filter_document = {"element_type": element_type, "data_type": data_type}
         if netname is not None:
             filter_document["netname"] = netname
