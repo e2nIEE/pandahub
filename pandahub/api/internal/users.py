@@ -4,7 +4,11 @@ from typing import Optional
 
 from fastapi import Depends, Request
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
-from fastapi_users.authentication import AuthenticationBackend, BearerTransport
+from fastapi_users.authentication import (
+    AuthenticationBackend,
+    BearerTransport,
+    CookieTransport,
+)
 from fastapi_users.authentication.strategy.db import (
     AccessTokenDatabase,
     DatabaseStrategy,
@@ -48,8 +52,13 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
 async def get_user_manager(user_db:BeanieUserDatabase = Depends(get_user_db)):
     yield UserManager(user_db)
 
-
-bearer_transport = BearerTransport(tokenUrl="auth/login")
+if settings.AUTH_TRANSPORT=="bearer":
+    transport = BearerTransport(tokenUrl="auth/login")
+elif settings.AUTH_TRANSPORT=="cookie":
+    transport = CookieTransport(cookie_name="retoflow_auth")
+else:
+    msg = f"Unknown AUTH_TRANSPORT: {settings.AUTH_TRANSPORT}"
+    raise ValueError(msg)
 
 
 def get_database_strategy(
@@ -59,8 +68,8 @@ def get_database_strategy(
 
 
 auth_backend = AuthenticationBackend(
-    name="jwt",
-    transport=bearer_transport,
+    name="db",
+    transport=transport,
     get_strategy=get_database_strategy,
 )
 fastapi_users = FastAPIUsers(get_user_manager, [auth_backend])

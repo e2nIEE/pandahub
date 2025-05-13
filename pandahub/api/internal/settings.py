@@ -51,6 +51,7 @@ SECRET = get_secret("SECRET")
 
 REGISTRATION_ENABLED = settings_bool("REGISTRATION_ENABLED", default=True)
 REGISTRATION_ADMIN_APPROVAL = settings_bool("REGISTRATION_ADMIN_APPROVAL", default=False)
+AUTH_TRANSPORT=get_os_env("AUTH_TRANSPORT", "bearer").lower()
 
 CREATE_INDEXES_WITH_PROJECT = settings_bool("CREATE_INDEXES_WITH_PROJECT", default=True)
 
