@@ -1674,21 +1674,22 @@ class PandaHub:
             var_data = {"var_type": "base", "not_in_var": [], "variant": None}
         else:
             var_data = {"var_type": "addition", "not_in_var": [], "variant": variant}
-
+        net_doc = db["_networks"].find_one({"_id": net_id})
         data = []
         for elm_data in elements_data:
-            self._add_missing_defaults(db, net_id, element_type, elm_data)
+            self._add_missing_defaults(element_type, elm_data, net_doc)
             self._ensure_dtypes(element_type, elm_data)
             data.append({**elm_data, **var_data, "net_id": net_id})
         collection = self._collection_name_of_element(element_type)
         db[collection].insert_many(data, ordered=False)
         return data
 
-    def _add_missing_defaults(self, db, net_id, element_type, element_data):
+    def _add_missing_defaults(self, element_type, element_data, net_doc):
         func_str = f"create_{element_type}"
-        if not hasattr(pp, func_str):
+        package = pp if net_doc['sector'] == 'power' else pps
+        if not hasattr(package, func_str):
             return
-        create_func = getattr(pp, func_str)
+        create_func = getattr(package, func_str)
         sig = signature(create_func)
         params = sig.parameters
 
@@ -1704,7 +1705,6 @@ class PandaHub:
         if element_type in ["line", "trafo", "trafo3w"]:
             # add standard type values
             std_type = element_data["std_type"]
-            net_doc = db["_networks"].find_one({"_id": net_id})
             if net_doc is not None:
                 # std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
                 std_types = net_doc["data"]["std_types"]
@@ -1715,6 +1715,9 @@ class PandaHub:
             if element_type == "line":
                 if "g_us_per_km" not in element_data:
                     element_data["g_us_per_km"] = 0
+        if element_type in ['sink', 'source']:
+            if not 'mdot_kg_per_s' in element_data:
+                element_data["mdot_kg_per_s"] = None
 
     def _ensure_dtypes(self, element_type, data):
         dtypes = self._datatypes.get(element_type)
