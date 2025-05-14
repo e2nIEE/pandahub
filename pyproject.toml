@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pandahub"
-version = "0.3.13"  # File format version '__format_version__' is tracked in __init__.py
+version = "0.3.14"  # File format version '__format_version__' is tracked in __init__.py
 authors=[
     { name = "Jan Ulffers", email = "jan.ulffers@iee.fraunhofer.de" },
     { name = "Leon Thurner", email = "leon.thurner@retoflow.de" },
