@@ -494,6 +494,6 @@ def get_metadata_for_timeseries_collections(db, data_type=None, net_id=None, ele
                     "No net_id was provided and multiple networks exist in the database. "
                     "Please provide a net_id."
                 )
-        metadata = {"data_type": data_type, **kwargs}
+        metadata = {"data_type": data_type, "net_id": net_id, "element_type": element_type, "element_index": element_index, **kwargs}
         metadata["_id"] = f"{net_id}_{element_type}_{element_index}_{data_type}"
         return metadata
