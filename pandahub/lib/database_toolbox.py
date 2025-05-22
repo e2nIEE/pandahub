@@ -478,3 +478,22 @@ def mongo_client(database: str | None = None, collection: str | None = None, con
         client.close()
 
 
+def get_metadata_for_timeseries_collections(db, data_type=None, net_id=None, element_type=None, element_index=None, **kwargs):
+        if element_type is None:
+            raise ValueError("element_type needs to be defined for timeseries collections")
+        if element_index is None:
+            raise ValueError("element_index needs to be defined for timeseries collections")
+        if data_type is None:
+            raise ValueError("data_type needs to be defined for timeseries collections")
+        if net_id is None:
+            net_ids = db["_networks"].distinct("_id")
+            if len(net_ids) == 1:
+                net_id = net_ids[0]
+            else:
+                raise ValueError(
+                    "No net_id was provided and multiple networks exist in the database. "
+                    "Please provide a net_id."
+                )
+        metadata = {"data_type": data_type, "net_id": net_id, "element_type": element_type, "element_index": element_index, **kwargs}
+        metadata["_id"] = f"{net_id}_{element_type}_{element_index}_{data_type}"
+        return metadata

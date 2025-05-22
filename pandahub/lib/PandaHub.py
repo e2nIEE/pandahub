@@ -38,6 +38,7 @@ from pandahub.lib.database_toolbox import (
     get_dtypes,
     decompress_timeseries_data,
     convert_geojsons,
+    get_metadata_for_timeseries_collections
 )
 from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 
@@ -1674,21 +1675,22 @@ class PandaHub:
             var_data = {"var_type": "base", "not_in_var": [], "variant": None}
         else:
             var_data = {"var_type": "addition", "not_in_var": [], "variant": variant}
-
+        net_doc = db["_networks"].find_one({"_id": net_id})
         data = []
         for elm_data in elements_data:
-            self._add_missing_defaults(db, net_id, element_type, elm_data)
+            self._add_missing_defaults(element_type, elm_data, net_doc)
             self._ensure_dtypes(element_type, elm_data)
             data.append({**elm_data, **var_data, "net_id": net_id})
         collection = self._collection_name_of_element(element_type)
         db[collection].insert_many(data, ordered=False)
         return data
 
-    def _add_missing_defaults(self, db, net_id, element_type, element_data):
+    def _add_missing_defaults(self, element_type, element_data, net_doc):
         func_str = f"create_{element_type}"
-        if not hasattr(pp, func_str):
+        package = pp if net_doc['sector'] == 'power' else pps
+        if not hasattr(package, func_str):
             return
-        create_func = getattr(pp, func_str)
+        create_func = getattr(package, func_str)
         sig = signature(create_func)
         params = sig.parameters
 
@@ -1704,7 +1706,6 @@ class PandaHub:
         if element_type in ["line", "trafo", "trafo3w"]:
             # add standard type values
             std_type = element_data["std_type"]
-            net_doc = db["_networks"].find_one({"_id": net_id})
             if net_doc is not None:
                 # std_types = json.loads(net_doc["data"]["std_types"], cls=io_pp.PPJSONDecoder)[element_type]
                 std_types = net_doc["data"]["std_types"]
@@ -1715,6 +1716,9 @@ class PandaHub:
             if element_type == "line":
                 if "g_us_per_km" not in element_data:
                     element_data["g_us_per_km"] = 0
+        if element_type in ['sink', 'source']:
+            if not 'mdot_kg_per_s' in element_data:
+                element_data["mdot_kg_per_s"] = None
 
     def _ensure_dtypes(self, element_type, data):
         dtypes = self._datatypes.get(element_type)
@@ -2050,20 +2054,21 @@ class PandaHub:
             self.check_permission("write")
             db = self._get_project_database()
         if self.collection_is_timeseries(collection_name, project_id, global_database):
-            metadata = kwargs
-            if data_type is not None:
-                metadata["data_type"] = data_type
-            net_id = metadata.get('net_id', None)
-            if net_id is None:
-                net_ids = db["_networks"].distinct("_id")
-                if len(net_ids) == 1:
-                    net_id = net_ids[0]
-                else:
-                    raise ValueError(
-                        "No net_id was provided and multiple networks exist in the database. "
-                        "Please provide a net_id."
-                    )
-            metadata["_id"] = f"{net_id}_{metadata.get('element_type', None)}_{metadata.get('element_index', None)}_{data_type}"
+            # get metadata dictionary based on the input arguments
+            metadata = get_metadata_for_timeseries_collections(db, data_type=data_type, **kwargs)
+            _id =  metadata["_id"]
+
+            # delete overlapping timeseries already in the database
+            filter = {
+                "metadata._id": _id,
+                "timestamp": {
+                    "$gte": timeseries.index.min(),
+                    "$lte":  timeseries.index.max()
+                }
+            }
+            db.timeseries.delete_many(filter)
+
+            # create new timeseries documents
             if isinstance(timeseries, pd.Series):
                 documents = [
                     {"metadata": metadata, "timestamp": idx, "value": value}
@@ -2075,9 +2080,11 @@ class PandaHub:
                     for idx, row in timeseries.iterrows()
                 ]
             db[collection_name].insert_many(documents)
+
             if kwargs.get("return_id"):
-                return metadata["_id"]
+                return _id
             return None
+
         document = create_timeseries_document(
             timeseries=timeseries,
             data_type=data_type,
@@ -2342,11 +2349,9 @@ class PandaHub:
             self.check_permission("read")
             db = self._get_project_database()
         if self.collection_is_timeseries(collection_name, project_id, global_database):
-            meta_filter = {
-                "metadata." + key: value for key, value in filter_document.items()
-            }
+            metadata = get_metadata_for_timeseries_collections(db, **kwargs)
             pipeline = []
-            pipeline.append({"$match": meta_filter})
+            pipeline.append({"$match": {"metadata._id": metadata["_id"]}})
             pipeline.append({"$project": {"_id": 0, "metadata": 0}})
             timeseries = db[collection_name].aggregate_pandas_all(pipeline)
             if len(timeseries) == 0:
@@ -2992,15 +2997,8 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         if self.collection_is_timeseries(collection_name):
-            meta_filter = {
-                "metadata.element_type": element_type,
-                "metadata.data_type": data_type,
-            }
-            if netname is not None:
-                meta_filter["metadata.netname"] = netname
-            if element_index is not None:
-                meta_filter["metadata.element_index"] = element_index
-            return db[collection_name].delete_many(meta_filter)
+            metadata = get_metadata_for_timeseries_collections(db, data_type, **kwargs)
+            return db[collection_name].delete_many({"metadata._id": metadata["_id"]})
         filter_document = {"element_type": element_type, "data_type": data_type}
         if netname is not None:
             filter_document["netname"] = netname
@@ -3191,6 +3189,7 @@ class PandaHub:
         msg = "_get_net_collections() has been made public - use get_net_collections() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning)
         return self.get_net_collections(db, with_areas)
+
 
 
 if __name__ == "__main__":
