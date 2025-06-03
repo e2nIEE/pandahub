@@ -926,6 +926,7 @@ class PandaHub:
             node_elements = []
             all_elements = []
             for c in component_list:
+                pps.add_new_component(net, c)
                 all_elements.append(c.table_name())
                 if issubclass(c, BranchComponent):
                     default_branches.append(c.table_name())
