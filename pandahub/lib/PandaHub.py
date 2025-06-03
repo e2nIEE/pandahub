@@ -4,27 +4,28 @@ import json
 import logging
 import time
 import warnings
-from inspect import signature, _empty
 from collections.abc import Callable
+from functools import reduce
+from inspect import signature, _empty
+from itertools import chain
+from operator import getitem
 from types import NoneType
 from typing import Optional, Union, TypeVar
+from uuid import UUID
 
 import numpy as np
+import pandapipes as pps
+import pandapower as pp
+import pandapower.io_utils as io_pp
 import pandas as pd
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
-from functools import reduce
-from operator import getitem
-from uuid import UUID
+from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe, BranchComponent
+from pandapipes.component_models import NodeElementComponent
 from pymongo import MongoClient, ReplaceOne
-from pymongo.database import Database
 from pymongo.collection import Collection
+from pymongo.database import Database
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
-
-import pandapipes as pps
-from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe
-import pandapower as pp
-import pandapower.io_utils as io_pp
 
 from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
     MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT
@@ -826,15 +827,15 @@ class PandaHub:
     def get_subnet_by_name(
         self,
         name,
-        bus_filter=None,
+        node_filter=None,
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
         variant=None,
         additional_filters: dict[
-            str, Callable[[pp.auxiliary.pandapowerNet], dict]
+            str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
         ] = {},
-    ):
+    ) -> pp.auxiliary.pandapowerNet | pps.pandapipesNet:
         self.check_permission("read")
         db = self._get_project_database()
         net_id = self._get_net_id_from_name(name, db)
@@ -842,7 +843,7 @@ class PandaHub:
             return None
         return self.get_subnet(
             net_id,
-            bus_filter=bus_filter,
+            node_filter=node_filter,
             include_results=include_results,
             add_edge_branches=add_edge_branches,
             geo_mode=geo_mode,
@@ -853,211 +854,159 @@ class PandaHub:
     def get_subnet(
         self,
         net_id,
-        bus_filter=None,
+        node_filter=None,
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
         variant=None,
         ignore_elements=[],
         additional_filters: dict[
-            str, Callable[[pp.auxiliary.pandapowerNet], dict]
+            str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
         ] = {},
-    ) -> pp.pandapowerNet:
+    ) -> pp.pandapowerNet | pps.pandapipesNet:
         db = self._get_project_database()
         meta = self._get_network_metadata(db, net_id)
-        dtypes = db["_networks"].find_one({"_id": net_id}, projection={"dtypes"})
+        dtypes = meta["dtypes"]
+        sector = meta["sector"]
+        is_power = sector == "power"
 
-        net = pp.create_empty_network()
+        def switch_filter(bus_filter):
+            return {
+                "$and": [
+                    {"et": "b"},
+                    bus_filter,
+                ]
+            }
 
-        if db[self._collection_name_of_element("bus")].find_one() is None:
+        def get_nodes_from_element(ntw, element, nd_cols):
+            return [ntw[element][ndc].to_numpy() for ndc in nd_cols]
+
+        def get_nodes_from_switch(ntw, _, _nd_cols):
+            return [ntw.switch.bus.to_numpy(), ntw.switch.loc[ntw.switch.et == "b", "element"].to_numpy()]
+
+        if is_power:
+            net = pp.create_empty_network()
+            node_name = "bus"
+            default_branches = ["line", "trafo", "trafo3w", "switch"]
+            default_node_cols = [
+                ("from_bus", "to_bus"),
+                ("hv_bus", "lv_bus"),
+                ("hv_bus", "lv_bus", "mv_bus"),
+                ("bus", "element")
+            ]
+            special_filters = {"switch": switch_filter}
+            get_nodes_func = {br: get_nodes_from_element for br in default_branches}
+            get_nodes_func["switch"] = get_nodes_from_switch
+            # add node elements
+            node_elements = [
+                "load",
+                "asymmetric_load",
+                "sgen",
+                "asymmetric_sgen",
+                "gen",
+                "ext_grid",
+                "shunt",
+                "xward",
+                "ward",
+                "motor",
+                "storage",
+            ]
+            branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
+            all_elements = (
+                node_elements + branch_elements + ["bus"] + list(additional_filters.keys())
+            )
+            all_elements = list(set(all_elements) - set(ignore_elements))
+        else:
+            net = pps.create_empty_network()
+            node_name = "junction"
+            component_list = json.loads(meta["data"]["component_list"][11:], cls=io_pp.PPJSONDecoder,
+                                        registry_class=FromSerializableRegistryPpipe)
+            default_branches = []
+            default_node_cols = []
+            node_elements = []
+            all_elements = []
+            for c in component_list:
+                all_elements.append(c.table_name())
+                if issubclass(c, BranchComponent):
+                    default_branches.append(c.table_name())
+                    default_node_cols.append(c.from_to_node_cols())
+                if issubclass(c, NodeElementComponent):
+                    node_elements.append(c.table_name())
+            special_filters = dict()
+            get_nodes_func = {br: get_nodes_from_element for br in default_branches}
+
+        if db[self._collection_name_of_element(node_name)].find_one() is None:
             net["empty"] = True
 
+        add_args = {
+            "net": net,
+            "db": db,
+            "net_id": net_id,
+            "include_results": include_results,
+            "geo_mode": geo_mode,
+            "variant": variant,
+            "dtypes": dtypes,
+            "filter": node_filter,
+        }
+
         # Add buses with filter
-        if bus_filter is not None:
-            self._add_element_from_collection(
-                net,
-                db,
-                "bus",
-                net_id,
-                bus_filter,
-                geo_mode=geo_mode,
-                variant=variant,
-                dtypes=dtypes,
-            )
-        buses = net.bus.index.tolist()
+        if node_filter is not None:
+            self._add_element_from_collection(element_type=node_name, **add_args)
+        nodes = net[node_name].index.tolist()
 
         if isinstance(add_edge_branches, bool):
             if add_edge_branches:
-                add_edge_branches = ["line", "trafo", "switch"]
+                add_edge_branches = default_branches
             else:
                 add_edge_branches = []
         elif not isinstance(add_edge_branches, list):
             raise ValueError("add_edge_branches must be a list or a boolean")
-        line_operator = "$or" if "line" in add_edge_branches else "$and"
-        # Add branch elements connected to at least one bus
-        self._add_element_from_collection(
-            net,
-            db,
-            "line",
-            net_id,
-            {
-                line_operator: [
-                    {"from_bus": {"$in": buses}},
-                    {"to_bus": {"$in": buses}},
-                ]
-            },
-            geo_mode=geo_mode,
-            variant=variant,
-            dtypes=dtypes,
-        )
-        trafo_operator = "$or" if "trafo" in add_edge_branches else "$and"
-        self._add_element_from_collection(
-            net,
-            db,
-            "trafo",
-            net_id,
-            {trafo_operator: [{"hv_bus": {"$in": buses}}, {"lv_bus": {"$in": buses}}]},
-            geo_mode=geo_mode,
-            variant=variant,
-            dtypes=dtypes,
-        )
-        self._add_element_from_collection(
-            net,
-            db,
-            "trafo3w",
-            net_id,
-            {
-                trafo_operator: [
-                    {"hv_bus": {"$in": buses}},
-                    {"mv_bus": {"$in": buses}},
-                    {"lv_bus": {"$in": buses}},
-                ]
-            },
-            geo_mode=geo_mode,
-            variant=variant,
-            dtypes=dtypes,
-        )
-        switch_operator = "$or" if "switch" in add_edge_branches else "$and"
-        self._add_element_from_collection(
-            net,
-            db,
-            "switch",
-            net_id,
-            {
-                "$and": [
-                    {"et": "b"},
+
+        branch_nodes = set()
+        for branch_name, node_cols in zip(default_branches, default_node_cols):
+            operator = "$or" if branch_name in add_edge_branches else "$and"
+            # Add branch elements connected to at least one node
+            filter_ = {operator: [{b: {"$in": nodes}} for b in node_cols]}
+            if branch_name in special_filters:
+                filter_ = special_filters[branch_name](filter_)
+            add_args["filter"] = filter_
+            self._add_element_from_collection(element_type=branch_name, **add_args)
+            get_nd_func = get_nodes_func[branch_name]
+            branch_nodes.update(set(chain.from_iterable(get_nd_func(net, branch_name, node_cols))))
+
+        if branch_nodes:
+            # Add buses on the other side of the branches
+            branch_buses_outside = [int(b) for b in branch_nodes - set(nodes)]
+            add_args["filter"] = {"index": {"$in": branch_buses_outside}}
+            self._add_element_from_collection(element_type=node_name, **add_args)
+            nodes = net[node_name].index.tolist()
+
+        if is_power:
+            add_args["filter"] = {
+                "$or": [
+                    {"$and": [{"et": "t"}, {"element": {"$in": net.trafo.index.tolist()}}]},
+                    {"$and": [{"et": "l"}, {"element": {"$in": net.line.index.tolist()}}]},
                     {
-                        switch_operator: [
-                            {"bus": {"$in": buses}},
-                            {"element": {"$in": buses}},
+                        "$and": [
+                            {"et": "t3"},
+                            {"element": {"$in": net.trafo3w.index.tolist()}},
                         ]
                     },
                 ]
-            },
-            geo_mode=geo_mode,
-            variant=variant,
-            dtypes=dtypes,
-        )
-        if add_edge_branches:
-            # Add buses on the other side of the branches
-            branch_buses = (
-                set(net.trafo.hv_bus.values)
-                | set(net.trafo.lv_bus.values)
-                | set(net.line.from_bus)
-                | set(net.line.to_bus)
-                | set(net.trafo3w.hv_bus.values)
-                | set(net.trafo3w.mv_bus.values)
-                | set(net.trafo3w.lv_bus.values)
-                | set(net.switch.bus)
-                | set(net.switch.element)
-            )
-            branch_buses_outside = [int(b) for b in branch_buses - set(buses)]
-            self._add_element_from_collection(
-                net,
-                db,
-                "bus",
-                net_id,
-                geo_mode=geo_mode,
-                variant=variant,
-                filter={"index": {"$in": branch_buses_outside}},
-                dtypes=dtypes,
-            )
-            buses = net.bus.index.tolist()
-
-        switch_filter = {
-            "$or": [
-                {"$and": [{"et": "t"}, {"element": {"$in": net.trafo.index.tolist()}}]},
-                {"$and": [{"et": "l"}, {"element": {"$in": net.line.index.tolist()}}]},
-                {
-                    "$and": [
-                        {"et": "t3"},
-                        {"element": {"$in": net.trafo3w.index.tolist()}},
-                    ]
-                },
-            ]
-        }
-        self._add_element_from_collection(
-            net,
-            db,
-            "switch",
-            net_id,
-            switch_filter,
-            geo_mode=geo_mode,
-            variant=variant,
-            dtypes=dtypes,
-        )
-
-        # add node elements
-        node_elements = [
-            "load",
-            "asymmetric_load",
-            "sgen",
-            "asymmetric_sgen",
-            "gen",
-            "ext_grid",
-            "shunt",
-            "xward",
-            "ward",
-            "motor",
-            "storage",
-        ]
-        branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
-        all_elements = (
-            node_elements + branch_elements + ["bus"] + list(additional_filters.keys())
-        )
-        all_elements = list(set(all_elements) - set(ignore_elements))
+            }
+            self._add_element_from_collection(element_type="switch", **add_args)
 
         # add all node elements that are connected to buses within the network
         for element in node_elements:
-            element_filter = {"bus": {"$in": buses}}
-            self._add_element_from_collection(
-                net,
-                db,
-                element,
-                net_id,
-                filter=element_filter,
-                geo_mode=geo_mode,
-                include_results=include_results,
-                variant=variant,
-                dtypes=dtypes,
-            )
+            add_args["filter"] = {node_name: {"$in": nodes}}
+            self._add_element_from_collection(element_type=element, **add_args)
 
         # Add elements for which the user has provided a filter function
         for element, filter_func in additional_filters.items():
             if element in ignore_elements:
                 continue
-            element_filter = filter_func(net)
-            self._add_element_from_collection(
-                net,
-                db,
-                element,
-                net_id,
-                filter=element_filter,
-                geo_mode=geo_mode,
-                include_results=include_results,
-                variant=variant,
-                dtypes=dtypes,
-            )
+            add_args["filter"] = filter_func(net)
+            self._add_element_from_collection(element_type=element, **add_args)
 
         # add all other collections
         collection_names = self.get_net_collections(db)
@@ -1076,17 +1025,8 @@ class PandaHub:
             else:
                 # all other tables (e.g. std_types) are loaded without filter
                 element_filter = None
-            self._add_element_from_collection(
-                net,
-                db,
-                table_name,
-                net_id,
-                filter=element_filter,
-                geo_mode=geo_mode,
-                include_results=include_results,
-                variant=variant,
-                dtypes=dtypes,
-            )
+            add_args["filter"] = element_filter
+            self._add_element_from_collection(element_type=table_name, **add_args)
         self.deserialize_and_update_data(net, meta)
         return net
 
