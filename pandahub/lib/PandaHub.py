@@ -1014,7 +1014,8 @@ class PandaHub:
         for collection in collection_names:
             table_name = self._element_name_of_collection(collection)
             # skip all element tables that we have already added
-            if table_name in all_elements or table_name in ignore_elements:
+            if (table_name in all_elements or table_name in ignore_elements
+                or table_name in additional_filters.keys()):
                 continue
             # for tables that share an index with an element (e.g. load->res_load) load only relevant entries
             for element in all_elements:
