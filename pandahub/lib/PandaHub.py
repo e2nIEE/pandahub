@@ -851,6 +851,7 @@ class PandaHub:
             additional_filters=additional_filters,
         )
 
+
     def get_subnet(
         self,
         net_id,
@@ -859,16 +860,24 @@ class PandaHub:
         add_edge_branches=True,
         geo_mode="string",
         variant=None,
-        ignore_elements=[],
+        ignore_elements=tuple([]),
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
-        ] = {},
-    ) -> pp.pandapowerNet | pps.pandapipesNet:
+        ] | None = None,
+        additional_branch_node_cols: dict[str, list[str]] | None = None,
+        *,
+        return_edge_branch_nodes: bool = False
+    ) -> (pp.pandapowerNet | pps.pandapipesNet) | (tuple[pp.pandapowerNet | pps.pandapipesNet, list]):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, net_id)
         dtypes = meta["dtypes"]
         sector = meta["sector"]
         is_power = sector == "power"
+
+        if additional_filters is None:
+            additional_filters = {}
+        if additional_branch_node_cols is None:
+            additional_branch_node_cols = {}
 
         def switch_filter(bus_filter):
             return {
@@ -919,8 +928,12 @@ class PandaHub:
         else:
             net = pps.create_empty_network()
             node_name = "junction"
-            component_list = json.loads(meta["data"]["component_list"][11:], cls=io_pp.PPJSONDecoder,
-                                        registry_class=FromSerializableRegistryPpipe)
+            component_list = []
+            if "data" in meta and "component_list" in meta["data"]:
+                component_list = json.loads(
+                    meta["data"]["component_list"][11:], cls=io_pp.PPJSONDecoder,
+                    registry_class=FromSerializableRegistryPpipe
+                )
             default_branches = []
             default_node_cols = []
             node_elements = []
@@ -963,6 +976,13 @@ class PandaHub:
         elif not isinstance(add_edge_branches, list):
             raise ValueError("add_edge_branches must be a list or a boolean")
 
+        # Add elements for which the user has provided a filter function
+        for element, filter_func in additional_filters.items():
+            if element in ignore_elements:
+                continue
+            add_args["filter"] = filter_func(net)
+            self._add_element_from_collection(element_type=element, **add_args)
+
         branch_nodes = set()
         for branch_name, node_cols in zip(default_branches, default_node_cols):
             operator = "$or" if branch_name in add_edge_branches else "$and"
@@ -975,10 +995,16 @@ class PandaHub:
             get_nd_func = get_nodes_func[branch_name]
             branch_nodes.update(set(chain.from_iterable(get_nd_func(net, branch_name, node_cols))))
 
+        for branch_name, node_cols in additional_branch_node_cols.items():
+            branch_nodes.update(
+                set(chain.from_iterable(get_nodes_from_element(net, branch_name, node_cols)))
+            )
+
+        branch_nodes_outside = []
         if branch_nodes:
             # Add buses on the other side of the branches
-            branch_buses_outside = [int(b) for b in branch_nodes - set(nodes)]
-            add_args["filter"] = {"index": {"$in": branch_buses_outside}}
+            branch_nodes_outside = list(map(int, branch_nodes - set(nodes)))
+            add_args["filter"] = {"index": {"$in": branch_nodes_outside}}
             self._add_element_from_collection(element_type=node_name, **add_args)
             nodes = net[node_name].index.tolist()
 
@@ -1002,13 +1028,6 @@ class PandaHub:
             add_args["filter"] = {node_name: {"$in": nodes}}
             self._add_element_from_collection(element_type=element, **add_args)
 
-        # Add elements for which the user has provided a filter function
-        for element, filter_func in additional_filters.items():
-            if element in ignore_elements:
-                continue
-            add_args["filter"] = filter_func(net)
-            self._add_element_from_collection(element_type=element, **add_args)
-
         # add all other collections
         collection_names = self.get_net_collections(db)
         for collection in collection_names:
@@ -1030,6 +1049,8 @@ class PandaHub:
             add_args["filter"] = element_filter
             self._add_element_from_collection(element_type=table_name, **add_args)
         self.deserialize_and_update_data(net, meta)
+        if return_edge_branch_nodes:
+            return net, branch_nodes_outside
         return net
 
     def _collection_name_of_element(self, element):
