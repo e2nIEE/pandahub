@@ -996,6 +996,8 @@ class PandaHub:
             branch_nodes.update(set(chain.from_iterable(get_nd_func(net, branch_name, node_cols))))
 
         for branch_name, node_cols in additional_branch_node_cols.items():
+            if branch_name not in net:
+                continue
             branch_nodes.update(
                 set(chain.from_iterable(get_nodes_from_element(net, branch_name, node_cols)))
             )
