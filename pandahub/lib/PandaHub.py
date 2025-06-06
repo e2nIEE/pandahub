@@ -3057,8 +3057,11 @@ class PandaHub:
         del_res = db[collection_name].delete_many(match_filter)
         return del_res
 
-    def create_timeseries_collection(self, collection_name, overwrite=False):
-        db = self._get_project_database()
+    def create_timeseries_collection(self, collection_name, overwrite=False, project_id=None):
+        if project_id is None:
+            db = self._get_project_database()
+        else:
+            db = self.mongo_client[str(project_id)]
         collection_exists = collection_name in db.list_collection_names()
         if collection_exists:
             if overwrite:
