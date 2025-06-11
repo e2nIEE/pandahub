@@ -31,24 +31,13 @@ class GlobalDataBaseConnection:
         with cls._lock:
             if cls._instance is None:
                 cls._instance = super(GlobalDataBaseConnection, cls).__new__(cls)
-                cls._instance.__init_once(*args, **kwargs)
+                cls._instance.__init_client(*args, **kwargs)
         return cls._instance
 
-    def __init_once(self, connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER,
-                 connection_password: str = MONGODB_PASSWORD):
-        mongo_client_args = {
-            "host": connection_url,
-            "uuidRepresentation": "standard",
-            "connect": False,
-        }
-        if connection_user:
-            mongo_client_args |= {
-                "username": connection_user,
-                "password": connection_password,
-            }
-        self._mongo_client = MongoClient(**mongo_client_args)
+    def __init_client(self, connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER, connection_password: str = MONGODB_PASSWORD):
+        self._mongo_client = get_mongo_client(connection_url, connection_user, connection_password)
 
-    def get_mongo_client(self):
+    def get_mongo_client(self) -> MongoClient:
         return self._mongo_client
 
 
