@@ -8,7 +8,6 @@ DATATYPES = {
         "in_service": bool,
         "max_vm_pu": float,
         "min_vm_pu": float,
-        "geo": object
     },
     "load": {
         "name": str,
@@ -97,7 +96,6 @@ DATATYPES = {
         "in_service": bool,
         "max_loading_percent": float,
         "std_type": str,
-        "geo": object
     },
     "trafo": {
         "name": str,
