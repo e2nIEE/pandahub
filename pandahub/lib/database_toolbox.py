@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import threading
 from contextlib import contextmanager
 from collections.abc import Iterator
 
@@ -19,6 +20,38 @@ import blosc
 logger = logging.getLogger(__name__)
 from pandapower.io_utils import PPJSONEncoder
 from packaging import version
+
+
+class GlobalDataBaseConnection:
+    _instance = None
+    _mongo_client = None
+    _lock = threading.Lock()
+
+    def __new__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(GlobalDataBaseConnection, cls).__new__(cls)
+                cls._instance.__init_once(*args, **kwargs)
+        return cls._instance
+
+    def __init_once(self, connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER,
+                 connection_password: str = MONGODB_PASSWORD):
+        mongo_client_args = {
+            "host": connection_url,
+            "uuidRepresentation": "standard",
+            "connect": False,
+        }
+        if connection_user:
+            mongo_client_args |= {
+                "username": connection_user,
+                "password": connection_password,
+            }
+        self._mongo_client = MongoClient(**mongo_client_args)
+
+    def get_mongo_client(self):
+        return self._mongo_client
+
+
 
 
 def get_document_hash(task):

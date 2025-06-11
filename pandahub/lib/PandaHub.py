@@ -32,13 +32,13 @@ from pandahub.lib.database_toolbox import (
     create_timeseries_document,
     convert_timeseries_to_subdocuments,
     convert_element_to_dict,
-    get_mongo_client,
     json_to_object,
     serialize_object_data,
     get_dtypes,
     decompress_timeseries_data,
     convert_geojsons,
-    get_metadata_for_timeseries_collections
+    get_metadata_for_timeseries_collections,
+    GlobalDataBaseConnection,
 )
 from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 
@@ -102,7 +102,7 @@ class PandaHub:
     ):
         self._datatypes = datatypes
         self.mongodb_indexes = mongodb_indexes
-        self.mongo_client = get_mongo_client(connection_url, connection_user, connection_password)
+        self.mongo_client = GlobalDataBaseConnection(connection_url, connection_user, connection_password).get_mongo_client()
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
