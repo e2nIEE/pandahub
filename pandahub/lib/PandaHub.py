@@ -78,6 +78,20 @@ def validate_variant_type(variant: int | None):
         msg = f"variant must be int or None, but got {variant} of type {type(variant)}"
         raise ValueError(msg)
 
+
+def re_arg(kwarg_map: dict[str, str]) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        def wrapped(*args, **kwargs):
+            new_kwargs = {}
+            for k, v in kwargs.items():
+                if k in kwarg_map:
+                    print(f"DEPRECATION WARNING: keyword argument '{k}' is no longer valid. Use '{kwarg_map[k]}' instead.")
+                new_kwargs[kwarg_map.get(k, k)] = v
+            return func(*args, **new_kwargs)
+        return wrapped
+    return decorator
+
+
 class PandaHub:
     permissions = {
         "read": ["owner", "developer", "guest"],
@@ -851,7 +865,7 @@ class PandaHub:
             additional_filters=additional_filters,
         )
 
-
+    @re_arg({"bus_filter": "node_filter"})
     def get_subnet(
         self,
         net_id,
@@ -3154,7 +3168,6 @@ class PandaHub:
         msg = "_get_net_collections() has been made public - use get_net_collections() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning)
         return self.get_net_collections(db, with_areas)
-
 
 
 if __name__ == "__main__":
