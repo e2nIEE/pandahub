@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import threading
 from contextlib import contextmanager
 from collections.abc import Iterator
 
@@ -10,6 +9,10 @@ from pymongo.database import Database
 from pymongo.collection import Collection
 
 from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD
+from pandahub.api.internal.global_db_client import (
+    __global_mongo_client,
+    _get_mongo_client,
+)
 from pandahub.lib.datatypes import DATATYPES
 import base64
 import hashlib
@@ -20,27 +23,6 @@ import blosc
 logger = logging.getLogger(__name__)
 from pandapower.io_utils import PPJSONEncoder
 from packaging import version
-
-
-class GlobalDataBaseConnection:
-    _instance = None
-    _mongo_client = None
-    _lock = threading.Lock()
-
-    def __new__(cls, *args, **kwargs):
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = super(GlobalDataBaseConnection, cls).__new__(cls)
-                cls._instance.__init_client(*args, **kwargs)
-        return cls._instance
-
-    def __init_client(self, connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER, connection_password: str = MONGODB_PASSWORD):
-        self._mongo_client = get_mongo_client(connection_url, connection_user, connection_password)
-
-    def get_mongo_client(self) -> MongoClient:
-        return self._mongo_client
-
-
 
 
 def get_document_hash(task):
@@ -452,17 +434,10 @@ def migrate_userdb_to_beanie(ph):
 
 def get_mongo_client(connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER,
                      connection_password: str = MONGODB_PASSWORD) -> MongoClient:
-    mongo_client_args = {
-        "host": connection_url,
-        "uuidRepresentation": "standard",
-        "connect": False,
-    }
-    if connection_user:
-        mongo_client_args |= {
-            "username": connection_user,
-            "password": connection_password,
-        }
-    return MongoClient(**mongo_client_args)
+    if __global_mongo_client is None:
+        return _get_mongo_client(connection_url, connection_user, connection_password)
+    else:
+        return __global_mongo_client
 
 @contextmanager
 def mongo_client(database: str | None = None, collection: str | None = None, connection_url: str = MONGODB_URL,
@@ -488,7 +463,7 @@ def mongo_client(database: str | None = None, collection: str | None = None, con
     """
     if collection is not None and database is None:
         raise ValueError("Must specify database to access a collection!")
-    client = get_mongo_client(connection_url, connection_user, connection_password)
+    client = _get_mongo_client(connection_url, connection_user, connection_password)
     try:
         if database is not None and collection is not None:
             yield client[database][collection]
