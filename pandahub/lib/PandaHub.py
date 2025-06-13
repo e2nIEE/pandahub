@@ -26,6 +26,7 @@ from pandapipes import from_json_string as from_json_pps, FromSerializableRegist
 import pandapower as pp
 import pandapower.io_utils as io_pp
 
+from api.internal.settings import PANDAHUB_GLOBAL_DB_CLIENT
 from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
     MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT
 from pandahub.lib.database_toolbox import (
@@ -102,7 +103,11 @@ class PandaHub:
     ):
         self._datatypes = datatypes
         self.mongodb_indexes = mongodb_indexes
-        self.mongo_client = get_mongo_client(connection_url=MONGODB_URL, connection_user = MONGODB_USER,connection_password = MONGODB_PASSWORD)
+        self.mongo_client = get_mongo_client(
+            connection_url=connection_url,
+            connection_user=connection_user,
+            connection_password=connection_password,
+        )
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
@@ -150,6 +155,12 @@ class PandaHub:
         except ServerSelectionTimeoutError as e:
             return "connection timeout"
 
+    def close(self, force=False):
+        """Close the database connection."""
+        if PANDAHUB_GLOBAL_DB_CLIENT and not force:
+            msg = "Closing the global MongoClient instance will break all subsequent database connections. If this is intentional, use force=True"
+            raise PandaHubError(msg)
+        self.mongo_client.close()
     # -------------------------
     # Permission check
     # -------------------------
