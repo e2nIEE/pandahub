@@ -26,9 +26,8 @@ from pandapipes import from_json_string as from_json_pps, FromSerializableRegist
 import pandapower as pp
 import pandapower.io_utils as io_pp
 
-from api.internal.settings import PANDAHUB_GLOBAL_DB_CLIENT
 from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
-    MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT
+    MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT, PANDAHUB_GLOBAL_DB_CLIENT
 from pandahub.lib.database_toolbox import (
     create_timeseries_document,
     convert_timeseries_to_subdocuments,
@@ -39,8 +38,8 @@ from pandahub.lib.database_toolbox import (
     decompress_timeseries_data,
     convert_geojsons,
     get_metadata_for_timeseries_collections,
-    get_mongo_client,
 )
+from pandahub.lib import get_mongo_client
 from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 
 logger = logging.getLogger(__name__)
