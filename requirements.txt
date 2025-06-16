@@ -4,7 +4,7 @@ fastapi>=0.104.0
 fastapi-mail>=1.4.1
 pandapower~=2.14
 pandapipes>=0.7.0
-pymongo
+pymongo>=4.9
 pydantic
 simplejson
 requests
