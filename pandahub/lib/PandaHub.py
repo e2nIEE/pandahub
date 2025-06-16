@@ -121,6 +121,27 @@ class PandaHub:
         if check_server_available:
             self.server_is_available()
 
+
+    @property
+    def project_db(self) -> Database:
+        """Get the database of the current active project"""
+        return self.get_project_database()
+
+    @property
+    def mgmt_db(self) -> Database:
+        """Get the user_management database"""
+        return self.mongo_client["user_management"]
+
+    @property
+    def users_collection(self) -> Collection:
+        """Get the users collection"""
+        return self.mongo_client["user_management"]["users"]
+
+    @property
+    def projects_collection(self) -> Collection:
+        """Get the projects collection"""
+        return self.mongo_client["user_management"]["projects"]
+
     # -------------------------
     # Database connection checks
     # -------------------------
@@ -282,7 +303,7 @@ class PandaHub:
         if realm is not None:
             filter_dict["realm"] = realm
         db = self.mongo_client["user_management"]
-        projects = list(db["projects"].find(filter_dict))
+        projects = db["projects"].find(filter_dict).to_list()
         return [
             {
                 "id": str(p["_id"]),
@@ -411,8 +432,7 @@ class PandaHub:
         return project is not None
 
     def _get_project_document(self, filter_dict: dict) -> Optional[dict]:
-        project_collection = self.mongo_client["user_management"].projects
-        projects = list(project_collection.find(filter_dict))
+        projects = self.projects_collection.find(filter_dict).to_list()
         if len(projects) == 0:  # project doesn't exist
             return None
         if len(projects) > 1:
@@ -447,8 +467,12 @@ class PandaHub:
         -------
         pymongo.database.Database
         """
+        if self.active_project is None:
+            msg = "Can not access project database - no project active!"
+            raise PandaHubError(msg)
+        project_id = str(self.active_project["_id"])
         if collection is None:
-            return self.mongo_client[str(self.active_project["_id"])]
+            return self.mongo_client[project_id]
         logger.warning(f"Passing a collection to get_project_database is deprecated. Use get_project_collection instead!")
         return self.get_project_collection(collection)
 
@@ -497,8 +521,6 @@ class PandaHub:
         list
             network ids
         """
-        if not self.active_project:
-            raise PandaHubError("No project activated!")
         return self.get_project_collection("_networks").find({}, {"_id:": 1}).distinct("_id")
 
     def get_project_version(self):
@@ -513,7 +535,7 @@ class PandaHub:
             return
 
         if version.parse(self.get_project_version()) < version.parse("0.2.3"):
-            db = self._get_project_database()
+            db = self.project_db
             all_collection_names = db.list_collection_names()
             old_net_collections = [
                 name
@@ -526,9 +548,7 @@ class PandaHub:
             for element in old_net_collections:
                 db[element].rename(self._collection_name_of_element(element))
             # for all networks
-            for d in list(
-                db["_networks"].find({}, projection={"sector": 1, "data": 1})
-            ):
+            for d in db["_networks"].find({}, projection={"sector": 1, "data": 1}).to_list():
                 # load old format
                 if d.get("sector", "power") == "power":
                     data = dict(
@@ -739,7 +759,7 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
         db = self._get_project_database()
-        return list(db["_networks"].find())
+        return db["_networks"].find().to_list()
 
 
     def get_network_by_name(
@@ -1251,11 +1271,11 @@ class PandaHub:
         proj = {"net": 0}
         if not load_area:
             proj["area_geojson"] = 0
-        nets = pd.DataFrame(list(db.find(fi, projection=proj)))
+        nets = pd.DataFrame(db.find(fi, projection=proj)).to_list()
         return nets
 
     def _get_net_id_from_name(self, name, db):
-        metadata = list(db["_networks"].find({"name": name}))
+        metadata = db["_networks"].find({"name": name}).to_list()
         if len(metadata) > 1:
             msg = (f"Multiple networks with the name {metadata[0]['name']} found in the database. "
                    f"Use the corresponding function which selects the network by net_id instead.")
@@ -1312,9 +1332,7 @@ class PandaHub:
             else:
                 filter_dict = {**filter_dict, **filter}
 
-        data = list(
-            db[self._collection_name_of_element(element_type)].find(filter_dict)
-        )
+        data = db[self._collection_name_of_element(element_type)].find(filter_dict).to_list()
         if len(data) == 0:
             return
         if dtypes is None:
@@ -1354,17 +1372,12 @@ class PandaHub:
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
-        db = self._get_project_database()
 
         collection = self._collection_name_of_element(element_type)
         dtypes = self._datatypes.get(element_type)
 
         variant_filter = self.get_variant_filter(variant)
-        documents = list(
-            db[collection].find(
-                {"index": element_index, "net_id": net_id, **variant_filter}
-            )
-        )
+        documents = self.projects_collection[collection].find({"index": element_index, "net_id": net_id, **variant_filter}).to_list()
         if len(documents) == 1:
             document = documents[0]
         else:
@@ -1456,7 +1469,7 @@ class PandaHub:
             **self.get_variant_filter(variant),
         }
 
-        deletion_targets = list(db[collection].find(element_filter))
+        deletion_targets = db[collection].find(element_filter).to_list()
         if not deletion_targets:
             return []
 
@@ -1564,7 +1577,7 @@ class PandaHub:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element_type)
 
-        js = list(db[collection].find({"index": element_index, "net_id": net_id}))[0]
+        js = db[collection].find({"index": element_index, "net_id": net_id}).to_list(1)
         obj = json_to_object(js["object"])
         setattr(obj, parameter, value)
         db[collection].update_one(
@@ -2429,7 +2442,7 @@ class PandaHub:
             if not include_metadata:
                 pipeline.append({"$project": {"timeseries_data": 1,
                                               "num_timestamps": 1}})
-        data = list(db[collection_name].aggregate(pipeline))
+        data = db[collection_name].aggregate(pipeline).to_list()
         if len(data) == 0:
             raise PandaHubError("no documents matching the provided filter found", 404)
         elif len(data) > 1:
@@ -2542,7 +2555,7 @@ class PandaHub:
                 pipeline.append({"$match": {"$and": match_filter}})
             projection = {"$project": {"timeseries_data": 0}}
             pipeline.append(projection)
-        metadata = list(db[collection_name].aggregate(pipeline))
+        metadata = db[collection_name].aggregate(pipeline).to_list()
         df_metadata = pd.DataFrame(metadata)
         if len(df_metadata):
             df_metadata.set_index("_id", inplace=True)
@@ -3096,7 +3109,7 @@ class PandaHub:
         global_database=False,
     ):
         db = self._get_project_or_global_db(project_id, global_database)
-        collections = list(db.list_collections(filter={"name": collection_name}))
+        collections = db.list_collections(filter={"name": collection_name}).to_list()
         return len(collections) == 1 and collections[0]["type"] == "timeseries"
 
     def _get_project_or_global_db(self, project_id=None, global_database=False):
