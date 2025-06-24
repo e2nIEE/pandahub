@@ -46,7 +46,7 @@ def load_test_subnet_from_mongodb(project_name):
     buses = list(range(1000))
     t0 = time.time()
     subnet = ph.get_subnet_by_name("test_net",
-                                   bus_filter={"index": {"$in": buses}})
+                                   node_filter={"index": {"$in": buses}})
     t1 = time.time()
     print("LOADED NET IN %.2fs"%(t1-t0))
     return subnet
