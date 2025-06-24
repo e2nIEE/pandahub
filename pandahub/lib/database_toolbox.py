@@ -1,14 +1,8 @@
 # -*- coding: utf-8 -*-
-from contextlib import contextmanager
-from collections.abc import Iterator
 
 import numpy as np
 import pandas as pd
-from pymongo import MongoClient
-from pymongo.database import Database
-from pymongo.collection import Collection
 
-from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD
 from pandahub.lib.datatypes import DATATYPES
 import base64
 import hashlib
@@ -428,53 +422,23 @@ def migrate_userdb_to_beanie(ph):
                  {'$out': 'users'}]
     userdb.aggregate(migration)
 
-def get_mongo_client(connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER,
-                     connection_password: str = MONGODB_PASSWORD) -> MongoClient:
-    mongo_client_args = {
-        "host": connection_url,
-        "uuidRepresentation": "standard",
-        "connect": False,
-    }
-    if connection_user:
-        mongo_client_args |= {
-            "username": connection_user,
-            "password": connection_password,
-        }
-    return MongoClient(**mongo_client_args)
 
-@contextmanager
-def mongo_client(database: str | None = None, collection: str | None = None, connection_url: str = MONGODB_URL,
-                 connection_user: str = MONGODB_USER, connection_password: str = MONGODB_PASSWORD) -> Iterator[MongoClient | Database | Collection]:
-    """Contextmanager for pymongo MongoClient / Database / Collection with close after use.
-
-    Parameters
-    ----------
-    database: str or None
-        The database to connect to
-    collection: str or None
-        The collection to connect to
-    connection_url: str or None
-        Defaults to MONGODB_URL env var
-    connection_user: str or None
-        Defaults to MONGODB_USER env var
-    connection_password: str or None
-        Defaults to MONGODB_PASSWORD env var
-
-    Returns
-    -------
-        Contextmanager yielding MongoClient / Database / Collection
-    """
-    if collection is not None and database is None:
-        raise ValueError("Must specify database to access a collection!")
-    client = get_mongo_client(connection_url, connection_user, connection_password)
-    try:
-        if database is not None and collection is not None:
-            yield client[database][collection]
-        elif database is not None:
-            yield client[database]
-        else:
-            yield client
-    finally:
-        client.close()
-
-
+def get_metadata_for_timeseries_collections(db, data_type=None, net_id=None, element_type=None, element_index=None, **kwargs):
+        if element_type is None:
+            raise ValueError("element_type needs to be defined for timeseries collections")
+        if element_index is None:
+            raise ValueError("element_index needs to be defined for timeseries collections")
+        if data_type is None:
+            raise ValueError("data_type needs to be defined for timeseries collections")
+        if net_id is None:
+            net_ids = db["_networks"].distinct("_id")
+            if len(net_ids) == 1:
+                net_id = net_ids[0]
+            else:
+                raise ValueError(
+                    "No net_id was provided and multiple networks exist in the database. "
+                    "Please provide a net_id."
+                )
+        metadata = {"data_type": data_type, "net_id": net_id, "element_type": element_type, "element_index": element_index, **kwargs}
+        metadata["_id"] = f"{net_id}_{element_type}_{element_index}_{data_type}"
+        return metadata

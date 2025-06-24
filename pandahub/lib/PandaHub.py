@@ -27,18 +27,19 @@ import pandapower as pp
 import pandapower.io_utils as io_pp
 
 from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
-    MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT
+    MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT, PANDAHUB_GLOBAL_DB_CLIENT
 from pandahub.lib.database_toolbox import (
     create_timeseries_document,
     convert_timeseries_to_subdocuments,
     convert_element_to_dict,
-    get_mongo_client,
     json_to_object,
     serialize_object_data,
     get_dtypes,
     decompress_timeseries_data,
     convert_geojsons,
+    get_metadata_for_timeseries_collections,
 )
+from pandahub.lib import get_mongo_client
 from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 
 logger = logging.getLogger(__name__)
@@ -101,7 +102,11 @@ class PandaHub:
     ):
         self._datatypes = datatypes
         self.mongodb_indexes = mongodb_indexes
-        self.mongo_client = get_mongo_client(connection_url, connection_user, connection_password)
+        self.mongo_client = get_mongo_client(
+            connection_url=connection_url,
+            connection_user=connection_user,
+            connection_password=connection_password,
+        )
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
@@ -115,6 +120,27 @@ class PandaHub:
         self._elements_without_vars = ["variant"] if elements_without_vars is None else elements_without_vars
         if check_server_available:
             self.server_is_available()
+
+
+    @property
+    def project_db(self) -> Database:
+        """Get the database of the current active project"""
+        return self.get_project_database()
+
+    @property
+    def mgmt_db(self) -> Database:
+        """Get the user_management database"""
+        return self.mongo_client["user_management"]
+
+    @property
+    def users_collection(self) -> Collection:
+        """Get the users collection"""
+        return self.mongo_client["user_management"]["users"]
+
+    @property
+    def projects_collection(self) -> Collection:
+        """Get the projects collection"""
+        return self.mongo_client["user_management"]["projects"]
 
     # -------------------------
     # Database connection checks
@@ -149,6 +175,12 @@ class PandaHub:
         except ServerSelectionTimeoutError as e:
             return "connection timeout"
 
+    def close(self, force=False):
+        """Close the database connection."""
+        if PANDAHUB_GLOBAL_DB_CLIENT and not force:
+            msg = "Closing the global MongoClient instance will break all subsequent database connections. If this is intentional, use force=True"
+            raise PandaHubError(msg)
+        self.mongo_client.close()
     # -------------------------
     # Permission check
     # -------------------------
@@ -271,7 +303,7 @@ class PandaHub:
         if realm is not None:
             filter_dict["realm"] = realm
         db = self.mongo_client["user_management"]
-        projects = list(db["projects"].find(filter_dict))
+        projects = db["projects"].find(filter_dict).to_list()
         return [
             {
                 "id": str(p["_id"]),
@@ -400,8 +432,7 @@ class PandaHub:
         return project is not None
 
     def _get_project_document(self, filter_dict: dict) -> Optional[dict]:
-        project_collection = self.mongo_client["user_management"].projects
-        projects = list(project_collection.find(filter_dict))
+        projects = self.projects_collection.find(filter_dict).to_list()
         if len(projects) == 0:  # project doesn't exist
             return None
         if len(projects) > 1:
@@ -436,8 +467,12 @@ class PandaHub:
         -------
         pymongo.database.Database
         """
+        if self.active_project is None:
+            msg = "Can not access project database - no project active!"
+            raise PandaHubError(msg)
+        project_id = str(self.active_project["_id"])
         if collection is None:
-            return self.mongo_client[str(self.active_project["_id"])]
+            return self.mongo_client[project_id]
         logger.warning(f"Passing a collection to get_project_database is deprecated. Use get_project_collection instead!")
         return self.get_project_collection(collection)
 
@@ -486,8 +521,6 @@ class PandaHub:
         list
             network ids
         """
-        if not self.active_project:
-            raise PandaHubError("No project activated!")
         return self.get_project_collection("_networks").find({}, {"_id:": 1}).distinct("_id")
 
     def get_project_version(self):
@@ -502,7 +535,7 @@ class PandaHub:
             return
 
         if version.parse(self.get_project_version()) < version.parse("0.2.3"):
-            db = self._get_project_database()
+            db = self.project_db
             all_collection_names = db.list_collection_names()
             old_net_collections = [
                 name
@@ -515,9 +548,7 @@ class PandaHub:
             for element in old_net_collections:
                 db[element].rename(self._collection_name_of_element(element))
             # for all networks
-            for d in list(
-                db["_networks"].find({}, projection={"sector": 1, "data": 1})
-            ):
+            for d in db["_networks"].find({}, projection={"sector": 1, "data": 1}).to_list():
                 # load old format
                 if d.get("sector", "power") == "power":
                     data = dict(
@@ -728,7 +759,7 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
         db = self._get_project_database()
-        return list(db["_networks"].find())
+        return db["_networks"].find().to_list()
 
 
     def get_network_by_name(
@@ -1240,11 +1271,11 @@ class PandaHub:
         proj = {"net": 0}
         if not load_area:
             proj["area_geojson"] = 0
-        nets = pd.DataFrame(list(db.find(fi, projection=proj)))
+        nets = pd.DataFrame(db.find(fi, projection=proj)).to_list()
         return nets
 
     def _get_net_id_from_name(self, name, db):
-        metadata = list(db["_networks"].find({"name": name}))
+        metadata = db["_networks"].find({"name": name}).to_list()
         if len(metadata) > 1:
             msg = (f"Multiple networks with the name {metadata[0]['name']} found in the database. "
                    f"Use the corresponding function which selects the network by net_id instead.")
@@ -1301,9 +1332,7 @@ class PandaHub:
             else:
                 filter_dict = {**filter_dict, **filter}
 
-        data = list(
-            db[self._collection_name_of_element(element_type)].find(filter_dict)
-        )
+        data = db[self._collection_name_of_element(element_type)].find(filter_dict).to_list()
         if len(data) == 0:
             return
         if dtypes is None:
@@ -1343,17 +1372,12 @@ class PandaHub:
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
-        db = self._get_project_database()
 
         collection = self._collection_name_of_element(element_type)
         dtypes = self._datatypes.get(element_type)
 
         variant_filter = self.get_variant_filter(variant)
-        documents = list(
-            db[collection].find(
-                {"index": element_index, "net_id": net_id, **variant_filter}
-            )
-        )
+        documents = self.projects_collection[collection].find({"index": element_index, "net_id": net_id, **variant_filter}).to_list()
         if len(documents) == 1:
             document = documents[0]
         else:
@@ -1445,7 +1469,7 @@ class PandaHub:
             **self.get_variant_filter(variant),
         }
 
-        deletion_targets = list(db[collection].find(element_filter))
+        deletion_targets = db[collection].find(element_filter).to_list()
         if not deletion_targets:
             return []
 
@@ -1553,7 +1577,7 @@ class PandaHub:
             value = dtypes[parameter](value)
         collection = self._collection_name_of_element(element_type)
 
-        js = list(db[collection].find({"index": element_index, "net_id": net_id}))[0]
+        js = db[collection].find({"index": element_index, "net_id": net_id}).to_list(1)
         obj = json_to_object(js["object"])
         setattr(obj, parameter, value)
         db[collection].update_one(
@@ -2053,20 +2077,21 @@ class PandaHub:
             self.check_permission("write")
             db = self._get_project_database()
         if self.collection_is_timeseries(collection_name, project_id, global_database):
-            metadata = kwargs
-            if data_type is not None:
-                metadata["data_type"] = data_type
-            net_id = metadata.get('net_id', None)
-            if net_id is None:
-                net_ids = db["_networks"].distinct("_id")
-                if len(net_ids) == 1:
-                    net_id = net_ids[0]
-                else:
-                    raise ValueError(
-                        "No net_id was provided and multiple networks exist in the database. "
-                        "Please provide a net_id."
-                    )
-            metadata["_id"] = f"{net_id}_{metadata.get('element_type', None)}_{metadata.get('element_index', None)}_{data_type}"
+            # get metadata dictionary based on the input arguments
+            metadata = get_metadata_for_timeseries_collections(db, data_type=data_type, **kwargs)
+            _id =  metadata["_id"]
+
+            # delete overlapping timeseries already in the database
+            filter = {
+                "metadata._id": _id,
+                "timestamp": {
+                    "$gte": timeseries.index.min(),
+                    "$lte":  timeseries.index.max()
+                }
+            }
+            db.timeseries.delete_many(filter)
+
+            # create new timeseries documents
             if isinstance(timeseries, pd.Series):
                 documents = [
                     {"metadata": metadata, "timestamp": idx, "value": value}
@@ -2078,9 +2103,11 @@ class PandaHub:
                     for idx, row in timeseries.iterrows()
                 ]
             db[collection_name].insert_many(documents)
+
             if kwargs.get("return_id"):
-                return metadata["_id"]
+                return _id
             return None
+
         document = create_timeseries_document(
             timeseries=timeseries,
             data_type=data_type,
@@ -2345,11 +2372,9 @@ class PandaHub:
             self.check_permission("read")
             db = self._get_project_database()
         if self.collection_is_timeseries(collection_name, project_id, global_database):
-            meta_filter = {
-                "metadata." + key: value for key, value in filter_document.items()
-            }
+            metadata = get_metadata_for_timeseries_collections(db, **kwargs)
             pipeline = []
-            pipeline.append({"$match": meta_filter})
+            pipeline.append({"$match": {"metadata._id": metadata["_id"]}})
             pipeline.append({"$project": {"_id": 0, "metadata": 0}})
             timeseries = db[collection_name].aggregate_pandas_all(pipeline)
             if len(timeseries) == 0:
@@ -2417,7 +2442,7 @@ class PandaHub:
             if not include_metadata:
                 pipeline.append({"$project": {"timeseries_data": 1,
                                               "num_timestamps": 1}})
-        data = list(db[collection_name].aggregate(pipeline))
+        data = db[collection_name].aggregate(pipeline).to_list()
         if len(data) == 0:
             raise PandaHubError("no documents matching the provided filter found", 404)
         elif len(data) > 1:
@@ -2530,7 +2555,7 @@ class PandaHub:
                 pipeline.append({"$match": {"$and": match_filter}})
             projection = {"$project": {"timeseries_data": 0}}
             pipeline.append(projection)
-        metadata = list(db[collection_name].aggregate(pipeline))
+        metadata = db[collection_name].aggregate(pipeline).to_list()
         df_metadata = pd.DataFrame(metadata)
         if len(df_metadata):
             df_metadata.set_index("_id", inplace=True)
@@ -2995,15 +3020,8 @@ class PandaHub:
         self.check_permission("write")
         db = self._get_project_database()
         if self.collection_is_timeseries(collection_name):
-            meta_filter = {
-                "metadata.element_type": element_type,
-                "metadata.data_type": data_type,
-            }
-            if netname is not None:
-                meta_filter["metadata.netname"] = netname
-            if element_index is not None:
-                meta_filter["metadata.element_index"] = element_index
-            return db[collection_name].delete_many(meta_filter)
+            metadata = get_metadata_for_timeseries_collections(db, data_type, **kwargs)
+            return db[collection_name].delete_many({"metadata._id": metadata["_id"]})
         filter_document = {"element_type": element_type, "data_type": data_type}
         if netname is not None:
             filter_document["netname"] = netname
@@ -3062,8 +3080,11 @@ class PandaHub:
         del_res = db[collection_name].delete_many(match_filter)
         return del_res
 
-    def create_timeseries_collection(self, collection_name, overwrite=False):
-        db = self._get_project_database()
+    def create_timeseries_collection(self, collection_name, overwrite=False, project_id=None):
+        if project_id is None:
+            db = self._get_project_database()
+        else:
+            db = self.mongo_client[str(project_id)]
         collection_exists = collection_name in db.list_collection_names()
         if collection_exists:
             if overwrite:
@@ -3088,7 +3109,7 @@ class PandaHub:
         global_database=False,
     ):
         db = self._get_project_or_global_db(project_id, global_database)
-        collections = list(db.list_collections(filter={"name": collection_name}))
+        collections = db.list_collections(filter={"name": collection_name}).to_list()
         return len(collections) == 1 and collections[0]["type"] == "timeseries"
 
     def _get_project_or_global_db(self, project_id=None, global_database=False):
@@ -3194,6 +3215,7 @@ class PandaHub:
         msg = "_get_net_collections() has been made public - use get_net_collections() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning)
         return self.get_net_collections(db, with_areas)
+
 
 
 if __name__ == "__main__":
