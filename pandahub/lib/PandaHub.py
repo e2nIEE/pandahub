@@ -1020,13 +1020,6 @@ class PandaHub:
         elif not isinstance(add_edge_branches, list):
             raise ValueError("add_edge_branches must be a list or a boolean")
 
-        # Add elements for which the user has provided a filter function
-        for element, filter_func in additional_filters.items():
-            if element in ignore_elements:
-                continue
-            add_args["filter"] = filter_func(net)
-            self._add_element_from_collection(element_type=element, **add_args)
-
         branch_nodes = set()
         for branch_name, node_cols in zip(default_branches, default_node_cols):
             operator = "$or" if branch_name in add_edge_branches else "$and"
@@ -1072,6 +1065,13 @@ class PandaHub:
         # add all node elements that are connected to buses within the network
         for element in node_elements:
             add_args["filter"] = {node_name: {"$in": nodes}}
+            self._add_element_from_collection(element_type=element, **add_args)
+
+        # Add elements for which the user has provided a filter function
+        for element, filter_func in additional_filters.items():
+            if element in ignore_elements:
+                continue
+            add_args["filter"] = filter_func(net)
             self._add_element_from_collection(element_type=element, **add_args)
 
         # add all other collections
