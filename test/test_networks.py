@@ -90,20 +90,20 @@ def test_load_subnetwork(ph):
         net = nw_pp.mv_oberrhein()
         ph.write_network_to_db(net, name)
 
-    subnet = ph.get_subnet_by_name(name, bus_filter={"vn_kv": 110})
+    subnet = ph.get_subnet_by_name(name, node_filter={"vn_kv": 110})
     expected_sizes = [("bus", 4), ("line", 0), ("trafo", 2), ("ext_grid", 2)]
 
     for element, size in expected_sizes:
         assert len(subnet[element]) == size
         assert len(subnet["res_" + element]) == size
 
-    subnet = ph.get_subnet_by_name(name, bus_filter={"vn_kv": 110},
+    subnet = ph.get_subnet_by_name(name, node_filter={"vn_kv": 110},
                                    include_results=False)
     for element, size in expected_sizes:
         assert len(subnet[element]) == size
         assert len(subnet["res_" + element]) == 0
 
-    subnet = ph.get_subnet_by_name(name, bus_filter={"vn_kv": 110},
+    subnet = ph.get_subnet_by_name(name, node_filter={"vn_kv": 110},
                                    add_edge_branches=False)
     expected_sizes = [("bus", 2), ("line", 0), ("trafo", 0), ("ext_grid", 2)]
 
