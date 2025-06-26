@@ -913,7 +913,7 @@ class PandaHub:
                 list[str] | None,
                 bool,
                 dict | None,
-                Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet]] | None
+                Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict] | None
             ]] | None = None,
         *,
         return_edge_branch_nodes: bool = False
