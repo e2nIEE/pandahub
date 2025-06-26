@@ -878,8 +878,8 @@ class PandaHub:
         variant=None,
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
-        ] = {},
-    ) -> pp.auxiliary.pandapowerNet | pps.pandapipesNet:
+        ] | None = None,
+    ) -> (pp.pandapowerNet | pps.pandapipesNet) | (tuple[pp.pandapowerNet | pps.pandapipesNet, list] | None):
         self.check_permission("read")
         db = self._get_project_database()
         net_id = self._get_net_id_from_name(name, db)
@@ -910,7 +910,7 @@ class PandaHub:
         ] | None = None,
         additional_edge_filters: dict[
             str, tuple[
-                list[str] | None,
+                list[str] | tuple[str, ...] | None,
                 bool,
                 dict | None,
                 Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict] | None
@@ -929,77 +929,23 @@ class PandaHub:
         if additional_edge_filters is None:
             additional_edge_filters = {}
 
-        def switch_filter(bus_filter):
-            return {
-                "$and": [
-                    {"et": "b"},
-                    bus_filter,
-                ]
-            }
-
-        def get_nodes_from_element(ntw, element, nd_cols):
-            if element not in ntw:
-                return [[] for _ in nd_cols]
-            return [ntw[element][ndc].tolist() for ndc in nd_cols]
-
-        def get_nodes_from_switch(ntw, _, _nd_cols):
-            return [ntw.switch.bus.to_numpy(), ntw.switch.loc[ntw.switch.et == "b", "element"].to_numpy()]
-
+        filtered_elements = set(additional_filters.keys()) | set(additional_edge_filters.keys())
         if is_power:
             net = pp.create_empty_network()
-            node_name = "bus"
-            branch_tables = ["line", "trafo", "trafo3w", "switch"]
-            branch_node_cols = [
-                ("from_bus", "to_bus"),
-                ("hv_bus", "lv_bus"),
-                ("hv_bus", "lv_bus", "mv_bus"),
-                ("bus", "element")
-            ]
-            special_filters = {"switch": switch_filter}
-            get_nodes_func = {br: get_nodes_from_element for br in branch_tables}
-            get_nodes_func["switch"] = get_nodes_from_switch
-            # add node elements
-            node_elements = [
-                "load",
-                "asymmetric_load",
-                "sgen",
-                "asymmetric_sgen",
-                "gen",
-                "ext_grid",
-                "shunt",
-                "xward",
-                "ward",
-                "motor",
-                "storage",
-            ]
-            branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
-            all_elements = (
-                node_elements + branch_elements + ["bus"] + list(additional_filters.keys())
-            )
-            all_elements = list(set(all_elements) - set(ignore_elements))
+            data_func = get_subnet_filter_data_power
+            args = [filtered_elements]
         else:
             net = pps.create_empty_network()
-            node_name = "junction"
-            component_list = []
-            if "data" in meta and "component_list" in meta["data"]:
-                component_list = json.loads(
-                    meta["data"]["component_list"][11:], cls=io_pp.PPJSONDecoder,
-                    registry_class=FromSerializableRegistryPpipe
-                )
-            branch_tables = []
-            branch_node_cols = []
-            node_elements = []
-            all_elements = []
-            for c in component_list:
-                pps.add_new_component(net, c)
-                all_elements.append(c.table_name())
-                if issubclass(c, BranchComponent):
-                    branch_tables.append(c.table_name())
-                    branch_node_cols.append(c.from_to_node_cols())
-                if issubclass(c, NodeElementComponent):
-                    node_elements.append(c.table_name())
-            special_filters = dict()
-            get_nodes_func = {br: get_nodes_from_element for br in branch_tables}
+            data_func = get_subnet_filter_data_pipe
+            args = [net, filtered_elements, meta]
+        (
+            node_name,
+            branch_tables,
+            branch_node_cols,
+            special_filters,
+            get_nodes_func,
+            node_elements,
+        ) = data_func(*args)
 
         if db[self._collection_name_of_element(node_name)].find_one() is None:
             net["empty"] = True
@@ -1030,7 +976,7 @@ class PandaHub:
 
         for tbl, (node_cols, add_edge, filter_func, node_getter) in additional_edge_filters.items():
             branch_tables.append(tbl)
-            branch_node_cols.append(node_cols)
+            branch_node_cols.append(tuple(node_cols))
             if add_edge:
                 add_edge_branches.append(tbl)
             if filter_func is not None:
@@ -1058,18 +1004,7 @@ class PandaHub:
             nodes = net[node_name].index.tolist()
 
         if is_power:
-            add_args["filter"] = {
-                "$or": [
-                    {"$and": [{"et": "t"}, {"element": {"$in": net.trafo.index.tolist()}}]},
-                    {"$and": [{"et": "l"}, {"element": {"$in": net.line.index.tolist()}}]},
-                    {
-                        "$and": [
-                            {"et": "t3"},
-                            {"element": {"$in": net.trafo3w.index.tolist()}},
-                        ]
-                    },
-                ]
-            }
+            add_args["filter"] = filter_switch_for_element(net)
             self._add_element_from_collection(element_type="switch", **add_args)
 
         # add all node elements that are connected to buses within the network
@@ -1089,15 +1024,10 @@ class PandaHub:
         for collection in collection_names:
             table_name = self._element_name_of_collection(collection)
             # skip all element tables that we have already added
-            if (
-                table_name in all_elements
-                or table_name in ignore_elements
-                or table_name in additional_filters.keys()
-                or table_name in additional_edge_filters.keys()
-            ):
+            if table_name in filtered_elements or table_name in ignore_elements:
                 continue
             # for tables that share an index with an element (e.g. load->res_load) load only relevant entries
-            for element in all_elements:
+            for element in filtered_elements:
                 if table_name.startswith(element + "_") or table_name.startswith(
                     "net_res_" + element
                 ):
@@ -3208,6 +3138,111 @@ class PandaHub:
         msg = "_get_net_collections() has been made public - use get_net_collections() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning)
         return self.get_net_collections(db, with_areas)
+
+
+def switch_filter(bus_filter):
+    return {
+        "$and": [
+            {"et": "b"},
+            bus_filter,
+        ]
+    }
+
+
+def filter_switch_for_element(net):
+    return {
+        "$or": [
+            {"$and": [{"et": "t"}, {"element": {"$in": net.trafo.index.tolist()}}]},
+            {"$and": [{"et": "l"}, {"element": {"$in": net.line.index.tolist()}}]},
+            {
+                "$and": [
+                    {"et": "t3"},
+                    {"element": {"$in": net.trafo3w.index.tolist()}},
+                ]
+            },
+        ]
+    }
+
+
+def get_nodes_from_element(ntw, element, nd_cols):
+    if element not in ntw:
+        return [[] for _ in nd_cols]
+    return [ntw[element][ndc].tolist() for ndc in nd_cols]
+
+
+def get_nodes_from_switch(ntw, _, _nd_cols):
+    return [ntw.switch.bus.to_numpy(), ntw.switch.loc[ntw.switch.et == "b", "element"].to_numpy()]
+
+
+def get_subnet_filter_data_power(filtered_elements):
+    node_name = "bus"
+    branch_tables = ["line", "trafo", "trafo3w", "switch"]
+    branch_node_cols = [
+        ("from_bus", "to_bus"),
+        ("hv_bus", "lv_bus"),
+        ("hv_bus", "lv_bus", "mv_bus"),
+        ("bus", "element"),
+    ]
+    special_filters = {"switch": switch_filter}
+    get_nodes_func = {br: get_nodes_from_element for br in branch_tables}
+    get_nodes_func["switch"] = get_nodes_from_switch
+    # add node elements
+    node_elements = [
+        "load",
+        "asymmetric_load",
+        "sgen",
+        "asymmetric_sgen",
+        "gen",
+        "ext_grid",
+        "shunt",
+        "xward",
+        "ward",
+        "motor",
+        "storage",
+    ]
+    branch_elements = ["trafo", "line", "trafo3w", "switch", "impedance"]
+    filtered_elements |= set(node_elements) | set(branch_elements) | {"bus"}
+    return (
+        node_name,
+        branch_tables,
+        branch_node_cols,
+        special_filters,
+        get_nodes_func,
+        node_elements,
+    )
+
+
+def get_subnet_filter_data_pipe(net, filtered_elements, metadata):
+    node_name = "junction"
+    component_list = []
+    if "data" in metadata and "component_list" in metadata["data"]:
+        component_list = json.loads(
+            metadata["data"]["component_list"][11:],
+            cls=io_pp.PPJSONDecoder,
+            registry_class=FromSerializableRegistryPpipe,
+        )
+    branch_tables = []
+    branch_node_cols = []
+    node_elements = []
+    for c in component_list:
+        pps.add_new_component(net, c)
+        filtered_elements.add(c.table_name())
+        if issubclass(c, BranchComponent):
+            branch_tables.append(c.table_name())
+            branch_node_cols.append(c.from_to_node_cols())
+        if issubclass(c, NodeElementComponent):
+            node_elements.append(c.table_name())
+    special_filters = dict()
+    get_nodes_func = {br: get_nodes_from_element for br in branch_tables}
+    return (
+        node_name,
+        branch_tables,
+        branch_node_cols,
+        special_filters,
+        get_nodes_func,
+        node_elements,
+    )
+
 
 
 if __name__ == "__main__":
