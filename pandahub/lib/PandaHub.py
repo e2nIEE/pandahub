@@ -908,7 +908,7 @@ class PandaHub:
         additional_filters: dict[
             str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
         ] | None = None,
-        additional_branch_node_cols: dict[str, list[str]] | None = None,
+        additional_edge_filters: dict = None,
         *,
         return_edge_branch_nodes: bool = False
     ) -> (pp.pandapowerNet | pps.pandapipesNet) | (tuple[pp.pandapowerNet | pps.pandapipesNet, list]):
@@ -920,8 +920,8 @@ class PandaHub:
 
         if additional_filters is None:
             additional_filters = {}
-        if additional_branch_node_cols is None:
-            additional_branch_node_cols = {}
+        if additional_edge_filters is None:
+            additional_edge_filters = {}
 
         def switch_filter(bus_filter):
             return {
@@ -932,7 +932,9 @@ class PandaHub:
             }
 
         def get_nodes_from_element(ntw, element, nd_cols):
-            return [ntw[element][ndc].to_numpy() for ndc in nd_cols]
+            if element not in ntw:
+                return [[] for _ in nd_cols]
+            return [ntw[element][ndc].tolist() for ndc in nd_cols]
 
         def get_nodes_from_switch(ntw, _, _nd_cols):
             return [ntw.switch.bus.to_numpy(), ntw.switch.loc[ntw.switch.et == "b", "element"].to_numpy()]
@@ -940,15 +942,15 @@ class PandaHub:
         if is_power:
             net = pp.create_empty_network()
             node_name = "bus"
-            default_branches = ["line", "trafo", "trafo3w", "switch"]
-            default_node_cols = [
+            branch_tables = ["line", "trafo", "trafo3w", "switch"]
+            branch_node_cols = [
                 ("from_bus", "to_bus"),
                 ("hv_bus", "lv_bus"),
                 ("hv_bus", "lv_bus", "mv_bus"),
                 ("bus", "element")
             ]
             special_filters = {"switch": switch_filter}
-            get_nodes_func = {br: get_nodes_from_element for br in default_branches}
+            get_nodes_func = {br: get_nodes_from_element for br in branch_tables}
             get_nodes_func["switch"] = get_nodes_from_switch
             # add node elements
             node_elements = [
@@ -978,20 +980,20 @@ class PandaHub:
                     meta["data"]["component_list"][11:], cls=io_pp.PPJSONDecoder,
                     registry_class=FromSerializableRegistryPpipe
                 )
-            default_branches = []
-            default_node_cols = []
+            branch_tables = []
+            branch_node_cols = []
             node_elements = []
             all_elements = []
             for c in component_list:
                 pps.add_new_component(net, c)
                 all_elements.append(c.table_name())
                 if issubclass(c, BranchComponent):
-                    default_branches.append(c.table_name())
-                    default_node_cols.append(c.from_to_node_cols())
+                    branch_tables.append(c.table_name())
+                    branch_node_cols.append(c.from_to_node_cols())
                 if issubclass(c, NodeElementComponent):
                     node_elements.append(c.table_name())
             special_filters = dict()
-            get_nodes_func = {br: get_nodes_from_element for br in default_branches}
+            get_nodes_func = {br: get_nodes_from_element for br in branch_tables}
 
         if db[self._collection_name_of_element(node_name)].find_one() is None:
             net["empty"] = True
@@ -1014,14 +1016,23 @@ class PandaHub:
 
         if isinstance(add_edge_branches, bool):
             if add_edge_branches:
-                add_edge_branches = default_branches
+                add_edge_branches = branch_tables
             else:
                 add_edge_branches = []
         elif not isinstance(add_edge_branches, list):
             raise ValueError("add_edge_branches must be a list or a boolean")
 
+        for tbl, (node_cols, add_edge, filter_func, node_getter) in additional_edge_filters.items():
+            branch_tables.append(tbl)
+            branch_node_cols.append(node_cols)
+            if add_edge:
+                add_edge_branches.append(tbl)
+            if filter_func is not None:
+                special_filters[tbl] = filter_func
+            get_nodes_func[tbl] = node_getter if node_getter is not None else get_nodes_from_element
+
         branch_nodes = set()
-        for branch_name, node_cols in zip(default_branches, default_node_cols):
+        for branch_name, node_cols in zip(branch_tables, branch_node_cols):
             operator = "$or" if branch_name in add_edge_branches else "$and"
             # Add branch elements connected to at least one node
             filter_ = {operator: [{b: {"$in": nodes}} for b in node_cols]}
@@ -1031,13 +1042,6 @@ class PandaHub:
             self._add_element_from_collection(element_type=branch_name, **add_args)
             get_nd_func = get_nodes_func[branch_name]
             branch_nodes.update(set(chain.from_iterable(get_nd_func(net, branch_name, node_cols))))
-
-        for branch_name, node_cols in additional_branch_node_cols.items():
-            if branch_name not in net:
-                continue
-            branch_nodes.update(
-                set(chain.from_iterable(get_nodes_from_element(net, branch_name, node_cols)))
-            )
 
         branch_nodes_outside = []
         if branch_nodes:
@@ -1080,7 +1084,7 @@ class PandaHub:
             table_name = self._element_name_of_collection(collection)
             # skip all element tables that we have already added
             if (table_name in all_elements or table_name in ignore_elements
-                or table_name in additional_filters.keys()):
+                or table_name in additional_filters.keys() or table_name in additional_edge_filters.keys()):
                 continue
             # for tables that share an index with an element (e.g. load->res_load) load only relevant entries
             for element in all_elements:
