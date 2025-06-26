@@ -44,7 +44,7 @@ jobs:
       - name: Build and Upload to TestPyPI
         if: inputs.upload_server == 'testpypi'
         run: |
-          python3 setup.py sdist --formats=zip
+          python3 setup.py sdist --formats=zip bdist_wheel
           twine check dist/* --strict
           python3 -m twine upload dist/* --verbose
         env:
@@ -56,7 +56,7 @@ jobs:
       - name: Build and Upload to PyPI
         if: inputs.upload_server == 'pypi'
         run: |
-          python3 setup.py sdist --formats=zip
+          python3 setup.py sdist --formats=zip bdist_wheel
           twine check dist/* --strict
           python3 -m twine upload dist/* --verbose
         env:
