@@ -1300,7 +1300,7 @@ class PandaHub:
         dtypes = self._datatypes.get(element_type)
 
         variant_filter = self.get_variant_filter(variant)
-        documents = self.projects_collection[collection].find({"index": element_index, "net_id": net_id, **variant_filter}).to_list()
+        documents = self.project_db[collection].find({"index": element_index, "net_id": net_id, **variant_filter}).to_list()
         if len(documents) == 1:
             document = documents[0]
         else:
