@@ -61,3 +61,6 @@ all = [
 
 [tool.setuptools.packages]
 find = {}
+
+[tool.ruff]
+line-length = 120

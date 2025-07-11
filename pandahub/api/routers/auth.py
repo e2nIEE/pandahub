@@ -2,13 +2,13 @@ from fastapi import APIRouter
 
 from pandahub.api.internal.users import auth_backend, fastapi_users
 from pandahub.api.internal.schemas import UserCreate, UserRead
-from pandahub.api.internal.settings import REGISTRATION_ENABLED
+from .. import pandahub_app_settings as settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 router.include_router(fastapi_users.get_auth_router(auth_backend))
 
-if REGISTRATION_ENABLED:
+if settings.registration_enabled:
     router.include_router(
         fastapi_users.get_register_router(UserRead, UserCreate),
     )

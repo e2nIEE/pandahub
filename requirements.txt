@@ -5,6 +5,7 @@ pandapower>=3.0
 pandapipes>=0.7.0
 pymongo>=4.9
 pydantic
+pydantic-settings
 simplejson
 requests
 python-dotenv

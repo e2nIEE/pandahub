@@ -26,9 +26,8 @@ from pymongo import MongoClient, ReplaceOne
 from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
+from . import pandahub_settings as settings
 
-from pandahub.api.internal.settings import MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD, MONGODB_GLOBAL_DATABASE_URL, \
-    MONGODB_GLOBAL_DATABASE_USER, MONGODB_GLOBAL_DATABASE_PASSWORD, CREATE_INDEXES_WITH_PROJECT, PANDAHUB_GLOBAL_DB_CLIENT
 from pandahub.lib.database_toolbox import (
     create_timeseries_document,
     convert_timeseries_to_subdocuments,
@@ -106,9 +105,9 @@ class PandaHub:
 
     def __init__(
         self,
-        connection_url=MONGODB_URL,
-        connection_user=MONGODB_USER,
-        connection_password=MONGODB_PASSWORD,
+        connection_url=settings.mongodb_url,
+        connection_user=settings.mongodb_user,
+        connection_password=settings.mongodb_password,
         check_server_available=False,
         user_id=None,
         datatypes=DATATYPES,
@@ -192,7 +191,7 @@ class PandaHub:
 
     def close(self, force=False):
         """Close the database connection."""
-        if PANDAHUB_GLOBAL_DB_CLIENT and not force:
+        if settings.pandahub_global_db_client and not force:
             msg = "Closing the global MongoClient instance will break all subsequent database connections. If this is intentional, use force=True"
             raise PandaHubError(msg)
         self.mongo_client.close()
@@ -288,7 +287,7 @@ class PandaHub:
         if self.user_id is not None:
             project_data["users"] = {self.user_id: "owner"}
         self.mongo_client["user_management"]["projects"].insert_one(project_data)
-        if CREATE_INDEXES_WITH_PROJECT:
+        if settings.create_indexes_with_project:
             self._create_mongodb_indexes(project_data["_id"])
         if activate:
             self.set_active_project_by_id(project_data["_id"])
@@ -507,19 +506,19 @@ class PandaHub:
         return self.get_project_database()[collection_name]
 
 
-    def _get_global_database(self) -> MongoClient:
+    def _get_global_database(self) -> Database:
         if (
             self.mongo_client_global_db is None
-            and MONGODB_GLOBAL_DATABASE_URL is not None
+            and settings.mongodb_global_database_url is not None
         ):
             mongo_client_args = {
-                "host": MONGODB_GLOBAL_DATABASE_URL,
+                "host": settings.mongodb_global_database_url,
                 "uuidRepresentation": "standard",
             }
-            if MONGODB_GLOBAL_DATABASE_USER:
+            if settings.mongodb_global_database_user:
                 mongo_client_args |= {
-                    "username": MONGODB_GLOBAL_DATABASE_USER,
-                    "password": MONGODB_GLOBAL_DATABASE_PASSWORD,
+                    "username": settings.mongodb_global_database_user,
+                    "password": settings.mongodb_global_database_password,
                 }
             self.mongo_client_global_db = MongoClient(**mongo_client_args)
         if self.mongo_client_global_db is None:
