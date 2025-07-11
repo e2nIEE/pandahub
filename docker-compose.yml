@@ -22,7 +22,6 @@ services:
     env_file:
         - .env
     environment:
-        - SECRET=devonly!
         - MONGODB_URL=${MONGODB_URL:-mongodb://db:27017}
         - PYTHONPYCACHEPREFIX=/pycache
         - PANDAHUB_GLOBAL_DB_CLIENT=${PANDAHUB_GLOBAL_DB_CLIENT:-true}
