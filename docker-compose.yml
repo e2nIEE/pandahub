@@ -8,8 +8,6 @@ services:
     restart: always
     volumes:
         - mongodb_pandahub:/data/db
-    networks:
-        - test
     ports:
         - "127.0.0.1:27017:27017"
 
@@ -18,22 +16,23 @@ services:
     build:
         context: .
         dockerfile: Dockerfile
-        target: dev
+    command: ["fastapi", "dev", "--host", "0.0.0.0", "pandahub/api/main.py"]
     env_file:
         - .env
     environment:
         - MONGODB_URL=${MONGODB_URL:-mongodb://db:27017}
         - PYTHONPYCACHEPREFIX=/pycache
-        - PANDAHUB_GLOBAL_DB_CLIENT=${PANDAHUB_GLOBAL_DB_CLIENT:-true}
     ports:
-        - "127.0.0.1:8002:8002"
+        - "127.0.0.1:8002:8000"
     volumes:
-        - ./:/src/
+        -   type: bind
+            source: pandahub
+            target: /app/pandahub
         - pycache:/pycache
-    networks:
-        - test
     depends_on:
         - db
+
 volumes:
   pycache:
   mongodb_pandahub:
+
