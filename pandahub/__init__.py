@@ -2,7 +2,6 @@ import importlib.metadata
 
 __version__ = importlib.metadata.version("pandahub")
 
-from lib.settings import PandaHubSettings
-from pandahub.lib.PandaHub import PandaHub, PandaHubError #noqa: F401
+from pandahub.lib.PandaHub import PandaHub, PandaHubError
 
-pandahub_settings = PandaHubSettings()
+__all__ = [PandaHub, PandaHubError]

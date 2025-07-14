@@ -5,7 +5,7 @@ from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
 from pymongo.synchronous.database import Database
 
-from . import pandahub_settings as settings
+from pandahub.lib.settings import pandahub_settings as settings
 
 
 def _get_mongo_client(

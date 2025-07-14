@@ -26,7 +26,6 @@ from pymongo import MongoClient, ReplaceOne
 from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
-from . import pandahub_settings as settings
 
 from pandahub.lib.database_toolbox import (
     create_timeseries_document,
@@ -44,6 +43,7 @@ from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 
 logger = logging.getLogger(__name__)
 from pandahub import __version__
+from pandahub.lib.settings import pandahub_settings as settings
 from pandahub.lib.datatypes import DATATYPES
 from packaging import version
 
