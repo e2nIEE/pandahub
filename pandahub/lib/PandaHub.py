@@ -6,11 +6,11 @@ import time
 import warnings
 from collections.abc import Callable
 from functools import reduce
-from inspect import signature, _empty
+from inspect import _empty, signature
 from itertools import chain
 from operator import getitem
 from types import NoneType
-from typing import Optional, Union, TypeVar
+from typing import Optional, TypeVar, Union
 from uuid import UUID
 
 import numpy as np
@@ -20,35 +20,35 @@ import pandapower.io_utils as io_pp
 import pandas as pd
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
-from pandapipes import from_json_string as from_json_pps, FromSerializableRegistryPpipe, BranchComponent
+from pandapipes import BranchComponent, FromSerializableRegistryPpipe
+from pandapipes import from_json_string as from_json_pps
 from pandapipes.component_models import NodeElementComponent
 from pymongo import MongoClient, ReplaceOne
 from pymongo.collection import Collection
 from pymongo.database import Database
-from pymongo.errors import ServerSelectionTimeoutError, DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, ServerSelectionTimeoutError
 
+from pandahub.lib import get_mongo_client
 from pandahub.lib.database_toolbox import (
-    create_timeseries_document,
-    convert_timeseries_to_subdocuments,
     convert_element_to_dict,
+    convert_geojsons,
+    convert_timeseries_to_subdocuments,
+    create_timeseries_document,
+    decompress_timeseries_data,
+    get_dtypes,
+    get_metadata_for_timeseries_collections,
     json_to_object,
     serialize_object_data,
-    get_dtypes,
-    decompress_timeseries_data,
-    convert_geojsons,
-    get_metadata_for_timeseries_collections,
 )
-from pandahub.lib import get_mongo_client
 from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 
 logger = logging.getLogger(__name__)
-from pandahub import __version__
-from pandahub.lib.settings import pandahub_settings as settings
-from pandahub.lib.datatypes import DATATYPES
+import pymongoarrow.monkey
 from packaging import version
 
-
-import pymongoarrow.monkey
+from pandahub import __version__
+from pandahub.lib.datatypes import DATATYPES
+from pandahub.lib.settings import pandahub_settings as ph_settings
 
 pymongoarrow.monkey.patch_all()
 
@@ -105,9 +105,9 @@ class PandaHub:
 
     def __init__(
         self,
-        connection_url=settings.mongodb_url,
-        connection_user=settings.mongodb_user,
-        connection_password=settings.mongodb_password,
+        connection_url=ph_settings.mongodb_url,
+        connection_user=ph_settings.mongodb_user,
+        connection_password=ph_settings.mongodb_password,
         check_server_available=False,
         user_id=None,
         datatypes=DATATYPES,
@@ -191,7 +191,7 @@ class PandaHub:
 
     def close(self, force=False):
         """Close the database connection."""
-        if settings.pandahub_global_db_client and not force:
+        if ph_settings.pandahub_global_db_client and not force:
             msg = "Closing the global MongoClient instance will break all subsequent database connections. If this is intentional, use force=True"
             raise PandaHubError(msg)
         self.mongo_client.close()
@@ -287,7 +287,7 @@ class PandaHub:
         if self.user_id is not None:
             project_data["users"] = {self.user_id: "owner"}
         self.mongo_client["user_management"]["projects"].insert_one(project_data)
-        if settings.create_indexes_with_project:
+        if ph_settings.create_indexes_with_project:
             self._create_mongodb_indexes(project_data["_id"])
         if activate:
             self.set_active_project_by_id(project_data["_id"])
@@ -509,16 +509,16 @@ class PandaHub:
     def _get_global_database(self) -> Database:
         if (
             self.mongo_client_global_db is None
-            and settings.mongodb_global_database_url is not None
+            and ph_settings.mongodb_global_database_url is not None
         ):
             mongo_client_args = {
-                "host": settings.mongodb_global_database_url,
+                "host": ph_settings.mongodb_global_database_url,
                 "uuidRepresentation": "standard",
             }
-            if settings.mongodb_global_database_user:
+            if ph_settings.mongodb_global_database_user:
                 mongo_client_args |= {
-                    "username": settings.mongodb_global_database_user,
-                    "password": settings.mongodb_global_database_password,
+                    "username": ph_settings.mongodb_global_database_user,
+                    "password": ph_settings.mongodb_global_database_password,
                 }
             self.mongo_client_global_db = MongoClient(**mongo_client_args)
         if self.mongo_client_global_db is None:
