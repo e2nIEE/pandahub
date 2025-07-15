@@ -9,12 +9,12 @@ from fastapi_users_db_beanie.access_token import (
     BeanieBaseAccessToken,
 )
 
-from .. import pandahub_app_settings as settings
+from .. import pandahub_app_settings as ph_settings
 from pydantic import Field
 
-mongo_client_args = {"host": settings.mongodb_url, "uuidRepresentation": "standard", "connect": False}
-if settings.mongodb_user:
-    mongo_client_args |= {"username": settings.mongodb_user, "password": settings.mongodb_password}
+mongo_client_args = {"host": ph_settings.mongodb_url, "uuidRepresentation": "standard", "connect": False}
+if ph_settings.mongodb_user:
+    mongo_client_args |= {"username": ph_settings.mongodb_user, "password": ph_settings.mongodb_password}
 
 client = motor.motor_asyncio.AsyncIOMotorClient(**mongo_client_args)
 client.get_io_loop = asyncio.get_event_loop
@@ -22,7 +22,7 @@ db = client["user_management"]
 
 class User(BeanieBaseUser, Document):
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
-    is_active: bool = not settings.registration_admin_approval
+    is_active: bool = not ph_settings.registration_admin_approval
     class Settings(BeanieBaseUser.Settings):
         name = "users"
 
