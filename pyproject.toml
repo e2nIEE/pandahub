@@ -16,7 +16,6 @@ authors = [
     { name = "Joschka Thurner", email = "joschka.thurner@retoflow.de" },
     { name = "Alexander Scheidler", email = "alexander.scheidler@iee.fraunhofer.de" },
 ]
-
 license = { file = "LICENSE" }
 readme = "README.md"
 classifiers = [
@@ -36,9 +35,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12"
 ]
-keywords = [
-    "network", "analysis", "optimization", "automation", "grid", "energy", "engineering", "simulation",
-]
+keywords = ["network", "analysis", "optimization", "automation", "grid", "energy", "engineering", "simulation"]
 requires-python = ">=3.9"
 dependencies = [
     "uvicorn>=0.24.0",
@@ -55,7 +52,8 @@ dependencies = [
 dynamic = ["version"]
 
 [project.optional-dependencies]
-api = ["fastapi[standard-no-fastapi-cloud-cli]>=0.104.0", "fastapi-users[beanie]>=12.0"]
+rest-api = ["fastapi[standard-no-fastapi-cloud-cli]>=0.104.0", "fastapi-users[beanie]>=12.0"]
+test = ["pytest", "pytest-xdist", "simbench", "line_profiler"]
 
 [project.urls]
 Homepage = "https://github.com/e2nIEE/pandahub"
