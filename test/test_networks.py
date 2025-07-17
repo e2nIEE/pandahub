@@ -6,7 +6,7 @@ import pandapower as pp
 import pandapower.networks as nw_pp
 from pandahub import PandaHubError
 from pandapipes.toolbox import nets_equal
-from pandahub.api.internal import settings
+from api import settings
 
 
 def test_additional_res_tables(ph):

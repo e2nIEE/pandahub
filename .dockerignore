@@ -1,0 +1,6 @@
+*
+!/pyproject.toml
+!/uv.lock
+!/pandahub
+!/README.md
+!/LICENSE

@@ -6,7 +6,7 @@ import pytest
 import datetime
 import pandapower.networks as nw
 import simbench as sb
-from pandahub.api.internal import settings
+from api import settings
 
 code = "1-HV-urban--0--sw"
 project = "pytest"

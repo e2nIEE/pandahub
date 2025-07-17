@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from pandahub.lib.PandaHub import PandaHubError
 from pandahub.api.routers import net, projects, timeseries, users, auth, variants
 from pandahub.api.internal.db import User, db, AccessToken
-from pandahub.api.internal import settings
+from . import pandahub_app_settings as ph_settings
 from beanie import init_beanie
 
 @asynccontextmanager
@@ -28,7 +28,7 @@ origins = [
     "http://localhost:8080",
 ]
 
-if settings.DEBUG:
+if ph_settings.debug:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -54,7 +54,7 @@ async def pandahub_exception_handler(request: Request, exc: PandaHubError):
 
 @app.get("/")
 async def ready():
-    if settings.DEBUG:
+    if ph_settings.debug:
         import os
         return os.environ
     return "Hello World!"
@@ -62,8 +62,8 @@ async def ready():
 
 if __name__ == "__main__":
     uvicorn.run("pandahub.api.main:app",
-                host=settings.PANDAHUB_SERVER_URL,
-                port=settings.PANDAHUB_SERVER_PORT,
+                host=ph_settings.pandahub_server_url,
+                port=ph_settings.pandahub_server_port,
                 log_level="info",
                 reload=True,
-                workers=settings.WORKERS)
+                workers=ph_settings.workers)

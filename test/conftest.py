@@ -1,6 +1,7 @@
 import pytest
 from pandahub import PandaHub
-from pandahub.api.internal import settings
+from api import settings
+
 
 @pytest.fixture(scope="session")
 def ph():
