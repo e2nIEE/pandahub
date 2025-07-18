@@ -8,6 +8,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-install-project --no-dev
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --extra api
+    uv sync --locked --no-dev --extra rest-api
 ENV PATH="/app/.venv/bin:$PATH"
 CMD ["fastapi", "run", "pandahub/api/main.py"]

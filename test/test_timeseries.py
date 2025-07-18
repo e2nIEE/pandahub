@@ -6,7 +6,6 @@ import pytest
 import datetime
 import pandapower.networks as nw
 import simbench as sb
-from api import settings
 
 code = "1-HV-urban--0--sw"
 project = "pytest"
@@ -259,7 +258,7 @@ def test_bulk_write_with_meta(ph):
 if __name__ == '__main__':
     from pandahub import PandaHub
 
-    ph = PandaHub(connection_url=settings.MONGODB_URL)
+    ph = PandaHub()
 
     project_name = "pytest"
 
