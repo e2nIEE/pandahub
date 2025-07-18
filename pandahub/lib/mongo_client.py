@@ -5,11 +5,14 @@ from pymongo import MongoClient
 from pymongo.synchronous.collection import Collection
 from pymongo.synchronous.database import Database
 
-from pandahub.api.internal.settings import PANDAHUB_GLOBAL_DB_CLIENT, MONGODB_URL, MONGODB_USER, MONGODB_PASSWORD
+from pandahub.lib.settings import pandahub_settings as settings
 
 
-def _get_mongo_client(connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER,
-                     connection_password: str = MONGODB_PASSWORD) -> MongoClient:
+def _get_mongo_client(
+    connection_url: str = settings.mongodb_url,
+    connection_user: str = settings.mongodb_user,
+    connection_password: str = settings.mongodb_password,
+) -> MongoClient:
     mongo_client_args = {
         "host": connection_url,
         "uuidRepresentation": "standard",
@@ -22,8 +25,9 @@ def _get_mongo_client(connection_url: str = MONGODB_URL, connection_user: str = 
         }
     return MongoClient(**mongo_client_args)
 
-if PANDAHUB_GLOBAL_DB_CLIENT:
-    _global_mongo_client = _get_mongo_client(connection_url=MONGODB_URL, connection_user = MONGODB_USER, connection_password = MONGODB_PASSWORD)
+if settings.pandahub_global_db_client:
+    _global_mongo_client = _get_mongo_client(connection_url=settings.mongodb_url, connection_user = settings.mongodb_user,
+                                             connection_password = settings.mongodb_password)
 else:
     _global_mongo_client = None
 
@@ -40,8 +44,13 @@ def get_mongo_client(database: str, collection: None=None,
 def get_mongo_client(database: str, collection: str,
                      connection_url: str = ..., connection_user: str = ..., connection_password: str = ...) -> Collection: ...
 
-def get_mongo_client(database: str | None = None, collection: str | None = None, connection_url: str = MONGODB_URL, connection_user: str = MONGODB_USER,
-                     connection_password: str = MONGODB_PASSWORD) -> MongoClient | Database | Collection:
+def get_mongo_client(
+    database: str | None = None,
+    collection: str | None = None,
+    connection_url: str = settings.mongodb_url,
+    connection_user: str = settings.mongodb_user,
+    connection_password: str = settings.mongodb_password,
+) -> MongoClient | Database | Collection:
     if collection is not None and database is None:
         raise ValueError("Must specify database to access a collection!")
     if _global_mongo_client is None:
@@ -52,8 +61,13 @@ def get_mongo_client(database: str | None = None, collection: str | None = None,
 
 
 @contextmanager
-def mongo_client(database: str | None = None, collection: str | None = None, connection_url: str = MONGODB_URL,
-                 connection_user: str = MONGODB_USER, connection_password: str = MONGODB_PASSWORD) -> Generator[MongoClient | Database | Collection, None, None]:
+def mongo_client(
+    database: str | None = None,
+    collection: str | None = None,
+    connection_url: str = settings.mongodb_url,
+    connection_user: str = settings.mongodb_user,
+    connection_password: str = settings.mongodb_password,
+) -> Generator[MongoClient | Database | Collection, None, None]:
     """Contextmanager for pymongo MongoClient / Database / Collection with close after use.
 
     Parameters

@@ -1,11 +1,14 @@
 [build-system]
-requires = ["build", "wheel", "setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "pandahub/__init__.py"
 
 [project]
 name = "pandahub"
-version = "0.4.4"  # File format version '__format_version__' is tracked in __init__.py
-authors=[
+description = "Data hub for pandapower and pandapipes networks based on MongoDB"
+authors = [
     { name = "Jan Ulffers", email = "jan.ulffers@iee.fraunhofer.de" },
     { name = "Leon Thurner", email = "leon.thurner@retoflow.de" },
     { name = "Jannis Kupka", email = "jannis.kupka@retoflow.de" },
@@ -13,11 +16,8 @@ authors=[
     { name = "Joschka Thurner", email = "joschka.thurner@retoflow.de" },
     { name = "Alexander Scheidler", email = "alexander.scheidler@iee.fraunhofer.de" },
 ]
-description = "Data hub for pandapower and pandapipes networks based on MongoDB"
-readme = "README.md"
 license = { file = "LICENSE" }
-dynamic = ["dependencies"]
-requires-python = ">=3.9"
+readme = "README.md"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
@@ -35,9 +35,25 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12"
 ]
-keywords = [
-    "network", "analysis", "optimization", "automation", "grid", "energy", "engineering", "simulation",
+keywords = ["network", "analysis", "optimization", "automation", "grid", "energy", "engineering", "simulation"]
+requires-python = ">=3.9"
+dependencies = [
+    "uvicorn>=0.24.0",
+    "pandapower>=3.0",
+    "pandapipes>=0.7.0",
+    "pymongo>=4.9",
+    "pydantic",
+    "pydantic-settings",
+    "simplejson",
+    "requests",
+    "pymongoarrow",
+    "blosc",
 ]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+rest-api = ["fastapi[standard-no-fastapi-cloud-cli]>=0.104.0", "fastapi-users[beanie]>=12.0"]
+test = ["pytest", "pytest-xdist", "simbench", "line_profiler"]
 
 [project.urls]
 Homepage = "https://github.com/e2nIEE/pandahub"
@@ -48,16 +64,5 @@ Issues = "https://github.com/e2nIEE/pandahub/issues"
 Download = "https://pypi.org/project/pandahub/#files"
 Changelog = "https://github.com/e2nIEE/pandahub/blob/develop/CHANGELOG.md"
 
-[tool.setuptools.dynamic]
-dependencies = { file = ["requirements.txt"] }
-
-[project.optional-dependencies]
-docs = ["numpydoc", "sphinx", "sphinx_rtd_theme", "sphinxcontrib.bibtex", "sphinx-pyproject"]
-test = ["pytest", "pytest-xdist", "nbmake", "simbench", "line_profiler"]
-all = [
-    "numpydoc", "sphinx", "sphinx_rtd_theme", "sphinxcontrib.bibtex", "sphinx-pyproject",
-    "pytest", "pytest-xdist", "nbmake", "simbench", "line_profiler",
-]
-
-[tool.setuptools.packages]
-find = {}
+[tool.ruff]
+line-length = 120

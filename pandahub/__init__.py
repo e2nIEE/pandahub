@@ -1,5 +1,5 @@
-import importlib.metadata
-
-__version__ = importlib.metadata.version("pandahub")
+__version__ = "0.4.4"
 
 from pandahub.lib.PandaHub import PandaHub, PandaHubError
+
+__all__ = [PandaHub, PandaHubError]

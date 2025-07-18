@@ -1,7 +1,7 @@
 import pandapower.networks as nw
 import pandahub
 import pandapower as pp
-from pandahub.api.internal import settings
+from api import settings
 from pandahub.lib.database_toolbox import convert_dataframes_to_dicts
 from pymongo import DESCENDING
 from packaging import version

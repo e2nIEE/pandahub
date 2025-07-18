@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi_users import schemas
-from pandahub.api.internal.settings import REGISTRATION_ADMIN_APPROVAL
+from .. import pandahub_app_settings as ph_settings
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
@@ -9,7 +9,7 @@ class UserRead(schemas.BaseUser[uuid.UUID]):
 
 
 class UserCreate(schemas.BaseUserCreate):
-    is_active: bool = not REGISTRATION_ADMIN_APPROVAL
+    is_active: bool = not ph_settings.registration_admin_approval
 
 
 class UserUpdate(schemas.BaseUserUpdate):

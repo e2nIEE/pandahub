@@ -109,5 +109,7 @@ ENV/
 
 # Credentials
 settings.py
+!pandahub/api/settings.py
+!pandahub/lib/settings.py
 
 !pandahub/lib

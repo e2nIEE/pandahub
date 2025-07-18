@@ -1,18 +1,13 @@
-# dev stage
-FROM python:3.11 AS dev
-ENV PYTHONUNBUFFERED=1
-ENV PATH="/opt/venv/bin:$PATH"
-WORKDIR /src
-COPY requirements.txt .
-RUN python -m venv /opt/venv && \
-    python -m pip install -r requirements.txt
-CMD ["python",  "-m", "pandahub.api.main"]
-
-# production stage
-FROM python:3.11-slim AS production-stage
-ENV PATH="/opt/venv/bin:$PATH"
-WORKDIR /src
-# copy files from build stage
-COPY --from=dev /opt/venv /opt/venv
-COPY . .
-CMD ["uvicorn", "--host", "127.0.0.1", "--port", "8080", "pandahub.api.main:app"]
+FROM python:3.12-slim
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PANDAHUB_GLOBAL_DB_CLIENT="true" PATH="/app/.venv/bin:$PATH"
+COPY --from=ghcr.io/astral-sh/uv:0.7.15 /uv /uvx /bin/
+WORKDIR /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project --no-dev
+COPY . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --extra api
+ENV PATH="/app/.venv/bin:$PATH"
+CMD ["fastapi", "run", "pandahub/api/main.py"]
