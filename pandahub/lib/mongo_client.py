@@ -15,8 +15,7 @@ def _get_mongo_client(
 ) -> MongoClient:
     mongo_client_args = {
         "host": connection_url,
-        "uuidRepresentation": "standard",
-        "connect": False,
+        "uuidRepresentation": "standard"
     }
     if connection_user:
         mongo_client_args |= {
