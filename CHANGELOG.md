@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.5.0
+
+🛠 Improvements
+* make api-dependencies optional, refactor settings, switch to uv + hatch (https://github.com/e2nIEE/pandahub/pull/101)
+
+🐛 Bug Fixes
+* server_is_available crashing (https://github.com/e2nIEE/pandahub/pull/103)
+* add mongodb indexes for missing elements (https://github.com/e2nIEE/pandahub/pull/102)
+
+🏗 Chore
+* remove user verification and password reset (https://github.com/e2nIEE/pandahub/pull/99)
+
 ## [0.4.0]
     - IMPROVED: pandapower 3.0 support
 

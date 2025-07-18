@@ -3,17 +3,47 @@
 [![pandahub](https://img.shields.io/pypi/v/pandahub?label=pypi%20package&color=green)](https://pypi.org/project/pandahub/) [![pandahub](https://img.shields.io/pypi/pyversions/pandahub.svg)](https://pypi.org/project/pandahub/) [![pandahub](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://github.com/e2nIEE/pandahub/blob/master/LICENSE)
 
 pandahub is a data hub for pandapower and pandapipes networks based on MongoDB. It allows you to store pandapower and
-pandapipes networks as well as timeseries in a MongoDB. pandahub allows you to access the database directly through the PandaHub class,
-but also provides a REST-API based on FastAPI. Access through the API is managed with a user management implementation based on FastAPI Users.
+pandapipes networks as well as timeseries in a MongoDB. pandahub allows you to access the database directly through the
+PandaHub class, but also provides a REST-API based on FastAPI including authentication (implemented with FastAPI Users).
 
-## Development
-`docker compose up -d` runs a mongodb container alongside a pandahub api instance with live reload available
-at http://localhost:8002. To connect to an existing database instead, set `MONGODB_URL` to the connection string through an environment variable / in you `.env` file.
+## PandaHub example
+Run `uv sync` and bring up a local mongodb instance with `docker compose up db -d`.
+
+Save pandapower's `mv_oberrhein` network to the database:
+```pycon
+>>> net = pp.networks.mv_oberrhein()
+>>> ph = PandaHub()
+>>> project_data = ph.create_project("MV Oberrhein Example")
+>>> net_data = ph.write_network_to_db(net, name="mv_oberrhein", net_id=0)
+```
+Close a switch in the database:
+```pycon
+>>> open_switch_idx = net.switch.query("closed==False").index.to_list()[0]
+>>> ph.set_net_value_in_db(net_id=0, element_type="switch", element_index=open_switch_idx,
+                           parameter="closed", value=True)
+
+```
+Retrieve the network from the database and confirm the switch is now closed:
+```pycon
+>>> net_from_db = ph.get_network(net_id=0)
+>>> net.switch.loc[open_switch_idx, "closed"]
+np.False_
+>>> net_from_db.switch.loc[open_switch_idx, "closed"]
+np.True_
+```
+
+## REST-api
+Run `uv sync --extra rest-api` to set up your venv with the required dependencies, then build the docker image and bring up a
+mongodb database + the rest-api:
+
+```console
+docker compose build
+docker compose up -d
+```
+This will run the example app in `pandahub/api/main.py` with live reload at http://localhost:8002.
+To connect to an existing database instead, set `MONGODB_URL` to the connection string through an environment variable or in you `.env` file.
 
 Swagger UI is available at http://localhost:8002/docs.
-
-If you develop on the library and do not need the fastapi app, `docker compose up db -d` starts only the mongodb
-container.
 
 ## MongoClient handling
 
