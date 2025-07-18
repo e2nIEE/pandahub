@@ -18,16 +18,19 @@ import pandapipes as pps
 import pandapower as pp
 import pandapower.io_utils as io_pp
 import pandas as pd
+import pymongoarrow.monkey
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
+from packaging import version
 from pandapipes import BranchComponent, FromSerializableRegistryPpipe
 from pandapipes import from_json_string as from_json_pps
 from pandapipes.component_models import NodeElementComponent
 from pymongo import MongoClient, ReplaceOne
 from pymongo.collection import Collection
 from pymongo.database import Database
-from pymongo.errors import DuplicateKeyError, ServerSelectionTimeoutError
+from pymongo.errors import ConnectionFailure, DuplicateKeyError, ServerSelectionTimeoutError
 
+from pandahub import __version__
 from pandahub.lib import get_mongo_client
 from pandahub.lib.database_toolbox import (
     convert_element_to_dict,
@@ -40,16 +43,11 @@ from pandahub.lib.database_toolbox import (
     json_to_object,
     serialize_object_data,
 )
-from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
-
-logger = logging.getLogger(__name__)
-import pymongoarrow.monkey
-from packaging import version
-
-from pandahub import __version__
 from pandahub.lib.datatypes import DATATYPES
+from pandahub.lib.mongodb_indexes import MONGODB_INDEXES
 from pandahub.lib.settings import pandahub_settings as ph_settings
 
+logger = logging.getLogger(__name__)
 pymongoarrow.monkey.patch_all()
 
 # -------------------------
@@ -161,33 +159,13 @@ class PandaHub:
     # -------------------------
 
     def server_is_available(self):
-        """
-        Check if the MongoDB server is available
-        """
+        """Check if the MongoDB server is available."""
         try:
-            self.mongo_client.server_info()
-            logger.debug(
-                "connected to mongoDB server %s" % self.get_masked_mongodb_url()
-            )
+            self.mongo_client.admin.command("ping")
             return True
-        except ServerSelectionTimeoutError:
-            logger.error(
-                "could not connect to mongoDB server %s" % self.get_masked_mongodb_url()
-            )
+        except ConnectionFailure as e:
+            logger.exception(e)
             return False
-
-    def check_connection_status(self):
-        """
-        Checks if the database is accessible
-        """
-        try:
-            status = self.mongo_client.find(
-                {}, collection_name="__connection_test_collection"
-            )
-            if status == []:
-                return "ok"
-        except ServerSelectionTimeoutError as e:
-            return "connection timeout"
 
     def close(self, force=False):
         """Close the database connection."""
