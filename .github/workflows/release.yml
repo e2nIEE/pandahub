@@ -1,103 +1,30 @@
-# This workflow will create a Python package and upload it to testPyPi or PyPi
-# Then, it installs pandahub from there and all dependencies and runs tests with different Python versions
-
-name: release
-
-# Controls when the action will run.
+name: Build and publish to PyPI
 on:
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-    inputs:
-      upload_server:
-        description: 'upload server'
-        required: true
-        default: 'testpypi'
-        type: choice
-        options:
-          - 'testpypi'
-          - 'pypi'
+  release:
+    types: [published]
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  upload:
-    # The type of runner that the job will run on
+  build-release-artifacts:
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Set up variables
+        run: |
+          echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
+      - name: Validate release tag
+        run: |
+          if ! [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            echo "Error: Release tag '${RELEASE_TAG}' is not in the format 'vX.Y.Z'. Please use a valid versioning format."
+            exit 1
+          fi
 
-      # Sets up python3
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 #v4.1.1
+      - uses: astral-sh/setup-uv@7edac99f961f18b581bbd960d59d049f04c0002f #v6.4.1
+      - run: uv build
+      - run: uv publish --token ${{ secrets.PYPI_API_TOKEN }}
+
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@81c65b7cd4de9b2570615ce3aad67a41de5b1a13 # v2.11.1
         with:
-          python-version: '3.10'
-      # Installs and upgrades pip, installs other dependencies and installs the package from setup.py
-      - name: Install dependencies
-        run: |
-          # Upgrade pip
-          python3 -m pip install --upgrade pip
-          # Install twine
-          python3 -m pip install setuptools wheel twine
-
-      # Upload to TestPyPI
-      - name: Build and Upload to TestPyPI
-        if: inputs.upload_server == 'testpypi'
-        run: |
-          python3 setup.py sdist --formats=zip bdist_wheel
-          twine check dist/* --strict
-          python3 -m twine upload dist/* --verbose
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-          TWINE_REPOSITORY: testpypi
-
-      # Upload to PyPI
-      - name: Build and Upload to PyPI
-        if: inputs.upload_server == 'pypi'
-        run: |
-          python3 setup.py sdist --formats=zip bdist_wheel
-          twine check dist/* --strict
-          python3 -m twine upload dist/* --verbose
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-          TWINE_REPOSITORY: pypi
-      # Make sure package is available on pypi
-      - name: Sleep for 300s to make release available
-        uses: juliangruber/sleep-action@v1
-        with:
-          time: 300s
-
-
-  build:
-
-    runs-on: ${{ matrix.os }}
-    needs: upload
-    strategy:
-      matrix:
-        python-version: ['3.9', '3.10', '3.11']
-        os:  [ ubuntu-latest, windows-latest ]
-    steps:
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -U pytest python-igraph pytest-split
-      - name: Install pandahub from TestPyPI
-        if: ${{ inputs.upload_server == 'testpypi'}}
-        run: |
-          pip install --no-cache-dir -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple pandahub
-      - name: Install pandahub from PyPI
-        if: ${{ inputs.upload_server == 'pypi'}}
-        run: |
-          python -m pip install pandahub
-      - name: List all installed packages
-        run: |
-          python -m pip list
-      - name: Test with pytest
-        run: |
-          python -m pytest --pyargs pandahub.test
+          file_glob: true
+          file: dist/*.whl
+          tag: ${{github.event.release.tag_name}}
