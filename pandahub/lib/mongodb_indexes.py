@@ -26,6 +26,13 @@ MONGODB_INDEXES = {
         IndexModel([("lv_bus", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
+    "net_trafo3w":
+        IndexModel([("net_id", DESCENDING),("index", DESCENDING),("variant", DESCENDING)],unique=True),
+        IndexModel([("hv_bus", DESCENDING)]),
+        IndexModel([("mv_bus", DESCENDING)]),
+        IndexModel([("lv_bus", DESCENDING)]),
+        *VARIANT_INDEXES,
+    ],
     "net_switch": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("bus", DESCENDING)]),
@@ -38,8 +45,18 @@ MONGODB_INDEXES = {
         IndexModel([("bus", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
+    "net_asymetric_load": [
+        IndexModel([("net_id", DESCENDING),("index", DESCENDING),("variant", DESCENDING)], unique=True),
+        IndexModel([("bus", DESCENDING)]),
+        *VARIANT_INDEXES,
+    ],
     "net_sgen": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
+        IndexModel([("bus", DESCENDING)]),
+        *VARIANT_INDEXES,
+    ],
+    "net_asymetric_sgen": [
+        IndexModel([("net_id", DESCENDING),("index", DESCENDING),("variant", DESCENDING)],unique=True),
         IndexModel([("bus", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
@@ -161,7 +178,6 @@ MONGODB_INDEXES = {
         IndexModel([("to_junction", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
-
     # others
     "net_area": [
         IndexModel(
@@ -174,6 +190,8 @@ MONGODB_INDEXES = {
         IndexModel([("connection_points", DESCENDING)]),
         IndexModel([("feeders", DESCENDING)]),
         IndexModel([("trafos", DESCENDING)]),
+        IndexModel([("trafo3ws", DESCENDING)]),
+        IndexModel([("has_ext_grid", DESCENDING)]),
         IndexModel([("substations", DESCENDING)]),
         IndexModel([("type", DESCENDING)]),
         IndexModel([("substation_buses", DESCENDING)]),
