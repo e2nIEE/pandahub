@@ -6,7 +6,6 @@ import pandapower as pp
 import pandapower.networks as nw_pp
 from pandahub import PandaHubError
 from pandapipes.toolbox import nets_equal
-from api import settings
 
 
 def test_additional_res_tables(ph):
@@ -37,11 +36,11 @@ def test_network_io(ph):
     net1 = nw_pp.mv_oberrhein()
     name1 = "oberrhein_network"
     # for some unknown reason the format of mv_oberrhein does not match the latest pandapower format
-    net1.gen.rename(columns={"qmax_mvar": "max_q_mvar", "qmin_mvar": "min_q_mvar"}, inplace=True)
-    del net1.shunt["scaling"]
-    del net1.impedance["r_pu"]
-    del net1.impedance["x_pu"]
-    del net1.dcline["cost_per_mw"]
+    # net1.gen.rename(columns={"qmax_mvar": "max_q_mvar", "qmin_mvar": "min_q_mvar"}, inplace=True)
+    # del net1.shunt["scaling"]
+    # del net1.impedance["r_pu"]
+    # del net1.impedance["x_pu"]
+    # del net1.dcline["cost_per_mw"]
 
     net2 = nw_pp.simple_four_bus_system()
     pp.create_bus(net2, vn_kv=20, index=10)  # check non-consecutive indices
@@ -52,7 +51,7 @@ def test_network_io(ph):
         if ph.network_with_name_exists(name):
             ph.delete_network_by_name(name)
 
-        assert ph.network_with_name_exists(name) == False
+        assert not ph.network_with_name_exists(name)
 
         ph.write_network_to_db(net, name)
         assert ph.network_with_name_exists(name) == True
@@ -163,7 +162,7 @@ def test_get_set_single_value(ph):
 if __name__ == '__main__':
     from pandahub import PandaHub
 
-    ph = PandaHub(connection_url=settings.MONGODB_URL)
+    ph = PandaHub()
     ph.create_project('pytest')
     net = nw_pps.gas_versatility()
     ph.write_network_to_db(net, 'versatility')

@@ -1,11 +1,11 @@
 import pytest
 from pandahub import PandaHub
-from api import settings
+# from pandahub.lib.settings import pandahub_settings
 
 
 @pytest.fixture(scope="session")
 def ph():
-    ph = PandaHub(connection_url=settings.MONGODB_URL)
+    ph = PandaHub()
 
     project_name = "pytest"
 

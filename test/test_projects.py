@@ -1,7 +1,6 @@
 import pandapower.networks as nw
 import pandahub
 import pandapower as pp
-from api import settings
 from pandahub.lib.database_toolbox import convert_dataframes_to_dicts
 from pymongo import DESCENDING
 from packaging import version
@@ -75,7 +74,7 @@ def test_upgrade_project():
                     except:
                         print("FAILED TO WRITE TABLE", key)
     # we use the implemetation of 0.2.2 to write a net
-    oldph = PandaHubV0_2_2(connection_url=settings.MONGODB_URL)
+    oldph = PandaHubV0_2_2()
 
     if oldph.project_exists("pytest"):
         oldph.set_active_project("pytest")
@@ -88,7 +87,7 @@ def test_upgrade_project():
     net.ext_grid.name = "Slack"
     oldph.write_network_to_db(net, "simple_network")
     # convert the db to latest version
-    ph = pandahub.PandaHub(connection_url=settings.MONGODB_URL)
+    ph = pandahub.PandaHub()
     ph.set_active_project("pytest")
     ph.upgrade_project_to_latest_version()
     # and test if everything went fine

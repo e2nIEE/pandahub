@@ -26,7 +26,7 @@ MONGODB_INDEXES = {
         IndexModel([("lv_bus", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
-    "net_trafo3w":
+    "net_trafo3w":[
         IndexModel([("net_id", DESCENDING),("index", DESCENDING),("variant", DESCENDING)],unique=True),
         IndexModel([("hv_bus", DESCENDING)]),
         IndexModel([("mv_bus", DESCENDING)]),
