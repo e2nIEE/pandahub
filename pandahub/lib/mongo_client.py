@@ -12,10 +12,12 @@ def _get_mongo_client(
     connection_url: str = settings.mongodb_url,
     connection_user: str = settings.mongodb_user,
     connection_password: str = settings.mongodb_password,
+    background_connect: bool = True,
 ) -> MongoClient:
     mongo_client_args = {
         "host": connection_url,
-        "uuidRepresentation": "standard"
+        "uuidRepresentation": "standard",
+        "connect": background_connect,
     }
     if connection_user:
         mongo_client_args |= {
@@ -26,7 +28,7 @@ def _get_mongo_client(
 
 if settings.pandahub_global_db_client:
     _global_mongo_client = _get_mongo_client(connection_url=settings.mongodb_url, connection_user = settings.mongodb_user,
-                                             connection_password = settings.mongodb_password)
+                                             connection_password = settings.mongodb_password, background_connect=False)
 else:
     _global_mongo_client = None
 
