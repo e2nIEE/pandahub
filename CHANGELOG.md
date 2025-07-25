@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.5.1
+
+🐛 Bug Fixes
+* global db client: do not connect to server in the background by @jthurner in https://github.com/e2nIEE/pandahub/pull/107
+* allow activating locked project if not held by other user by @jthurner in https://github.com/e2nIEE/pandahub/pull/108
+
 ## 0.5.0
 
 🛠 Improvements
