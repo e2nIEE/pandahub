@@ -438,10 +438,11 @@ class PandaHub:
         user = self._get_user()
         if not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
             raise PandaHubError("You don't have rights to access this project", 403)
-        elif project_doc.get("locked") and project_doc.get("locked_by") != self.user_id:
-            raise PandaHubError("Project is locked by another user")
-        else:
-            return project_doc
+        if project_doc.get("locked"):
+            locked_by = project_doc.get("locked_by")
+            if locked_by is not None and locked_by != self.user_id:
+                raise PandaHubError("Project is locked by another user")
+        return project_doc
 
     def _get_project_database(self) -> Database:
         return self.get_project_database()
