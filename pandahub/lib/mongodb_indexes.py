@@ -5,8 +5,8 @@ VARIANT_INDEXES = [
     IndexModel([("var_type", DESCENDING)]),
     IndexModel([("not_in_var", DESCENDING)]),
 ]
-MONGODB_INDEXES = {
-    # pandapower
+
+PANDAPOWER_INDEXES = {
     "net_bus": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("geo", GEOSPHERE)]),
@@ -20,14 +20,14 @@ MONGODB_INDEXES = {
         IndexModel([("geo", GEOSPHERE)]),
         *VARIANT_INDEXES,
     ],
-    "net_trafo":[
+    "net_trafo": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("hv_bus", DESCENDING)]),
         IndexModel([("lv_bus", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
-    "net_trafo3w":[
-        IndexModel([("net_id", DESCENDING),("index", DESCENDING),("variant", DESCENDING)],unique=True),
+    "net_trafo3w": [
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("hv_bus", DESCENDING)]),
         IndexModel([("mv_bus", DESCENDING)]),
         IndexModel([("lv_bus", DESCENDING)]),
@@ -46,7 +46,7 @@ MONGODB_INDEXES = {
         *VARIANT_INDEXES,
     ],
     "net_asymetric_load": [
-        IndexModel([("net_id", DESCENDING),("index", DESCENDING),("variant", DESCENDING)], unique=True),
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("bus", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
@@ -56,7 +56,7 @@ MONGODB_INDEXES = {
         *VARIANT_INDEXES,
     ],
     "net_asymetric_sgen": [
-        IndexModel([("net_id", DESCENDING),("index", DESCENDING),("variant", DESCENDING)],unique=True),
+        IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("bus", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
@@ -95,8 +95,9 @@ MONGODB_INDEXES = {
         IndexModel([("bus", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
+}
 
-    # pandapipes
+PANDAPIPES_INDEXES = {
     "net_junction": [
         IndexModel([("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)], unique=True),
         IndexModel([("geo", GEOSPHERE)]),
@@ -178,7 +179,9 @@ MONGODB_INDEXES = {
         IndexModel([("to_junction", DESCENDING)]),
         *VARIANT_INDEXES,
     ],
-    # others
+}
+
+COMMON_INDEXES = {
     "net_area": [
         IndexModel(
             [("net_id", DESCENDING), ("index", DESCENDING), ("variant", DESCENDING)],
@@ -211,3 +214,4 @@ MONGODB_INDEXES = {
         *VARIANT_INDEXES,
     ],
 }
+MONGODB_INDEXES = PANDAPOWER_INDEXES | PANDAPIPES_INDEXES | COMMON_INDEXES
