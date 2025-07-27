@@ -103,14 +103,15 @@ class PandaHub:
 
     def __init__(
         self,
-        connection_url=ph_settings.mongodb_url,
-        connection_user=ph_settings.mongodb_user,
-        connection_password=ph_settings.mongodb_password,
-        check_server_available=False,
-        user_id=None,
-        datatypes=DATATYPES,
-        mongodb_indexes=MONGODB_INDEXES,
-        elements_without_vars = None,
+        connection_url: str = ph_settings.mongodb_url,
+        connection_user: str = ph_settings.mongodb_user,
+        connection_password: str = ph_settings.mongodb_password,
+        check_server_available: bool = False,
+        user_id: str = None,
+        datatypes: dict = DATATYPES,
+        mongodb_indexes: dict = MONGODB_INDEXES,
+        elements_without_vars: list | tuple = None,
+        create_indexes_with_project: bool = ph_settings.create_indexes_with_project,
     ):
         self._datatypes = datatypes
         self.mongodb_indexes = mongodb_indexes
@@ -119,6 +120,11 @@ class PandaHub:
             connection_user=connection_user,
             connection_password=connection_password,
         )
+        self._elements_without_vars = (
+            ["variant"] if elements_without_vars is None else elements_without_vars
+        )
+        self.create_indexes_with_project = create_indexes_with_project
+
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
@@ -129,7 +135,6 @@ class PandaHub:
                 {"var_type": np.nan},
             ]
         }
-        self._elements_without_vars = ["variant"] if elements_without_vars is None else elements_without_vars
         if check_server_available:
             self.server_is_available()
 
@@ -265,7 +270,7 @@ class PandaHub:
         if self.user_id is not None:
             project_data["users"] = {self.user_id: "owner"}
         self.mongo_client["user_management"]["projects"].insert_one(project_data)
-        if ph_settings.create_indexes_with_project:
+        if self.create_indexes_with_project:
             self._create_mongodb_indexes(project_data["_id"])
         if activate:
             self.set_active_project_by_id(project_data["_id"])
