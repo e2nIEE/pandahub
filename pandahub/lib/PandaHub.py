@@ -28,7 +28,7 @@ from pandapipes.component_models import NodeElementComponent
 from pymongo import MongoClient, ReplaceOne
 from pymongo.collection import Collection
 from pymongo.database import Database
-from pymongo.errors import ConnectionFailure, DuplicateKeyError, ServerSelectionTimeoutError
+from pymongo.errors import ConnectionFailure, DuplicateKeyError
 
 from pandahub import __version__
 from pandahub.lib import get_mongo_client
@@ -51,23 +51,25 @@ logger = logging.getLogger(__name__)
 pymongoarrow.monkey.patch_all()
 
 # -------------------------
-# Exceptions
+# Typing
 # -------------------------
 
+ProjectID = TypeVar("ProjectID", str, int, ObjectId)
+SettingsValue = TypeVar("SettingsValue", str, int, float, list, dict)
+PandaNet = TypeVar("PandaNet", pp.pandapowerNet, pps.pandapipesNet)
+
+# -------------------------
+# Exceptions
+# -------------------------
 
 class PandaHubError(Exception):
     def __init__(self, message, status_code=400):
         self.status_code = status_code
         super().__init__(message)
 
-
 # -------------------------
 # PandaHub
 # -------------------------
-
-ProjectID = TypeVar("ProjectID", str, int, ObjectId)
-SettingsValue = TypeVar("SettingsValue", str, int, float, list, dict)
-
 
 def validate_variant_type(variant: int | None):
     """Raise a ValueError if variant is not int | None."""
@@ -103,14 +105,15 @@ class PandaHub:
 
     def __init__(
         self,
-        connection_url=ph_settings.mongodb_url,
-        connection_user=ph_settings.mongodb_user,
-        connection_password=ph_settings.mongodb_password,
-        check_server_available=False,
-        user_id=None,
-        datatypes=DATATYPES,
-        mongodb_indexes=MONGODB_INDEXES,
-        elements_without_vars = None,
+        connection_url: str = ph_settings.mongodb_url,
+        connection_user: str = ph_settings.mongodb_user,
+        connection_password: str = ph_settings.mongodb_password,
+        check_server_available: bool = False,
+        user_id: str = None,
+        datatypes: dict = DATATYPES,
+        mongodb_indexes: dict = MONGODB_INDEXES,
+        elements_without_vars: list | tuple = None,
+        create_indexes_with_project: bool = ph_settings.create_indexes_with_project,
     ):
         self._datatypes = datatypes
         self.mongodb_indexes = mongodb_indexes
@@ -119,6 +122,11 @@ class PandaHub:
             connection_user=connection_user,
             connection_password=connection_password,
         )
+        self._elements_without_vars = (
+            ["variant"] if elements_without_vars is None else elements_without_vars
+        )
+        self.create_indexes_with_project = create_indexes_with_project
+
         self.mongo_client_global_db = None
         self.active_project = None
         self.user_id = user_id
@@ -129,7 +137,6 @@ class PandaHub:
                 {"var_type": np.nan},
             ]
         }
-        self._elements_without_vars = ["variant"] if elements_without_vars is None else elements_without_vars
         if check_server_available:
             self.server_is_available()
 
@@ -265,7 +272,7 @@ class PandaHub:
         if self.user_id is not None:
             project_data["users"] = {self.user_id: "owner"}
         self.mongo_client["user_management"]["projects"].insert_one(project_data)
-        if ph_settings.create_indexes_with_project:
+        if self.create_indexes_with_project:
             self._create_mongodb_indexes(project_data["_id"])
         if activate:
             self.set_active_project_by_id(project_data["_id"])
@@ -855,9 +862,9 @@ class PandaHub:
         geo_mode="string",
         variant=None,
         additional_filters: dict[
-            str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
+            str, Callable[[PandaNet], dict]
         ] | None = None,
-    ) -> (pp.pandapowerNet | pps.pandapipesNet) | (tuple[pp.pandapowerNet | pps.pandapipesNet, list] | None):
+    ) -> PandaNet | (tuple[PandaNet, list] | None):
         self.check_permission("read")
         db = self._get_project_database()
         net_id = self._get_net_id_from_name(name, db)
@@ -883,19 +890,17 @@ class PandaHub:
         geo_mode="string",
         variant=None,
         ignore_elements=tuple([]),
-        additional_filters: dict[
-            str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
-        ] | None = None,
+        additional_filters: dict[str, Callable[[PandaNet], dict]] | None = None,
         additional_edge_filters: dict[
             str, tuple[
                 list[str] | tuple[str, ...] | None,
                 bool,
                 dict | None,
-                Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict] | None
+                Callable[[PandaNet], dict] | None
             ]] | None = None,
         *,
         return_edge_branch_nodes: bool = False
-    ) -> (pp.pandapowerNet | pps.pandapipesNet) | (tuple[pp.pandapowerNet | pps.pandapipesNet, list]):
+    ) -> PandaNet | (tuple[PandaNet, list]):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, net_id)
         dtypes = meta["dtypes"]
@@ -1029,7 +1034,7 @@ class PandaHub:
 
     def write_network_to_db(
         self,
-        net: pp.pandapowerNet | pps.pandapipesNet,
+        net: PandaNet,
         name: str,
         sector="power",
         overwrite: bool = True,
