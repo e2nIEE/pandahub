@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.5.3
+
+🛠 Improvements
+* add type aliases for pandapower / pandapipes networks (https://github.com/e2nIEE/pandahub/pull/112)
+
 ## 0.5.2
 
 🛠 Improvements

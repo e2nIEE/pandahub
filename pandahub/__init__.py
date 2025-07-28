@@ -1,5 +1,5 @@
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 
-from pandahub.lib.PandaHub import PandaHub, PandaHubError
+from pandahub.lib.PandaHub import PandaHub, PandaHubError, PandaPowerNet, PandaPipesNet, PandaNet, SettingsValue, ProjectID
 
-__all__ = [PandaHub, PandaHubError]
+__all__ = ["PandaHub", "PandaHubError", "PandaPowerNet", "PandaPipesNet", "PandaNet", "SettingsValue", "ProjectID"]
