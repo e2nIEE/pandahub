@@ -10,7 +10,7 @@ from inspect import _empty, signature
 from itertools import chain
 from operator import getitem
 from types import NoneType
-from typing import Optional, TypeVar, Union
+from typing import Optional, Union, TypeAlias
 from uuid import UUID
 
 import numpy as np
@@ -54,9 +54,11 @@ pymongoarrow.monkey.patch_all()
 # Typing
 # -------------------------
 
-ProjectID = TypeVar("ProjectID", str, int, ObjectId)
-SettingsValue = TypeVar("SettingsValue", str, int, float, list, dict)
-PandaNet = TypeVar("PandaNet", pp.pandapowerNet, pps.pandapipesNet)
+ProjectID: TypeAlias = str | int | ObjectId
+SettingsValue: TypeAlias = str | int | float | list | dict
+PandaNet: TypeAlias = pp.pandapowerNet | pps.pandapipesNet
+PandaPowerNet: TypeAlias = pp.pandapowerNet
+PandaPipesNet: TypeAlias = pps.pandapipesNet
 
 # -------------------------
 # Exceptions
@@ -334,7 +336,7 @@ class PandaHub:
             project_id = active_projects[0]["id"]
             self.set_active_project_by_id(project_id)
 
-    def set_active_project_by_id(self, project_id:ProjectID):
+    def set_active_project_by_id(self, project_id: ProjectID):
         try:
             project_id = ObjectId(project_id)
         except InvalidId:
