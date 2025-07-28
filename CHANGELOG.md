@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.5.2
+
+🛠 Improvements
+* split mongodb indexes by pandapower / pandapipes elements (https://github.com/e2nIEE/pandahub/pull/110)
+
 ## 0.5.1
 
 🐛 Bug Fixes
