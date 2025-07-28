@@ -28,7 +28,7 @@ from pandapipes.component_models import NodeElementComponent
 from pymongo import MongoClient, ReplaceOne
 from pymongo.collection import Collection
 from pymongo.database import Database
-from pymongo.errors import ConnectionFailure, DuplicateKeyError, ServerSelectionTimeoutError
+from pymongo.errors import ConnectionFailure, DuplicateKeyError
 
 from pandahub import __version__
 from pandahub.lib import get_mongo_client
@@ -51,23 +51,25 @@ logger = logging.getLogger(__name__)
 pymongoarrow.monkey.patch_all()
 
 # -------------------------
-# Exceptions
+# Typing
 # -------------------------
 
+ProjectID = TypeVar("ProjectID", str, int, ObjectId)
+SettingsValue = TypeVar("SettingsValue", str, int, float, list, dict)
+PandaNet = TypeVar("PandaNet", pp.pandapowerNet, pps.pandapipesNet)
+
+# -------------------------
+# Exceptions
+# -------------------------
 
 class PandaHubError(Exception):
     def __init__(self, message, status_code=400):
         self.status_code = status_code
         super().__init__(message)
 
-
 # -------------------------
 # PandaHub
 # -------------------------
-
-ProjectID = TypeVar("ProjectID", str, int, ObjectId)
-SettingsValue = TypeVar("SettingsValue", str, int, float, list, dict)
-
 
 def validate_variant_type(variant: int | None):
     """Raise a ValueError if variant is not int | None."""
@@ -860,9 +862,9 @@ class PandaHub:
         geo_mode="string",
         variant=None,
         additional_filters: dict[
-            str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
+            str, Callable[[PandaNet], dict]
         ] | None = None,
-    ) -> (pp.pandapowerNet | pps.pandapipesNet) | (tuple[pp.pandapowerNet | pps.pandapipesNet, list] | None):
+    ) -> PandaNet | (tuple[PandaNet, list] | None):
         self.check_permission("read")
         db = self._get_project_database()
         net_id = self._get_net_id_from_name(name, db)
@@ -888,19 +890,17 @@ class PandaHub:
         geo_mode="string",
         variant=None,
         ignore_elements=tuple([]),
-        additional_filters: dict[
-            str, Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict]
-        ] | None = None,
+        additional_filters: dict[str, Callable[[PandaNet], dict]] | None = None,
         additional_edge_filters: dict[
             str, tuple[
                 list[str] | tuple[str, ...] | None,
                 bool,
                 dict | None,
-                Callable[[pp.auxiliary.pandapowerNet | pps.pandapipesNet], dict] | None
+                Callable[[PandaNet], dict] | None
             ]] | None = None,
         *,
         return_edge_branch_nodes: bool = False
-    ) -> (pp.pandapowerNet | pps.pandapipesNet) | (tuple[pp.pandapowerNet | pps.pandapipesNet, list]):
+    ) -> PandaNet | (tuple[PandaNet, list]):
         db = self._get_project_database()
         meta = self._get_network_metadata(db, net_id)
         dtypes = meta["dtypes"]
@@ -1034,7 +1034,7 @@ class PandaHub:
 
     def write_network_to_db(
         self,
-        net: pp.pandapowerNet | pps.pandapipesNet,
+        net: PandaNet,
         name: str,
         sector="power",
         overwrite: bool = True,
