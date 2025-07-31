@@ -293,47 +293,57 @@ class PandaHub:
         self.mongo_client.user_management.projects.delete_one({"_id": project_id})
         self.active_project = None
 
-    def get_projects(self, realm: Optional[str] = None):
-        filter_dict = {}
+    def get_projects(
+        self, query_filter: dict | None = None, projection: dict | list | None = None, realm: str | None = None
+    ) -> list[dict]:
+        """Return a list of projects the active user has access to.
+
+        If the active user is superuser, project documents for all users will be returned. The project documents additionally
+        contain a field "permission" with the user's permission value, and "_id" is mapped to "id" and cast to string.
+
+        If no user is active, only projects not under user management will be returned.
+
+        Parameters
+        ----------
+        query_filter:
+            Return only projects matching the given filter. User management / realm filtering is always applied additionally.
+        projection:
+            mongodb query projection to filter fields on the returned project documents.
+        realm:
+            Return only projects with matching realm.
+
+        Returns
+        -------
+        list[dict]
+            A list of project documents the user has access to.
+        """
+        projection = {} if projection is None else projection
+        query_filter = {} if query_filter is None else query_filter
         if self.user_id is not None:
             user = self._get_user()
             if not user["is_superuser"]:
-                filter_dict = {"users.{}".format(self.user_id): {"$exists": True}}
+                query_filter |= {f"users.{self.user_id}": {"$exists": True}}
         else:
-            filter_dict = {"users": {"$exists": False}}
+            query_filter |= {"users": {"$exists": False}}
         if realm is not None:
-            filter_dict["realm"] = realm
-        db = self.mongo_client["user_management"]
-        projects = db["projects"].find(filter_dict).to_list()
-        return [
-            {
-                "id": str(p["_id"]),
-                "name": p["name"],
-                "realm": str(p["realm"]),
-                "settings": p["settings"],
-                "locked": p.get("locked"),
-                "locked_by": p.get("locked_by"),
-                "locked_reason": p.get("locked_reason"),
-                "permissions": self.get_permissions_by_role(
-                    p.get("users").get(self.user_id)
-                )
-                if self.user_id
-                else None,
-            }
-            for p in projects
-        ]
+            query_filter["realm"] = realm
+        projects = self.projects_collection.find(query_filter, projection).to_list()
+        for project in projects:
+            if "_id" in project:
+                project["id"] = str(project.pop("_id"))
+            if self.user_id:
+                role = project.get("users").get(self.user_id)
+                project["permissions"] = self.get_permissions_by_role(role)
+        return projects
 
-    def set_active_project(self, project_name:str, realm=None):
-        projects = self.get_projects(realm=realm)
-        active_projects = [
-            project for project in projects if project["name"] == project_name
-        ]
-        if len(active_projects) == 0:
+    def set_active_project(self, project_name: str, realm=None):
+        projects = self.get_projects(query_filter={"name":project_name},realm=realm, projection=["_id"])
+        if len(projects) == 0:
             raise PandaHubError("Project not found!", 404)
-        elif len(active_projects) > 1:
+        elif len(projects) > 1:
             raise PandaHubError("Multiple projects found!")
         else:
-            project_id = active_projects[0]["id"]
+            project_id = projects[0]["id"]
             self.set_active_project_by_id(project_id)
 
     def set_active_project_by_id(self, project_id: ProjectID):
@@ -3232,8 +3242,8 @@ def get_subnet_filter_data_pipe(net, filtered_elements, metadata):
 
 if __name__ == "__main__":
     self = PandaHub()
-    project_name = "test_project"
-    self.set_active_project(project_name)
+    test_project_name = "test_project"
+    self.set_active_project(test_project_name)
     ts = self.multi_get_timeseries_from_db(global_database=True)
     # r = self.create_account(email, password)
     # self.login(email, password)
