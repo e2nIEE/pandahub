@@ -379,49 +379,31 @@ class PandaHub:
         )
         self.set_active_project(project_name, realm)
 
-    def lock_project(self):
-        coll = self.mongo_client["user_management"]["projects"]
-        result = coll.find_one_and_update(
-            {
-                "_id": self.active_project["_id"],
-                "$or": [
-                    {"locked": {"$eq": False}},
-                    {
-                        "$and": [
-                            {"locked": {"$eq": True}},
-                            {"locked_by": str(self.user_id)},
-                        ]
-                    },
-                ],
-            },
-            {"$set": {"locked": True, "locked_by": str(self.user_id)}},
+    def lock_project(self)-> bool:
+        """Lock active project with the current user.
+
+        Returns True if the project was successfully locked for current active user, and False if another user already held a lock on the project.
+        """
+        result = self.projects_collection.find_one_and_update(
+            {"_id": self.active_project["_id"], "locked_by":{"$in":[self.user_id, None]}},
+            {"$set": {"locked_by": self.user_id}}
         )
         return result is not None
 
 
-    # def lock_project(self):
-    #     db = self.mongo_client["user_management"]["projects"]
-    #     result = db.update_one(
-    #
-    #     result = db.find_one_and_update(
-    #         {
-    #             "_id": self.active_project["_id"],
-    #             "_id": self.active_project["_id"], "locked": False
-    #         },
-    #         {"$set": {"locked": True, "locked_by": self.user_id}},
-    #     )
-    #     return result.acknowledged and result.modified_count > 0
+    def unlock_project(self)-> bool:
+        """Unlock active project with the current user.
 
-    def unlock_project(self):
-        db = self.mongo_client["user_management"]["projects"]
-        return db.update_one(
-            {"_id": self.active_project["_id"], "locked_by": self.user_id},
-            {"$set": {"locked": False, "locked_by": None}},
+        Returns True if the project was successfully unlocked with the current user, and False if the project lock is held by another user.
+        """
+        result = self.projects_collection.find_one_and_update(
+            {"_id": self.active_project["_id"], "locked_by": {"$in": [self.user_id, None]}},
+            {"$set": {"locked_by": None}},
         )
+        return result is not None
 
     def force_unlock_project(self, project_id):
-        db = self.mongo_client["user_management"]["projects"]
-        project = db.find_one({"_id": ObjectId(project_id)})
+        project = self.projects_collection.find_one({"_id": ObjectId(project_id)})
         user = self._get_user()
         if project is None:
             return None
@@ -430,16 +412,15 @@ class PandaHub:
             or self.user_id in project["users"].keys()
             or user["is_superuser"]
         ):
-            return db.update_one(
+            return self.projects_collection.update_one(
                 {"_id": ObjectId(project_id)},
-                {"$set": {"locked": False, "locked_by": None}},
+                {"$set": {"locked_by": None}},
             )
         else:
             raise PandaHubError("You don't have rights to access this project", 403)
 
     def project_exists(self, project_name:Optional[str]=None, realm=None):
-        project_collection = self.mongo_client["user_management"].projects
-        project = project_collection.find_one({"name": project_name, "realm": realm})
+        project = self.projects_collection.find_one({"name": project_name, "realm": realm})
         return project is not None
 
     def _get_project_document(self, filter_dict: dict) -> Optional[dict]:
@@ -457,10 +438,9 @@ class PandaHub:
         user = self._get_user()
         if not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
             raise PandaHubError("You don't have rights to access this project", 403)
-        if project_doc.get("locked"):
-            locked_by = project_doc.get("locked_by")
-            if locked_by is not None and locked_by != self.user_id:
-                raise PandaHubError("Project is locked by another user")
+        locked_by = project_doc.get("locked_by")
+        if locked_by is not None and locked_by != self.user_id:
+            raise PandaHubError("Project is locked by another user")
         return project_doc
 
     def _get_project_database(self) -> Database:
