@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.5.4
+
+🛠 Improvements
+* simplify project locking (https://github.com/e2nIEE/pandahub/pull/114)
+* improve ph.get_project (https://github.com/e2nIEE/pandahub/pull/113)
+* add ph.get_project_names (https://github.com/e2nIEE/pandahub/pull/115)
+
 ## 0.5.3
 
 🛠 Improvements
