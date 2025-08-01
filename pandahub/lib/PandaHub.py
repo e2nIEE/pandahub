@@ -336,6 +336,11 @@ class PandaHub:
                 project["permissions"] = self.get_permissions_by_role(role)
         return projects
 
+    def get_project_names(self) -> list[str]:
+        """Return a list with names the current user has access to."""
+        return [project["name"] for project in self.get_projects(projection={"_id": 0, "name": 1})]
+
+
     def set_active_project(self, project_name: str, realm=None):
         projects = self.get_projects(query_filter={"name":project_name},realm=realm, projection=["_id"])
         if len(projects) == 0:
