@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.5.5
+🐛 Bug Fixes
+* default project["permissions"] to None in get_projects instead of omitting it (https://github.com/e2nIEE/pandahub/pull/117)
+
 ## 0.5.4
 
 🛠 Improvements
