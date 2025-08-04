@@ -331,9 +331,11 @@ class PandaHub:
         for project in projects:
             if "_id" in project:
                 project["id"] = str(project.pop("_id"))
-            if self.user_id:
-                role = project.get("users").get(self.user_id)
+            if self.user_id and "users" in project:
+                role = project["users"].get(self.user_id)
                 project["permissions"] = self.get_permissions_by_role(role)
+            else:
+                project["permissions"] = None
         return projects
 
     def get_project_names(self) -> list[str]:
