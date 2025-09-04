@@ -884,6 +884,7 @@ class PandaHub:
         self,
         net_id,
         node_filter=None,
+        line_filter=None,
         include_results=True,
         add_edge_branches=True,
         geo_mode="string",
@@ -940,12 +941,11 @@ class PandaHub:
             "geo_mode": geo_mode,
             "variant": variant,
             "dtypes": dtypes,
-            "filter": node_filter,
         }
 
         # Add buses with filter
         if node_filter is not None:
-            self._add_element_from_collection(element_type=node_name, **add_args)
+            self._add_element_from_collection(element_type=node_name, filter=node_filter, **add_args)
         nodes = net[node_name].index.tolist()
 
         if isinstance(add_edge_branches, bool):
@@ -967,13 +967,15 @@ class PandaHub:
 
         branch_nodes = set()
         for branch_name, node_cols in zip(branch_tables, branch_node_cols):
-            operator = "$or" if branch_name in add_edge_branches else "$and"
-            # Add branch elements connected to at least one node
-            filter_ = {operator: [{b: {"$in": nodes}} for b in node_cols]}
-            if branch_name in special_filters:
-                filter_ = special_filters[branch_name](filter_)
-            add_args["filter"] = filter_
-            self._add_element_from_collection(element_type=branch_name, **add_args)
+            if branch_name == "line" and line_filter is not None:
+                 branch_filter = line_filter
+            else:
+                operator = "$or" if branch_name in add_edge_branches else "$and"
+                # Add branch elements connected to at least one node
+                branch_filter = {operator: [{b: {"$in": nodes}} for b in node_cols]}
+                if branch_name in special_filters:
+                    branch_filter = special_filters[branch_name](branch_filter)
+            self._add_element_from_collection(element_type=branch_name, filter=branch_filter, **add_args)
             get_nd_func = get_nodes_func[branch_name]
             branch_nodes.update(set(chain.from_iterable(get_nd_func(net, branch_name, node_cols))))
 
@@ -981,25 +983,21 @@ class PandaHub:
         if branch_nodes:
             # Add buses on the other side of the branches
             branch_nodes_outside = list(map(int, branch_nodes - set(nodes)))
-            add_args["filter"] = {"index": {"$in": branch_nodes_outside}}
-            self._add_element_from_collection(element_type=node_name, **add_args)
+            self._add_element_from_collection(element_type=node_name, filter={"index": {"$in": branch_nodes_outside}}, **add_args)
             nodes = net[node_name].index.tolist()
 
         if is_power:
-            add_args["filter"] = filter_switch_for_element(net)
-            self._add_element_from_collection(element_type="switch", **add_args)
+            self._add_element_from_collection(element_type="switch", filter=filter_switch_for_element(net), **add_args)
 
         # add all node elements that are connected to buses within the network
         for element in node_elements:
-            add_args["filter"] = {node_name: {"$in": nodes}}
-            self._add_element_from_collection(element_type=element, **add_args)
+            self._add_element_from_collection(element_type=element, filter={node_name: {"$in": nodes}}, **add_args)
 
         # Add elements for which the user has provided a filter function
         for element, filter_func in additional_filters.items():
             if element in ignore_elements:
                 continue
-            add_args["filter"] = filter_func(net)
-            self._add_element_from_collection(element_type=element, **add_args)
+            self._add_element_from_collection(element_type=element, filter=filter_func(net), **add_args)
 
         # add all other collections
         collection_names = self.get_net_collections(db)
@@ -1018,8 +1016,7 @@ class PandaHub:
             else:
                 # all other tables (e.g. std_types) are loaded without filter
                 element_filter = None
-            add_args["filter"] = element_filter
-            self._add_element_from_collection(element_type=table_name, **add_args)
+            self._add_element_from_collection(element_type=table_name, filter=element_filter, **add_args)
         self.deserialize_and_update_data(net, meta)
         if return_edge_branch_nodes:
             return net, branch_nodes_outside
