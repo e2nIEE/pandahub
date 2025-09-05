@@ -227,6 +227,9 @@ def convert_element_to_dict(element_data, net_id, default_dtypes=None):
 
     if "object" in element_data.columns:
         element_data["object"] = element_data["object"].apply(object_to_json)
+    if "q_max_characteristic" in element_data.columns:
+            element_data["q_max_characteristic"] = element_data["q_max_characteristic"].apply(object_to_json)
+            element_data["q_min_characteristic"] = element_data["q_min_characteristic"].apply(object_to_json)
     element_data["index"] = element_data.index
     element_data["net_id"] = net_id
     load_geojsons(element_data)

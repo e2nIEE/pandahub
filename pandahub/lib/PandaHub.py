@@ -1258,6 +1258,9 @@ class PandaHub:
         convert_geojsons(df, geo_mode)
         if "object" in df.columns:
             df["object"] = df["object"].apply(json_to_object)
+        if "q_max_characteristic" in df.columns:
+            df["q_max_characteristic"] = df["q_max_characteristic"].apply(json_to_object)
+            df["q_min_characteristic"] = df["q_min_characteristic"].apply(json_to_object)
         if not element_type in net or net[element_type].empty:
             net[element_type] = df
         else:
