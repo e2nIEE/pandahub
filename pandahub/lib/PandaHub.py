@@ -2282,6 +2282,11 @@ class PandaHub:
             if len(timeseries) == 0:
                 raise PandaHubError("no documents matching the provided filter found", 404)
             timeseries.set_index("timestamp", inplace=True)
+            if timestamp_range is not None:
+                timeseries = timeseries.loc[
+                    (timeseries.index >= timestamp_range[0])
+                    & (timeseries.index < timestamp_range[1])
+                ]
             if include_metadata:
                 raise NotImplementedError(
                     "Not implemented yet for timeseries collections"
