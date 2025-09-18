@@ -38,14 +38,11 @@ classifiers = [
 keywords = ["network", "analysis", "optimization", "automation", "grid", "energy", "engineering", "simulation"]
 requires-python = ">=3.9"
 dependencies = [
-    "uvicorn>=0.24.0",
     "pandapower>=3.0",
     "pandapipes>=0.7.0",
     "pymongo>=4.9",
     "pydantic",
     "pydantic-settings",
-    "simplejson",
-    "requests",
     "pymongoarrow",
     "blosc",
 ]
