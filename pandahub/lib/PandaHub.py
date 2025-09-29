@@ -1235,9 +1235,6 @@ class PandaHub:
             else:
                 filter_dict = {**filter_dict, **filter}
 
-        if element_type == "data_checks":
-            return
-
         data = db[self._collection_name_of_element(element_type)].find(filter_dict).to_list()
         if len(data) == 0:
             return
