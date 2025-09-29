@@ -1215,7 +1215,6 @@ class PandaHub:
         geo_mode="string",
         variant=None,
         dtypes=None,
-        only_fields=None,
     ):
         if only_tables is not None and element_type not in only_tables:
             return
@@ -1236,20 +1235,10 @@ class PandaHub:
             else:
                 filter_dict = {**filter_dict, **filter}
 
-        # if element_type == "bus":
-        #     projection = {"index": 1, "level": 1, "net_id": 1, "in_service": 1, "type": 1, "substation": 1, "geo": 1}
-        # elif element_type == "line":
-        #     projection = {"index": 1, "from_bus": 1, "to_bus": 1, "level": 1, "net_id": 1, "length_km": 1, "in_service": 1, "type": 1, "max_i_ka": 1, "geo": 1, "std_type": 1}
-        # elif element_type in ["load", "sgen"]:
-        #     projection = {"index": 1, "bus": 1, "net_id": 1, "level": 1, "type": 1}
-        # elif element_type == "switch":
-        #     projection = {"index": 1, "net_id": 1, "et": 1, "element": 1, "bus": 1, "closed": 1, "level": 1}
-        # else:
-        projection = None
         if element_type == "data_checks":
             return
 
-        data = db[self._collection_name_of_element(element_type)].find(filter_dict, projection).to_list()
+        data = db[self._collection_name_of_element(element_type)].find(filter_dict).to_list()
         if len(data) == 0:
             return
         if dtypes is None:
