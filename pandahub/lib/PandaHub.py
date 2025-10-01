@@ -2001,12 +2001,12 @@ class PandaHub:
             # create new timeseries documents
             if isinstance(timeseries, pd.Series):
                 documents = [
-                    {"metadata": {"_id": _id}, "timestamp": idx, "value": value}
+                    {"metadata": metadata, "timestamp": idx, "value": value}
                     for idx, value in timeseries.items()
                 ]
             elif isinstance(timeseries, pd.DataFrame):
                 documents = [
-                    {"metadata": {"_id": _id}, "timestamp": idx, **row.to_dict()}
+                    {"metadata": metadata, "timestamp": idx, **row.to_dict()}
                     for idx, row in timeseries.iterrows()
                 ]
 
