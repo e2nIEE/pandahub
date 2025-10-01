@@ -879,6 +879,7 @@ class PandaHub:
             additional_filters=additional_filters,
         )
 
+
     @re_arg({"bus_filter": "node_filter"})
     def get_subnet(
         self,
@@ -1968,7 +1969,7 @@ class PandaHub:
 
         Returns
         -------
-        document _id if return_id = True.
+        _id: timeseries _id
 
         """
         if project_id:
@@ -1982,13 +1983,14 @@ class PandaHub:
             # get metadata dictionary based on the input arguments
             metadata = get_metadata_for_timeseries_collections(db, data_type=data_type, **kwargs)
             _id =  metadata["_id"]
-
+            start = timeseries.index.min()
+            end = timeseries.index.max()
             # delete overlapping timeseries already in the database
             filter = {
                 "metadata._id": _id,
                 "timestamp": {
-                    "$gte": timeseries.index.min(),
-                    "$lte":  timeseries.index.max()
+                    "$gte": start,
+                    "$lte":  end
                 }
             }
             db.timeseries.delete_many(filter)
@@ -1996,32 +1998,55 @@ class PandaHub:
             # create new timeseries documents
             if isinstance(timeseries, pd.Series):
                 documents = [
-                    {"metadata": metadata, "timestamp": idx, "value": value}
+                    {"metadata": {"_id": _id}, "timestamp": idx, "value": value}
                     for idx, value in timeseries.items()
                 ]
             elif isinstance(timeseries, pd.DataFrame):
                 documents = [
-                    {"metadata": metadata, "timestamp": idx, **row.to_dict()}
+                    {"metadata": {"_id": _id}, "timestamp": idx, **row.to_dict()}
                     for idx, row in timeseries.iterrows()
                 ]
+
+            timeseries_db_is_empty = db[collection_name].find_one() is None
+            metadata_collection_name = collection_name + "_metadata"
+            timeseries_metadata_exists = metadata_collection_name in db.list_collection_names()
+
             db[collection_name].insert_many(documents)
-
-            if kwargs.get("return_id"):
-                return _id
-            return None
-
-        document = create_timeseries_document(
-            timeseries=timeseries,
-            data_type=data_type,
-            ts_format=ts_format,
-            compress_ts_data=compress_ts_data,
-            **kwargs,
-        )
-        db[collection_name].replace_one({"_id": document["_id"]}, document, upsert=True)
-        logger.debug("document with _id {document['_id']} added to database")
-        if kwargs.get("return_id"):
+            if timeseries_db_is_empty or timeseries_metadata_exists:
+                meta_col = db[metadata_collection_name]
+                max_value = timeseries.values.max()
+                min_value = timeseries.values.min()
+                id_match = {"_id": _id}
+                if meta_col.find_one(id_match) is None:
+                    meta_col.insert_one(
+                        {
+                            "first_timestamp": start,
+                            "min_value": min_value,
+                            "last_timestamp": end,
+                            "max_value": max_value,
+                            **metadata,
+                        }
+                    )
+                else:
+                    meta_col.update_one(
+                        id_match,
+                        {
+                            "$min": {"first_timestamp": start, "min_value": min_value},   # only updates if start < current
+                            "$max": {"last_timestamp": end, "max_value": max_value},       # only updates if end > current
+                        }
+                    )
+            return _id
+        else:
+            document = create_timeseries_document(
+                timeseries=timeseries,
+                data_type=data_type,
+                ts_format=ts_format,
+                compress_ts_data=compress_ts_data,
+                **kwargs,
+            )
+            db[collection_name].replace_one({"_id": document["_id"]}, document, upsert=True)
+            logger.debug("document with _id {document['_id']} added to database")
             return document["_id"]
-        return None
 
     def bulk_write_timeseries_to_db(
         self,
@@ -2282,11 +2307,6 @@ class PandaHub:
             if len(timeseries) == 0:
                 raise PandaHubError("no documents matching the provided filter found", 404)
             timeseries.set_index("timestamp", inplace=True)
-            if timestamp_range is not None:
-                timeseries = timeseries.loc[
-                    (timeseries.index >= timestamp_range[0])
-                    & (timeseries.index < timestamp_range[1])
-                ]
             if include_metadata:
                 raise NotImplementedError(
                     "Not implemented yet for timeseries collections"
@@ -2414,39 +2434,12 @@ class PandaHub:
             self.check_permission("read")
             db = self._get_project_database()
         if self.collection_is_timeseries(collection_name, project_id, global_database):
-            pipeline = []
-            if len(filter_document) > 0:
-                document_filter = {
-                    "metadata." + key: value for key, value in filter_document.items()
-                }
-                pipeline.append({"$match": document_filter})
-            else:
-                document_filter = {}
-            if timestamp_range is not None:
-                document_filter["timestamp"] = {
-                    "$gte": timestamp_range[0],
-                    "$lt": timestamp_range[1],
-                }
-            document = db[collection_name].find_one(
-                document_filter, projection={"timestamp": 0, "_id": 0}
-            )
-            if document is None:
-                return pd.DataFrame()
-            value_fields = ["$%s" % field for field in document.keys() if field != "metadata"]
-            group_dict = {
-                "_id": "$metadata._id",
-                "max_value": {"$max": {"$max": value_fields}},
-                "min_value": {"$min": {"$min": value_fields}},
-                "first_timestamp": {"$min": "$timestamp"},
-                "last_timestamp": {"$max": "$timestamp"},
-            }
-            metadata_fields = {
-                metadata_field: {"$first": "$metadata.%s" % metadata_field}
-                for metadata_field in document["metadata"].keys()
-                if metadata_field != "_id"
-            }
-            group_dict.update(metadata_fields)
-            pipeline.append({"$group": group_dict})
+            metadata_collection_name = collection_name + "_metadata"
+            # if there is no metadata collection yet, compile the metadata for all timeseries
+            if metadata_collection_name not in db.list_collection_names():
+                metadata = self.get_timeseries_metadata_from_timeseries_collection(filter_document={}, collection_name=collection_name)
+                db[metadata_collection_name].insert_many(metadata)
+            metadata = self.get_timeseries_metadata_from_metadata_collection(filter_document, metadata_collection_name, timestamp_range)
         else:
             match_filter = []
             pipeline = []
@@ -2462,11 +2455,60 @@ class PandaHub:
                 pipeline.append({"$match": {"$and": match_filter}})
             projection = {"$project": {"timeseries_data": 0}}
             pipeline.append(projection)
-        metadata = db[collection_name].aggregate(pipeline).to_list()
+            metadata = db[collection_name].aggregate(pipeline).to_list()
         df_metadata = pd.DataFrame(metadata)
         if len(df_metadata):
             df_metadata.set_index("_id", inplace=True)
+        if "return_id" in df_metadata:
+            del df_metadata["return_id"]
         return df_metadata
+
+
+    def get_timeseries_metadata_from_metadata_collection(self, filter_document, metadata_collection_name, timestamp_range=None):
+        db = self._get_project_database()
+        if timestamp_range is not None:
+            filter_document["first_timestamp"] = {"$lte": timestamp_range[1]}
+            filter_document["last_timestamp"] = {"$gte": timestamp_range[0]}
+        return db[metadata_collection_name].find(filter_document).to_list()
+
+
+    def get_timeseries_metadata_from_timeseries_collection(self, filter_document, collection_name, timestamp_range=None):
+        db = self._get_project_database()
+        pipeline = []
+        if len(filter_document) > 0:
+            document_filter = {
+                "metadata." + key: value for key, value in filter_document.items()
+            }
+            pipeline.append({"$match": document_filter})
+        else:
+            document_filter = {}
+        if timestamp_range is not None:
+            document_filter["timestamp"] = {
+                "$gte": timestamp_range[0],
+                "$lt": timestamp_range[1],
+            }
+        document = db[collection_name].find_one(
+            document_filter, projection={"timestamp": 0, "_id": 0}
+        )
+        if document is None:
+            return pd.DataFrame()
+        value_fields = ["$%s" % field for field in document.keys() if field != "metadata"]
+        group_dict = {
+            "_id": "$metadata._id",
+            "max_value": {"$max": {"$max": value_fields}},
+            "min_value": {"$min": {"$min": value_fields}},
+            "first_timestamp": {"$min": "$timestamp"},
+            "last_timestamp": {"$max": "$timestamp"},
+        }
+        metadata_fields = {
+            metadata_field: {"$first": "$metadata.%s" % metadata_field}
+            for metadata_field in document["metadata"].keys()
+            if metadata_field != "_id"
+        }
+        group_dict.update(metadata_fields)
+        pipeline.append({"$group": group_dict})
+        return db[collection_name].aggregate(pipeline).to_list()
+
 
     def add_metadata(
         self,
@@ -2551,36 +2593,6 @@ class PandaHub:
 
             pipeline.append({"$addFields": {"_id": "$metadata._id"}})
             pipeline.append({"$project": {"metadata": 0}})
-
-            if include_metadata:
-                document = db[collection_name].find_one(
-                    document_filter,
-                    projection={"timestamp": 0, "metadata": 0, "_id": 0},
-                )
-                if document is None:
-                    meta_data = {}
-                else:
-                    meta_pipeline = []
-                    meta_pipeline.append({"$match": document_filter})
-                    value_fields = ["$%s" % field for field in document.keys()]
-                    group_dict = {
-                        "_id": "$metadata._id",
-                        "max_value": {"$max": {"$max": value_fields}},
-                        "min_value": {"$min": {"$min": value_fields}},
-                        "first_timestamp": {"$min": "$timestamp"},
-                        "last_timestamp": {"$max": "$timestamp"},
-                    }
-                    document = db[collection_name].find_one(document_filter)
-                    metadata_fields = {
-                        metadata_field: {"$first": "$metadata.%s" % metadata_field}
-                        for metadata_field in document["metadata"].keys()
-                        if metadata_field != "_id"
-                    }
-                    group_dict.update(metadata_fields)
-                    meta_pipeline.append({"$group": group_dict})
-                    meta_data = {
-                        d["_id"]: d for d in db[collection_name].aggregate(meta_pipeline)
-                    }
             timeseries = []
             ts_all = db[collection_name].aggregate_pandas_all(pipeline)
             if len(ts_all) == 0:
@@ -2592,7 +2604,9 @@ class PandaHub:
                 for col in value_columns:
                     timeseries_dict = {"timeseries_data": ts[col]}
                     if include_metadata:
-                        timeseries_dict.update(meta_data[_id])
+                        metadata = db[f"{collection_name}_metadata"].find_one({"_id": _id})
+                        if metadata is not None:
+                            timeseries_dict.update(metadata)
                         if len(value_columns) > 1:
                             timeseries_dict["name"] = "%s, %s" % (
                                 timeseries_dict["name"],
@@ -2881,6 +2895,7 @@ class PandaHub:
             timeseries = timeseries.pivot(columns=pivot_by_column, values="value")
         return timeseries
 
+
     def delete_timeseries_from_db(
         self,
         element_type,
@@ -2888,6 +2903,7 @@ class PandaHub:
         netname=None,
         element_index=None,
         collection_name="timeseries",
+        global_database=False,
         **kwargs,
     ):
         """
@@ -2924,19 +2940,58 @@ class PandaHub:
             DESCRIPTION.
 
         """
-        self.check_permission("write")
-        db = self._get_project_database()
+        if global_database:
+            db = self._get_global_database()
+        else:
+            self.check_permission("write")
+            db = self._get_project_database()
         if self.collection_is_timeseries(collection_name):
             metadata = get_metadata_for_timeseries_collections(db, data_type, **kwargs)
-            return db[collection_name].delete_many({"metadata._id": metadata["_id"]})
-        filter_document = {"element_type": element_type, "data_type": data_type}
-        if netname is not None:
-            filter_document["netname"] = netname
-        if element_index is not None:
-            filter_document["element_index"] = element_index
-        filter_document = {**filter_document, **kwargs}
-        del_res = db[collection_name].delete_one(filter_document)
-        return del_res
+            return self.delete_timeseries_from_db_by_id(metadata["_id"], collection_name)
+        else:
+            filter_document = {"element_type": element_type, "data_type": data_type}
+            if netname is not None:
+                filter_document["netname"] = netname
+            if element_index is not None:
+                filter_document["element_index"] = element_index
+            filter_document = {**filter_document, **kwargs}
+            del_res = db[collection_name].delete_one(filter_document)
+            return del_res
+
+    def delete_timeseries_from_db_by_id(
+        self,
+        _id,
+        collection_name="timeseries",
+        global_database=False,
+    ):
+        """
+        This function can be used to delete a single timeseries that matches
+        the provided metadata from a MongoDB database. The element_type and data_type
+        of the timeseries are required, netname and element_index are optional.
+        Additionally, arbitrary kwargs can be used.
+
+        Parameters
+        ----------
+        collection_name : str
+            Name of the collection that shall be queried.
+        global_database: bool
+
+        Returns
+        -------
+        Success : Delete Result
+
+        """
+        if global_database:
+            db = self._get_global_database()
+        else:
+            self.check_permission("write")
+            db = self._get_project_database()
+        if self.collection_is_timeseries(collection_name):
+            db[f"{collection_name}_metadata"].delete_many({"_id": _id})
+            return db[collection_name].delete_many({"metadata._id": _id})
+        else:
+            return db[collection_name].delete_one({"_id": _id})
+
 
     def bulk_del_timeseries_from_db(
         self, filter_document, collection_name="timeseries"
@@ -2972,6 +3027,7 @@ class PandaHub:
             meta_filter = {
                 "metadata." + key: value for key, value in filter_document.items()
             }
+            db[f"{collection_name}_metadata"].delete_many(filter_document)
             return db[collection_name].delete_many(meta_filter)
         db = self._get_project_database()
         match_filter = {}
