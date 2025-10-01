@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.5.8
+🐛 Bug Fixes
+* remove unnecessary dependencies from base package (https://github.com/e2nIEE/pandahub/pull/123)
+
+## 0.5.7
+🐛 Bug Fixes
+* respect timeseries range when querying timeseries collections (https://github.com/e2nIEE/pandahub/pull/122)
+
+## 0.5.6
+🛠 Improvements
+* allow to define line_filter in get_subnet (https://github.com/e2nIEE/pandahub/pull/119)
+
 ## 0.5.5
 🐛 Bug Fixes
 * default project["permissions"] to None in get_projects instead of omitting it (https://github.com/e2nIEE/pandahub/pull/117)
