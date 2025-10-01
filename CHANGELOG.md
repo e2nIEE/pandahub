@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.5.9
+🛠 Improvements
+* Introduce metadata-collections for timeseries collections to enable fast querying of metadata values (https://github.com/e2nIEE/pandahub/pull/124)
+
 ## 0.5.8
 🐛 Bug Fixes
 * remove unnecessary dependencies from base package (https://github.com/e2nIEE/pandahub/pull/123)
