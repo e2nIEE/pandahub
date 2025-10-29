@@ -2305,6 +2305,8 @@ class PandaHub:
             metadata = get_metadata_for_timeseries_collections(db, **kwargs)
             pipeline = []
             pipeline.append({"$match": {"metadata._id": metadata["_id"]}})
+            if timestamp_range is not None:
+                pipeline.append({"$match": {"timestamp": {"$gte": timestamp_range[0], "$lt": timestamp_range[1]}}})
             pipeline.append({"$project": {"_id": 0, "metadata": 0}})
             timeseries = db[collection_name].aggregate_pandas_all(pipeline)
             if len(timeseries) == 0:
