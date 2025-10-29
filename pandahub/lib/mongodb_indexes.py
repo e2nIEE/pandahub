@@ -213,5 +213,11 @@ COMMON_INDEXES = {
         IndexModel([("geo", GEOSPHERE)]),
         *VARIANT_INDEXES,
     ],
+    "variant": [
+        IndexModel(
+            [("net_id", DESCENDING), ("index", DESCENDING)],
+            unique=True,
+        ),
+    ],
 }
 MONGODB_INDEXES = PANDAPOWER_INDEXES | PANDAPIPES_INDEXES | COMMON_INDEXES
