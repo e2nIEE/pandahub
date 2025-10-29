@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.5.10
+🐛 Bug Fixes
+* fix _collection_name_of_element and _element_name_of_collection for elements without net_ prefix (https://github.com/e2nIEE/pandahub/pull/127)
+* add missing mongodb indexes for variant collection (https://github.com/e2nIEE/pandahub/pull/128)
+
 ## 0.5.9
 🛠 Improvements
 * Introduce metadata-collections for timeseries collections to enable fast querying of metadata values (https://github.com/e2nIEE/pandahub/pull/124)
