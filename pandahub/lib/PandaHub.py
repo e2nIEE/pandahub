@@ -1023,11 +1023,13 @@ class PandaHub:
             return net, branch_nodes_outside
         return net
 
-    def _collection_name_of_element(self, element):
-        return f"net_{element}"
+    def _collection_name_of_element(self, element: str) -> str:
+        """Get the project collection name for an element."""
+        return f"net_{element}" if element not in ["variant", "_networks"] else element
 
-    def _element_name_of_collection(self, collection):
-        return collection[4:]  # remove "net_" prefix
+    def _element_name_of_collection(self, collection: str) -> str:
+        """Get the element name for a project collection."""
+        return collection[4:] if collection.startswith("net_") else collection
 
     def write_network_to_db(
         self,
