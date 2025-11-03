@@ -285,21 +285,23 @@ class PandaHub:
             self.set_active_project_by_id(project_data["_id"])
         return project_data
 
-    def delete_project(self, i_know_this_action_is_final: bool = False, project_id: str | None = None):
+    def delete_project(self, i_know_this_action_is_final: bool = False, project_id: ProjectID | None = None):
         """Delete a project, checking the required permission."""
-        if project_id:
+        if project_id is None:
+            project_id = self.active_project["_id"]
+        else:
             self.set_active_project_by_id(project_id)
         self.check_permission("delete_project")
         if not i_know_this_action_is_final:
             raise PandaHubError(
                 "Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm."
             )
-        self._delete_project()
+        self._delete_project(project_id)
 
-    def _delete_project(self):
+    def _delete_project(self, project_id: ProjectID):
         """Delete the current active project."""
-        self.mongo_client.drop_database(self.active_project_id)
-        self.mongo_client.user_management.projects.delete_one({"_id": self.active_project["_id"]})
+        self.mongo_client.drop_database(str(project_id))
+        self.mongo_client.user_management.projects.delete_one({"_id": project_id})
         self.active_project = None
 
     def get_projects(
@@ -777,14 +779,14 @@ class PandaHub:
             self.active_project = None
         return None
 
-    def _remove_user_from_project(self, user_id: UUID, project_id: ProjectID) -> None:
+    def _remove_user_from_project(self, user_id: UUID | str, project_id: ProjectID) -> None:
         """Remove the user id from the project document."""
         project = self.projects_collection.find_one_and_update({"_id": project_id},
                                                                {"$unset": {f"users.{user_id}": ""}},
                                                                ["users"],
                                                                return_document=ReturnDocument.AFTER)
         if len(project["users"]) == 0:
-            self._delete_project()
+            self._delete_project(project_id)
 
     # -------------------------
     # Net handling
