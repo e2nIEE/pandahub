@@ -25,7 +25,7 @@ from packaging import version
 from pandapipes import BranchComponent, FromSerializableRegistryPpipe
 from pandapipes import from_json_string as from_json_pps
 from pandapipes.component_models import NodeElementComponent
-from pymongo import MongoClient, ReplaceOne
+from pymongo import MongoClient, ReplaceOne, ReturnDocument
 from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import ConnectionFailure, DuplicateKeyError
@@ -163,6 +163,11 @@ class PandaHub:
         """Get the projects collection"""
         return self.mongo_client["user_management"]["projects"]
 
+    @property
+    def active_project_id(self) -> str | None:
+        """Get the active project id as string."""
+        return None if self.active_project is None else str(self.active_project["_id"])
+
     # -------------------------
     # Database connection checks
     # -------------------------
@@ -280,17 +285,21 @@ class PandaHub:
             self.set_active_project_by_id(project_data["_id"])
         return project_data
 
-    def delete_project(self, i_know_this_action_is_final=False, project_id=None):
+    def delete_project(self, i_know_this_action_is_final: bool = False, project_id: str | None = None):
+        """Delete a project, checking the required permission."""
         if project_id:
             self.set_active_project_by_id(project_id)
-        project_id = self.active_project["_id"]
         self.check_permission("delete_project")
         if not i_know_this_action_is_final:
             raise PandaHubError(
                 "Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm."
             )
-        self.mongo_client.drop_database(str(project_id))
-        self.mongo_client.user_management.projects.delete_one({"_id": project_id})
+        self._delete_project()
+
+    def _delete_project(self):
+        """Delete the current active project."""
+        self.mongo_client.drop_database(self.active_project_id)
+        self.mongo_client.user_management.projects.delete_one({"_id": self.active_project["_id"]})
         self.active_project = None
 
     def get_projects(
@@ -736,18 +745,42 @@ class PandaHub:
             {"$set": {f"users.{user_id}": new_role}},
         )
 
-    def remove_user_from_project(self, email):
+    def remove_user_from_project(self, email: str) -> None:
+        """
+        Remove a user from the active project.
+
+        Users can always remove themselves from a project, regardless of their project role. Removing other users from the currently active
+        project requires the "user_management" role.
+
+        The project will be deleted if it had no other members.
+
+        Parameters
+        ----------
+        email: str
+            The email adress of the user to remove from project.
+
+        Returns
+        -------
+        None
+        """
         user = self.get_user_by_email(email)
         if user is None:
-            return
+            return None
+        user_id = user["_id"]
         # check permission only if the user tries to remove a different user to
         # allow leaving a project with just 'read' permission
-        if str(user["_id"]) != self.user_id:
+        removing_own_user = str(user_id) == self.user_id
+        if not removing_own_user:
             self.check_permission("user_management")
-        user_id = user["_id"]
-        self.mongo_client["user_management"]["projects"].update_one(
-            {"_id": self.active_project["_id"]}, {"$unset": {f"users.{user_id}": ""}}
-        )
+        project = self.projects_collection.find_one_and_update({"_id": self.active_project["_id"]},
+                                                               {"$unset": {f"users.{user_id}": ""}},
+                                                               ["users"],
+                                                               return_document=ReturnDocument.AFTER)
+        if len(project["users"]) == 0:
+            self._delete_project()
+        elif removing_own_user:
+            self.active_project = None
+        return None
 
     # -------------------------
     # Net handling
