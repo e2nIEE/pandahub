@@ -772,15 +772,19 @@ class PandaHub:
         removing_own_user = str(user_id) == self.user_id
         if not removing_own_user:
             self.check_permission("user_management")
-        project = self.projects_collection.find_one_and_update({"_id": self.active_project["_id"]},
+        self._remove_user_from_project(user_id, self.active_project["_id"])
+        if removing_own_user:
+            self.active_project = None
+        return None
+
+    def _remove_user_from_project(self, user_id: UUID, project_id: ProjectID) -> None:
+        """Remove the user id from the project document."""
+        project = self.projects_collection.find_one_and_update({"_id": project_id},
                                                                {"$unset": {f"users.{user_id}": ""}},
                                                                ["users"],
                                                                return_document=ReturnDocument.AFTER)
         if len(project["users"]) == 0:
             self._delete_project()
-        elif removing_own_user:
-            self.active_project = None
-        return None
 
     # -------------------------
     # Net handling
