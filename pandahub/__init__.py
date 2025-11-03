@@ -1,4 +1,4 @@
-__version__ = "0.5.9"
+__version__ = "0.5.10"
 
 from pandahub.lib.PandaHub import PandaHub, PandaHubError, PandaPowerNet, PandaPipesNet, PandaNet, SettingsValue, ProjectID
 
