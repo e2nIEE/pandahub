@@ -2,6 +2,12 @@
 
 ## 0.5.10
 🐛 Bug Fixes
+* use `timestamp_range` in function `get_timeseries_from_db` by @dreissland in https://github.com/e2nIEE/pandahub/pull/130
+🛠 Improvements
+* delete project if last user is removed by @jthurner in https://github.com/e2nIEE/pandahub/pull/131
+
+## 0.5.10
+🐛 Bug Fixes
 * fix _collection_name_of_element and _element_name_of_collection for elements without net_ prefix (https://github.com/e2nIEE/pandahub/pull/127)
 * add missing mongodb indexes for variant collection (https://github.com/e2nIEE/pandahub/pull/128)
 
