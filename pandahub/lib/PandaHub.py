@@ -299,7 +299,7 @@ class PandaHub:
         self._delete_project(project_id)
 
     def _delete_project(self, project_id: ProjectID):
-        """Delete the current active project."""
+        """Delete project by id."""
         self.mongo_client.drop_database(str(project_id))
         self.mongo_client.user_management.projects.delete_one({"_id": project_id})
         self.active_project = None
@@ -780,7 +780,7 @@ class PandaHub:
         return None
 
     def _remove_user_from_project(self, user_id: UUID | str, project_id: ProjectID) -> None:
-        """Remove the user id from the project document."""
+        """Remove the user id from the project document and delete project if it has no other users.."""
         project = self.projects_collection.find_one_and_update({"_id": project_id},
                                                                {"$unset": {f"users.{user_id}": ""}},
                                                                ["users"],
