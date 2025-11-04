@@ -3050,7 +3050,22 @@ class PandaHub:
         del_res = db[collection_name].delete_many(match_filter)
         return del_res
 
-    def create_timeseries_collection(self, collection_name, overwrite=False, project_id=None):
+    def create_timeseries_collection(self, collection_name:str, overwrite=False, project_id=None,
+            bucket_max_span_seconds:int=None):
+        """
+        Creates a MongoDB time-series collection with specified configuration.
+        Args:
+            collection_name (str): Name of the collection to create.
+            overwrite (bool, optional): If True, drops the existing collection before creating a new one. Defaults to False.
+            project_id (str, optional): ID of the project database to use. If None, uses the default project database.
+            bucket_max_span_seconds (int, optional): Maximum span in seconds for each bucket in the time-series collection. Consider this approach if you expect to query data for fixed time intervals, such as every 4 hours starting at midnight. Ensuring buckets don't overlap between those periods optimizes for high query volume and insert operations. If not provided, sets granularity to 'minutes'.
+        Returns:
+            None
+        Notes:
+            - If the collection already exists and `overwrite` is False, the method logs a message and skips creation.
+            - The time-series collection uses 'timestamp' as the time field and 'metadata' as the meta field.
+            - An index is created on 'metadata._id' after collection creation.
+        """
         if project_id is None:
             db = self._get_project_database()
         else:
@@ -3062,13 +3077,18 @@ class PandaHub:
             else:
                 logger.info("Collection already exists, skipping")
                 return
-        db.create_collection(
-            collection_name,
-            timeseries={
+        timeseries = {
                 "timeField": "timestamp",
                 "metaField": "metadata",
-                "granularity": "minutes",
-            },
+        }
+        if bucket_max_span_seconds:
+            timeseries["bucketMaxSpanSeconds"] = bucket_max_span_seconds
+            timeseries["bucketRoundingSeconds"] = bucket_max_span_seconds
+        else:
+            timeseries["granularity"] = "minutes"
+        db.create_collection(
+            collection_name,
+            timeseries=timeseries
         )
         db[collection_name].create_index({"metadata._id": 1})
 
