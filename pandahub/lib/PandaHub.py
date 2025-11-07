@@ -287,10 +287,9 @@ class PandaHub:
 
     def delete_project(self, i_know_this_action_is_final: bool = False, project_id: ProjectID | None = None):
         """Delete a project, checking the required permission."""
-        if project_id is None:
-            project_id = self.active_project["_id"]
-        else:
+        if project_id is not None:
             self.set_active_project_by_id(project_id)
+        project_id = self.active_project["_id"]
         self.check_permission("delete_project")
         if not i_know_this_action_is_final:
             raise PandaHubError(
