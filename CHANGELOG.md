@@ -1,6 +1,10 @@
 # Change Log
 
-## 0.5.10
+## 0.5.12
+🐛 Bug Fixes
+* fix ph.delete_project when using project ids of type ObjectID by @jthurner in https://github.com/e2nIEE/pandahub/pull/134
+
+## 0.5.11
 🐛 Bug Fixes
 * use `timestamp_range` in function `get_timeseries_from_db` by @dreissland in https://github.com/e2nIEE/pandahub/pull/130
 🛠 Improvements
