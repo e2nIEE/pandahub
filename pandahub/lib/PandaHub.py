@@ -2345,7 +2345,7 @@ class PandaHub:
             pipeline = []
             pipeline.append({"$match": {"metadata._id": metadata["_id"]}})
             if timestamp_range is not None:
-                pipeline.append({"$match": {"timestamp": {"$gte": timestamp_range[0], "$lt": timestamp_range[1]}}})
+                pipeline.append({"$match": {"timestamp": {"$gte": timestamp_range[0], "$lte": timestamp_range[1]}}})
             pipeline.append({"$project": {"_id": 0, "metadata": 0}})
             timeseries = db[collection_name].aggregate_pandas_all(pipeline)
             if len(timeseries) == 0:
@@ -2380,7 +2380,7 @@ class PandaHub:
                                                     ]
                                                 },
                                                 {
-                                                    "$lt": [
+                                                    "$lte": [
                                                         "$$timeseries_data.timestamp",
                                                         timestamp_range[1],
                                                     ]
@@ -2529,7 +2529,7 @@ class PandaHub:
         if timestamp_range is not None:
             document_filter["timestamp"] = {
                 "$gte": timestamp_range[0],
-                "$lt": timestamp_range[1],
+                "$lte": timestamp_range[1],
             }
         document = db[collection_name].find_one(
             document_filter, projection={"timestamp": 0, "_id": 0}
@@ -2613,7 +2613,7 @@ class PandaHub:
                         "$match": {
                             "timestamp": {
                                 "$gte": timestamp_range[0],
-                                "$lt": timestamp_range[1],
+                                "$lte": timestamp_range[1],
                             }
                         }
                     }
@@ -2624,7 +2624,7 @@ class PandaHub:
                         "$match": {
                             "timestamp": {
                                 "$gte": exclude_timestamp_range[0],
-                                "$lt": exclude_timestamp_range[1],
+                                "$lte": exclude_timestamp_range[1],
                             }
                         }
                     }
@@ -2687,7 +2687,7 @@ class PandaHub:
                                     ]
                                 },
                                 {
-                                    "$lt": [
+                                    "$lte": [
                                         "$$timeseries_data.timestamp",
                                         timestamp_range[1],
                                     ]
@@ -2707,7 +2707,7 @@ class PandaHub:
                         "cond": {
                             "$or": [
                                 {
-                                    "$lt": [
+                                    "$lte": [
                                         "$$timeseries_data.timestamp",
                                         timestamp_range[0],
                                     ]
@@ -2881,7 +2881,7 @@ class PandaHub:
                                     ]
                                 },
                                 {
-                                    "$lt": [
+                                    "$lte": [
                                         "$$timeseries_data.timestamp",
                                         timestamp_range[1],
                                     ]
@@ -2902,7 +2902,7 @@ class PandaHub:
                         "cond": {
                             "$or": [
                                 {
-                                    "$lt": [
+                                    "$lte": [
                                         "$$timeseries_data.timestamp",
                                         timestamp_range[0],
                                     ]
