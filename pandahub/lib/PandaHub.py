@@ -2056,8 +2056,8 @@ class PandaHub:
             db[collection_name].insert_many(documents)
             if timeseries_db_is_empty or timeseries_metadata_exists:
                 meta_col = db[metadata_collection_name]
-                max_value = timeseries.values.max()
-                min_value = timeseries.values.min()
+                max_value = np.nanmax(timeseries.to_numpy())
+                min_value = np.nanmin(timeseries.to_numpy())
                 id_match = {"_id": _id}
                 if meta_col.find_one(id_match) is None:
                     meta_col.insert_one(
