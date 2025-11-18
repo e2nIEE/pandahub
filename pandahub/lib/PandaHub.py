@@ -2036,8 +2036,7 @@ class PandaHub:
                     "$lte":  end
                 }
             }
-            db.timeseries.delete_many(filter)
-
+            db[collection_name].delete_many(filter)
             # create new timeseries documents
             if isinstance(timeseries, pd.Series):
                 documents = [
