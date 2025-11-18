@@ -2015,6 +2015,8 @@ class PandaHub:
         _id: timeseries _id
 
         """
+        if timeseries.empty:
+            return
         if project_id:
             self.set_active_project_by_id(project_id)
         if global_database:
