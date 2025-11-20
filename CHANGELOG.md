@@ -2,6 +2,12 @@
 
 ## 0.5.12
 🐛 Bug Fixes
+* don't try to write empty timeseries to mongodb
+* include upper end of the timestamp range in timeseries query
+* replace timeseries document with the same _id
+
+## 0.5.12
+🐛 Bug Fixes
 * fix ph.delete_project when using project ids of type ObjectID by @jthurner in https://github.com/e2nIEE/pandahub/pull/134
 
 ## 0.5.11
