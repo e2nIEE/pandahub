@@ -1,6 +1,6 @@
 # Change Log
 
-## 0.5.12
+## 0.5.13
 🐛 Bug Fixes
 * don't try to write empty timeseries to mongodb
 * include upper end of the timestamp range in timeseries query
