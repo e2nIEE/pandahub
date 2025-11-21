@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.5.14
+🛠 Improvements
+* allow ignoring the user lock when activating a project
+
 ## 0.5.13
 🐛 Bug Fixes
 * don't try to write empty timeseries to mongodb
