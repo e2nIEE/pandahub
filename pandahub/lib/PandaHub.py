@@ -353,7 +353,7 @@ class PandaHub:
         return [project["name"] for project in self.get_projects(projection={"_id": 0, "name": 1})]
 
 
-    def set_active_project(self, project_name: str, realm=None):
+    def set_active_project(self, project_name: str, realm=None, ignore_user_lock: bool | None = False):
         projects = self.get_projects(query_filter={"name":project_name},realm=realm, projection=["_id"])
         if len(projects) == 0:
             raise PandaHubError("Project not found!", 404)
@@ -361,14 +361,14 @@ class PandaHub:
             raise PandaHubError("Multiple projects found!")
         else:
             project_id = projects[0]["id"]
-            self.set_active_project_by_id(project_id)
+            self.set_active_project_by_id(project_id, ignore_user_lock=ignore_user_lock)
 
-    def set_active_project_by_id(self, project_id: ProjectID):
+    def set_active_project_by_id(self, project_id: ProjectID, ignore_user_lock: bool | None = False):
         try:
             project_id = ObjectId(project_id)
         except InvalidId:
             pass
-        self.active_project = self._get_project_document({"_id": project_id})
+        self.active_project = self._get_project_document({"_id": project_id}, ignore_user_lock=ignore_user_lock)
         if self.active_project is None:
             raise PandaHubError("Project not found!", 404)
 
@@ -440,7 +440,7 @@ class PandaHub:
         project = self.projects_collection.find_one({"name": project_name, "realm": realm})
         return project is not None
 
-    def _get_project_document(self, filter_dict: dict) -> Optional[dict]:
+    def _get_project_document(self, filter_dict: dict, ignore_user_lock: bool | None = False) -> Optional[dict]:
         projects = self.projects_collection.find(filter_dict).to_list()
         if len(projects) == 0:  # project doesn't exist
             return None
@@ -455,9 +455,10 @@ class PandaHub:
         user = self._get_user()
         if not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
             raise PandaHubError("You don't have rights to access this project", 403)
-        locked_by = project_doc.get("locked_by")
-        if locked_by is not None and locked_by != self.user_id:
-            raise PandaHubError("Project is locked by another user")
+        if not ignore_user_lock:
+            locked_by = project_doc.get("locked_by")
+            if locked_by is not None and locked_by != self.user_id:
+                raise PandaHubError("Project is locked by another user")
         return project_doc
 
     def _get_project_database(self) -> Database:
