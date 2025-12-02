@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.5.15
+🐛 Bug Fixes
+* fix wrong return in get_timeseries_metadata_from_timeseries_collection by @jthurner in https://github.com/e2nIEE/pandahub/pull/142
+
 ## 0.5.14
 🛠 Improvements
 * allow ignoring the user lock when activating a project

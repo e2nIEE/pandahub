@@ -2510,16 +2510,18 @@ class PandaHub:
             del df_metadata["return_id"]
         return df_metadata
 
-
-    def get_timeseries_metadata_from_metadata_collection(self, filter_document, metadata_collection_name, timestamp_range=None):
+    def get_timeseries_metadata_from_metadata_collection(
+        self, filter_document: dict, metadata_collection_name: str, timestamp_range=None
+    ) -> list[dict]:
         db = self._get_project_database()
         if timestamp_range is not None:
             filter_document["first_timestamp"] = {"$lte": timestamp_range[1]}
             filter_document["last_timestamp"] = {"$gte": timestamp_range[0]}
         return db[metadata_collection_name].find(filter_document).to_list()
 
-
-    def get_timeseries_metadata_from_timeseries_collection(self, filter_document, collection_name, timestamp_range=None):
+    def get_timeseries_metadata_from_timeseries_collection(
+        self, filter_document: dict, collection_name: str, timestamp_range=None
+    ) -> list[dict]:
         db = self._get_project_database()
         pipeline = []
         if len(filter_document) > 0:
@@ -2538,7 +2540,7 @@ class PandaHub:
             document_filter, projection={"timestamp": 0, "_id": 0}
         )
         if document is None:
-            return pd.DataFrame()
+            return []
         value_fields = ["$%s" % field for field in document.keys() if field != "metadata"]
         group_dict = {
             "_id": "$metadata._id",
