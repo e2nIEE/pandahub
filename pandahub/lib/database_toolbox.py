@@ -443,5 +443,9 @@ def get_metadata_for_timeseries_collections(db, data_type=None, net_id=None, ele
                     "Please provide a net_id."
                 )
         metadata = {"data_type": data_type, "net_id": net_id, "element_type": element_type, "element_index": element_index, **kwargs}
-        metadata["_id"] = f"{net_id}_{element_type}_{element_index}_{data_type}"
+        _id = f"{net_id}_{element_type}_{element_index}_{data_type}"
+        parameter = metadata.get("parameter")
+        if parameter:
+            _id = _id+f"_{parameter}"
+        metadata["_id"] = _id
         return metadata
