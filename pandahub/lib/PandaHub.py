@@ -230,7 +230,7 @@ class PandaHub:
 
     def get_user_by_email(self, email):
         user_mgmnt_db = self.mongo_client["user_management"]
-        user = user_mgmnt_db["users"].find_one({"email": email})
+        user = user_mgmnt_db["users"].find_one({"email": email}, collation={"locale": "en", "strength": 2})
         if user is None:
             return None
         if str(user["_id"]) != self.user_id:
