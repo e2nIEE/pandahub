@@ -230,7 +230,7 @@ class PandaHub:
 
     def get_user_by_email(self, email):
         user_mgmnt_db = self.mongo_client["user_management"]
-        user = user_mgmnt_db["users"].find_one({"email": email})
+        user = user_mgmnt_db["users"].find_one({"email": email}, collation={"locale": "en", "strength": 2})
         if user is None:
             return None
         if str(user["_id"]) != self.user_id:
@@ -2542,14 +2542,7 @@ class PandaHub:
         )
         if document is None:
             return []
-        value_field_names = [field for field in document.keys() if field != "metadata"]
-        # Exclude documents where any value field contains NaN so that $min/$max only
-        # operate on finite values (MongoDB treats NaN as less than all finite numbers,
-        # which would cause $min to return NaN whenever a single document has a bad reading).
-        pipeline.append(
-            {"$match": {"$nor": [{field: float("nan")} for field in value_field_names]}}
-        )
-        value_fields = ["$%s" % field for field in value_field_names]
+        value_fields = ["$%s" % field for field in document.keys() if field != "metadata"]
         group_dict = {
             "_id": "$metadata._id",
             "max_value": {"$max": {"$max": value_fields}},
