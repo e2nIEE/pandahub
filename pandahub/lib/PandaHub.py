@@ -230,7 +230,7 @@ class PandaHub:
 
     def get_user_by_email(self, email):
         user_mgmnt_db = self.mongo_client["user_management"]
-        user = user_mgmnt_db["users"].find_one({"email": email}, collation={"locale": "en", "strength": 2})
+        user = user_mgmnt_db["users"].find_one({"email": email})
         if user is None:
             return None
         if str(user["_id"]) != self.user_id:
@@ -2485,7 +2485,6 @@ class PandaHub:
             # if there is no metadata collection yet, compile the metadata for all timeseries
             if metadata_collection_name not in db.list_collection_names():
                 metadata = self.get_timeseries_metadata_from_timeseries_collection(filter_document={}, collection_name=collection_name)
-                print("METADATA", metadata)
                 if len(metadata) > 0:
                     db[metadata_collection_name].insert_many(metadata)
             metadata = self.get_timeseries_metadata_from_metadata_collection(filter_document, metadata_collection_name, timestamp_range)
