@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.5.17
+🐛 Bug Fixes
+* Fix writing empty list to metadata collection in https://github.com/e2nIEE/pandahub/pull/146
+
 ## 0.5.16
 🛠 Improvements
 * ignore case when looking up users by email in https://github.com/e2nIEE/pandahub/pull/143
