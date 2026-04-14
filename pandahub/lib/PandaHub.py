@@ -2485,7 +2485,9 @@ class PandaHub:
             # if there is no metadata collection yet, compile the metadata for all timeseries
             if metadata_collection_name not in db.list_collection_names():
                 metadata = self.get_timeseries_metadata_from_timeseries_collection(filter_document={}, collection_name=collection_name)
-                db[metadata_collection_name].insert_many(metadata)
+                print("METADATA", metadata)
+                if len(metadata) > 0:
+                    db[metadata_collection_name].insert_many(metadata)
             metadata = self.get_timeseries_metadata_from_metadata_collection(filter_document, metadata_collection_name, timestamp_range)
         else:
             match_filter = []
@@ -2541,7 +2543,14 @@ class PandaHub:
         )
         if document is None:
             return []
-        value_fields = ["$%s" % field for field in document.keys() if field != "metadata"]
+        value_field_names = [field for field in document.keys() if field != "metadata"]
+        # Exclude documents where any value field contains NaN so that $min/$max only
+        # operate on finite values (MongoDB treats NaN as less than all finite numbers,
+        # which would cause $min to return NaN whenever a single document has a bad reading).
+        pipeline.append(
+            {"$match": {"$nor": [{field: float("nan")} for field in value_field_names]}}
+        )
+        value_fields = ["$%s" % field for field in value_field_names]
         group_dict = {
             "_id": "$metadata._id",
             "max_value": {"$max": {"$max": value_fields}},
