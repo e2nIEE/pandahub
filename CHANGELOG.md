@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.5.16
+🛠 Improvements
+* ignore case when looking up users by email in https://github.com/e2nIEE/pandahub/pull/143
+* instantiate global mongo client on first use in https://github.com/e2nIEE/pandahub/pull/144
+
 ## 0.5.15
 🐛 Bug Fixes
 * fix wrong return in get_timeseries_metadata_from_timeseries_collection by @jthurner in https://github.com/e2nIEE/pandahub/pull/142
