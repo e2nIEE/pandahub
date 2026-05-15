@@ -1495,7 +1495,7 @@ class PandaHub:
                 insert_result = db[collection].insert_one(document)
                 document["_id"] = insert_result.inserted_id
             else:
-                update_dict = {"$set": {parameter: value}, "$unset": {"not_in_var": ""}}
+                update_dict = {"$set": {parameter: value, "not_in_var": []}}
                 if document["var_type"] == "change":
                     update_dict["$addToSet"] = {"changed_fields": parameter}
                 db[collection].update_one({"_id": document["_id"]}, update_dict)
