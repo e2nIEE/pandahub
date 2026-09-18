@@ -30,13 +30,14 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     # Add the specific Python versions supported here, e.g.:
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12"
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14"
 ]
 keywords = ["network", "analysis", "optimization", "automation", "grid", "energy", "engineering", "simulation"]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "pandapower>=3.0",
     "pandapipes>=0.7.0",
