@@ -1,4 +1,3 @@
-
 DATATYPES = {
     "bus": {
         "name": str,
@@ -20,7 +19,7 @@ DATATYPES = {
         "scaling": float,
         "in_service": bool,
         "controllable": bool,
-        "type": str
+        "type": str,
     },
     "sgen": {
         "name": str,
@@ -31,7 +30,7 @@ DATATYPES = {
         "scaling": float,
         "in_service": bool,
         "type": str,
-        "current_source": bool
+        "current_source": bool,
     },
     "gen": {
         "name": str,
@@ -48,17 +47,9 @@ DATATYPES = {
         "slack_weight": float,
         "controllable": bool,
         "max_p_mw": float,
-        "min_p_mw": float
+        "min_p_mw": float,
     },
-    "switch": {
-        "name": str,
-        "bus": int,
-        "element": int,
-        "et": str,
-        "type": str,
-        "closed": bool,
-        "z_ohm": float
-    },
+    "switch": {"name": str, "bus": int, "element": int, "et": str, "type": str, "closed": bool, "z_ohm": float},
     "ext_grid": {
         "name": str,
         "bus": int,
@@ -78,7 +69,7 @@ DATATYPES = {
         "x0x_min": float,
         "r0x0_max": float,
         "r0x0_min": float,
-        "controllable": bool
+        "controllable": bool,
     },
     "line": {
         "name": str,
@@ -120,7 +111,7 @@ DATATYPES = {
         "tap_phase_shifter": bool,
         "parallel": int,
         "df": float,
-        "in_service": bool
+        "in_service": bool,
     },
     "motor": {
         "name": str,
@@ -135,7 +126,7 @@ DATATYPES = {
         "vn_kv": float,
         "scaling": float,
         "in_service": bool,
-        "rx": float
+        "rx": float,
     },
     "asymmetric_load": {
         "name": str,
@@ -149,7 +140,7 @@ DATATYPES = {
         "sn_mva": float,
         "scaling": float,
         "in_service": bool,
-        "type": str
+        "type": str,
     },
     "asymmetric_sgen": {
         "name": str,
@@ -164,7 +155,7 @@ DATATYPES = {
         "scaling": float,
         "in_service": bool,
         "type": str,
-        "current_source": bool
+        "current_source": bool,
     },
     "storage": {
         "name": str,
@@ -177,7 +168,7 @@ DATATYPES = {
         "max_e_mwh": float,
         "scaling": float,
         "in_service": bool,
-        "type": str
+        "type": str,
     },
     "shunt": {
         "bus": int,
@@ -187,7 +178,7 @@ DATATYPES = {
         "vn_kv": float,
         "step": int,
         "max_step": int,
-        "in_service": bool
+        "in_service": bool,
     },
     "trafo3w": {
         "name": str,
@@ -230,7 +221,7 @@ DATATYPES = {
         "rtf_pu": float,
         "xtf_pu": float,
         "sn_mva": float,
-        "in_service": bool
+        "in_service": bool,
     },
     "dcline": {
         "name": str,
@@ -246,7 +237,7 @@ DATATYPES = {
         "min_q_to_mvar": float,
         "max_q_from_mvar": float,
         "max_q_to_mvar": float,
-        "in_service": bool
+        "in_service": bool,
     },
     "ward": {
         "name": str,
@@ -255,7 +246,7 @@ DATATYPES = {
         "qs_mvar": float,
         "qz_mvar": float,
         "pz_mw": float,
-        "in_service": bool
+        "in_service": bool,
     },
     "xward": {
         "name": str,
@@ -268,7 +259,7 @@ DATATYPES = {
         "x_ohm": float,
         "vm_pu": float,
         "slack_weight": float,
-        "in_service": bool
+        "in_service": bool,
     },
     "measurement": {
         "name": str,
@@ -277,14 +268,9 @@ DATATYPES = {
         "element": int,
         "value": float,
         "std_dev": float,
-        "side": str
+        "side": str,
     },
-    "pwl_cost": {
-        "power_type": str,
-        "element": int,
-        "et": str,
-        "points": str
-    },
+    "pwl_cost": {"power_type": str, "element": int, "et": str, "points": str},
     "poly_cost": {
         "element": int,
         "et": str,
@@ -293,17 +279,15 @@ DATATYPES = {
         "cp2_eur_per_mw2": float,
         "cq0_eur": float,
         "cq1_eur_per_mvar": float,
-        "cq2_eur_per_mvar2": float
+        "cq2_eur_per_mvar2": float,
     },
-    'characteristic': {
-        'object': object
-    },
-    'controller': {
-        'object': object,
-        'in_service': bool,
-        'order': float,
-        'level': str,
-        'initial_run': bool,
-        "recycle": str
+    "characteristic": {"object": object},
+    "controller": {
+        "object": object,
+        "in_service": bool,
+        "order": float,
+        "level": str,
+        "initial_run": bool,
+        "recycle": str,
     },
 }

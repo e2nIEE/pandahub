@@ -18,5 +18,3 @@ def ph():
     yield ph
 
     ph.delete_project(i_know_this_action_is_final=True)
-
-

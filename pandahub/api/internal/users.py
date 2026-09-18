@@ -10,11 +10,14 @@ from fastapi_users.db import BeanieUserDatabase
 
 from ..internal.db import get_user_db, get_access_token_db, User, AccessToken
 
-class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
-  pass
 
-async def get_user_manager(user_db:BeanieUserDatabase = Depends(get_user_db)):
+class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
+    pass
+
+
+async def get_user_manager(user_db: BeanieUserDatabase = Depends(get_user_db)):
     yield UserManager(user_db)
+
 
 bearer_transport = BearerTransport(tokenUrl="auth/login")
 

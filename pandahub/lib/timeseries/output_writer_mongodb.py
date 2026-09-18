@@ -7,6 +7,7 @@ from pandahub.mongo_io_methods import MongoIOMethods
 
 try:
     import pplog
+
     logger = pplog.getLogger(__name__)
 except ImportError:
     import logging
@@ -16,9 +17,22 @@ class OutputWriterMongoDB(OutputWriter):
     """
     Output Writer which writes to a mongoDB
     """
-    def __init__(self, net, io_methods: MongoIOMethods, netname: str, db_name: str, start_date: datetime, time_steps=None,
-                 write_time=None, log_variables=None, write_caching=10, freq="15min", collection_name='timeseries_data',
-                 **kwargs):
+
+    def __init__(
+        self,
+        net,
+        io_methods: MongoIOMethods,
+        netname: str,
+        db_name: str,
+        start_date: datetime,
+        time_steps=None,
+        write_time=None,
+        log_variables=None,
+        write_caching=10,
+        freq="15min",
+        collection_name="timeseries_data",
+        **kwargs,
+    ):
         super().__init__(net, time_steps=time_steps, write_time=write_time, log_variables=log_variables)
         self.io_methods = io_methods
         self.args = kwargs
@@ -36,7 +50,7 @@ class OutputWriterMongoDB(OutputWriter):
     #     pass
 
     # def _save_single_xls_sheet(self, append):
-        # ToDo: implement save to a single sheet
+    # ToDo: implement save to a single sheet
     #     raise NotImplementedError("Sorry not implemented yet")
 
     def _init_np_array(self, partial_func):
@@ -125,9 +139,7 @@ class OutputWriterMongoDB(OutputWriter):
                 end = self.start_date + (self.current_pos - 1) * pd.Timedelta(self.freq)
                 if self.current_pos < self.write_caching:
                     res_df.drop(range(self.current_pos, self.write_caching), axis=0, inplace=True)
-                res_df.index = pd.date_range(start=self.start_date,
-                                             end=end,
-                                             freq=self.freq)
+                res_df.index = pd.date_range(start=self.start_date, end=end, freq=self.freq)
                 if res_name in self.ids:
                     for ii in res_df.index:
                         row = res_df.loc[ii]
@@ -139,17 +151,19 @@ class OutputWriterMongoDB(OutputWriter):
                             # **self.args
                         )
                 else:
-                    et = res_name.split('.')[0]
-                    dt = res_name.split('.')[1]
+                    et = res_name.split(".")[0]
+                    dt = res_name.split(".")[1]
                     self.ids[res_name] = self.io_methods.bulk_write_timeseries_to_db(
-                        timeseries=res_df, netname=self.NET_NAME,
-                        element_type=et, data_type=dt,
+                        timeseries=res_df,
+                        netname=self.NET_NAME,
+                        element_type=et,
+                        data_type=dt,
                         collection_name=self.collection_name,
                         db_name=self.db_name,
                         return_ids=True,
                         last_timestamp=self.start_date + pd.Timedelta(self.freq) * len(self.time_steps),
                         num_timestamps=len(self.time_steps),
-                        **self.args
+                        **self.args,
                     )
 
             self.start_date = self.start_date + self.current_pos * pd.Timedelta(self.freq)

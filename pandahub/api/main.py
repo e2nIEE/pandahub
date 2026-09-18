@@ -11,16 +11,15 @@ from pandahub.api.internal.db import User, db, AccessToken
 from . import pandahub_app_settings as ph_settings
 from beanie import init_beanie
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_beanie(
         database=db,
-        document_models=[
-            User,
-            AccessToken
-        ],
+        document_models=[User, AccessToken],
     )
     yield
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -52,18 +51,22 @@ async def pandahub_exception_handler(request: Request, exc: PandaHubError):
         content=str(exc),
     )
 
+
 @app.get("/")
 async def ready():
     if ph_settings.debug:
         import os
+
         return os.environ
     return "Hello World!"
 
 
 if __name__ == "__main__":
-    uvicorn.run("pandahub.api.main:app",
-                host=ph_settings.pandahub_server_url,
-                port=ph_settings.pandahub_server_port,
-                log_level="info",
-                reload=True,
-                workers=ph_settings.workers)
+    uvicorn.run(
+        "pandahub.api.main:app",
+        host=ph_settings.pandahub_server_url,
+        port=ph_settings.pandahub_server_port,
+        log_level="info",
+        reload=True,
+        workers=ph_settings.workers,
+    )

@@ -10,6 +10,7 @@ from pandahub.lib.settings import pandahub_settings as settings
 
 _global_mongo_client = None
 
+
 def _get_mongo_client(
     connection_url: str = settings.mongodb_url,
     connection_user: str = settings.mongodb_user,
@@ -30,14 +31,29 @@ def _get_mongo_client(
 
 
 @overload
-def get_mongo_client(database: None = None, collection: None = None,
-                     connection_url: str = ..., connection_user: str = ..., connection_password: str = ...) -> MongoClient: ...
+def get_mongo_client(
+    database: None = None,
+    collection: None = None,
+    connection_url: str = ...,
+    connection_user: str = ...,
+    connection_password: str = ...,
+) -> MongoClient: ...
 @overload
-def get_mongo_client(database: str, collection: None=None,
-                     connection_url: str = ..., connection_user: str = ..., connection_password: str = ...) -> Database: ...
+def get_mongo_client(
+    database: str,
+    collection: None = None,
+    connection_url: str = ...,
+    connection_user: str = ...,
+    connection_password: str = ...,
+) -> Database: ...
 @overload
-def get_mongo_client(database: str, collection: str,
-                     connection_url: str = ..., connection_user: str = ..., connection_password: str = ...) -> Collection: ...
+def get_mongo_client(
+    database: str,
+    collection: str,
+    connection_url: str = ...,
+    connection_user: str = ...,
+    connection_password: str = ...,
+) -> Collection: ...
 
 
 def get_mongo_client(
@@ -95,7 +111,9 @@ def mongo_client(
         client.close()
 
 
-def _get_db_or_coll(client: MongoClient, database: str | None = None, collection: str | None = None) -> MongoClient | Database | Collection:
+def _get_db_or_coll(
+    client: MongoClient, database: str | None = None, collection: str | None = None
+) -> MongoClient | Database | Collection:
     if database is not None and collection is not None:
         return client[database][collection]
     elif database is not None:
