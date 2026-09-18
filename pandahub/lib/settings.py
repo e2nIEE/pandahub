@@ -1,8 +1,8 @@
 import os
 from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import AfterValidator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def get_secret(secret: str) -> str:

@@ -1,4 +1,4 @@
-from typing import Optional, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 class CreateProject(BaseModel):
     name: str
-    settings: Optional[dict] = None
+    settings: dict | None = None
 
 
 @router.post("/create_project")

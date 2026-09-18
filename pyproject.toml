@@ -131,4 +131,6 @@ ignore = [
     "TD003",
     # ignore magic numbers rule (use named constants where appropriate manually)
     "PLR2004",
+    # TODO: make boolean positional arguments keyword-only (breaking change)
+    "FBT001",
 ]

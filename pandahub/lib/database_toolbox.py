@@ -1,25 +1,24 @@
-# -*- coding: utf-8 -*-
+"""Utility functions for serializing, converting, and storing pandapower/pandapipes network data in MongoDB."""
 
+import base64
+import hashlib
+import importlib
+import json
+import logging
+import blosc
 import numpy as np
 import pandas as pd
 
 from pandahub.lib.datatypes import DATATYPES
-import base64
-import hashlib
-import logging
-import json
-import importlib
-import blosc
 
 logger = logging.getLogger(__name__)
-from pandapower.io_utils import PPJSONEncoder
 from packaging import version
+from pandapower.io_utils import PPJSONEncoder
+from pymongo.database import Database
 
 
-def get_document_hash(task):
-    """
-    Returns a hash value of the input task in order to generate consistent but
-    unique _ids.
+def get_document_hash(task) -> str:
+    """Return a hash value of the input task to generate consistent but unique _ids.
 
     Parameters
     ----------
@@ -38,19 +37,20 @@ def get_document_hash(task):
 
 
 def make_task_hashable(task):
-    """
-    Makes a task dict hashable.
+    """Make a task dict hashable.
+
     Parameters
     ----------
     task : dict
         task that shall be made hashable.
+
     Returns
     -------
     TYPE
         hashable task.
     """
     if isinstance(task, (tuple, list)):
-        return tuple((make_task_hashable(e) for e in task))
+        return tuple(make_task_hashable(e) for e in task)
 
     if isinstance(task, dict):
         return tuple(sorted((k, make_task_hashable(v)) for k, v in task.items()))
@@ -60,9 +60,9 @@ def make_task_hashable(task):
     return task
 
 
-def add_timestamp_info_to_document(document, timeseries, ts_format):
-    """
-    Adds some meta information to documents that containg time series.
+def add_timestamp_info_to_document(document: dict, timeseries: pd.Series, ts_format: str) -> dict:
+    """Add meta information to documents that contain time series.
+
     The document will get the additional attributes 'first_timestamp',
     'last_tiemstamp' and 'num_timestamps' (number of timestamps). This
     information can be used to calculate the timeseries' resolution, to
@@ -91,10 +91,11 @@ def add_timestamp_info_to_document(document, timeseries, ts_format):
     return document
 
 
-def convert_timeseries_to_subdocuments(timeseries):
-    """
-    Converts a timeseries to a list of dicts. Every dict represents one timestep
-    and contains the keys 'timestamp' and 'value' as well as the according values.
+def convert_timeseries_to_subdocuments(timeseries: pd.Series) -> list[dict]:
+    """Convert a timeseries to a list of dicts.
+
+    Every dict represents one timestep and contains the keys 'timestamp' and 'value'
+    as well as the according values.
 
     Parameters
     ----------
@@ -113,37 +114,43 @@ def convert_timeseries_to_subdocuments(timeseries):
     return subdocuments
 
 
-def compress_timeseries_data(timeseries_data, ts_format):
+def compress_timeseries_data(timeseries_data: pd.Series, ts_format: str) -> bytes | None:
+    """Compress timeseries data using blosc."""
     if ts_format == "timestamp_value":
         timeseries_data = np.array([timeseries_data.index.astype("int64"), timeseries_data.values])
         return blosc.compress(timeseries_data.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
-    elif ts_format == "array":
+    if ts_format == "array":
         return blosc.compress(timeseries_data.astype(float).values.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
 
 
-def decompress_timeseries_data(timeseries_data, ts_format, num_timestamps):
+def decompress_timeseries_data(timeseries_data: bytes, ts_format: str, num_timestamps: int):
+    """Decompress blosc-compressed timeseries data back to a pandas Series or numpy array."""
     if ts_format == "timestamp_value":
         data = np.frombuffer(blosc.decompress(timeseries_data), dtype=np.float64).reshape(
             (num_timestamps, 2), order="F"
         )
         return pd.Series(data[:, 1], index=pd.to_datetime(data[:, 0]))
-    elif ts_format == "array":
+    if ts_format == "array":
         return np.frombuffer(blosc.decompress(timeseries_data), dtype=np.float64)
 
 
-def create_timeseries_document(timeseries, data_type, ts_format="timestamp_value", compress_ts_data=False, **kwargs):
-    """
-    Creates a document that contains timeseries metadata as well as the timeseries
-    itself. Uses the function 'add_timestamp_info_to_document' to add information
-    about the embedded timeseries and the function 'convert_timeseries_to_subdocuments'
-    to convert the input timeseries to a list of subdocuments, that can be accessed
-    with the attribute "timeseries_data". The element_type and data_type of the
-    timeseries are required metadata, netname and element_index are optional.
+def create_timeseries_document(
+    timeseries: pd.Series,
+    data_type: str,
+    ts_format: str = "timestamp_value",
+    compress_ts_data: bool = False,
+    **kwargs,
+) -> dict:
+    """Create a document containing timeseries metadata and data.
+
+    Uses 'add_timestamp_info_to_document' to add information about the embedded timeseries
+    and 'convert_timeseries_to_subdocuments' to convert the input timeseries to a list of
+    subdocuments accessible via the "timeseries_data" key. The element_type and data_type of
+    the timeseries are required metadata, netname and element_index are optional.
     Additionally, arbitrary kwargs can be added.
 
     By default, the document will have an _id generated based on its metadata
-    using the function get_document_hash but an _id provided by the user as a
-    kwarg will not be overwritten.
+    using 'get_document_hash', but an _id provided by the user as a kwarg will not be overwritten.
 
 
     Parameters
@@ -179,21 +186,20 @@ def create_timeseries_document(timeseries, data_type, ts_format="timestamp_value
 
     if compress_ts_data:
         document["timeseries_data"] = compress_timeseries_data(timeseries, ts_format)
-    else:
-        if ts_format == "timestamp_value":
-            document["timeseries_data"] = convert_timeseries_to_subdocuments(timeseries)
-        elif ts_format == "array":
-            document["timeseries_data"] = list(timeseries.values)
+    elif ts_format == "timestamp_value":
+        document["timeseries_data"] = convert_timeseries_to_subdocuments(timeseries)
+    elif ts_format == "array":
+        document["timeseries_data"] = list(timeseries.values)
 
     return document
 
 
-def convert_element_to_dict(element_data, net_id, default_dtypes=None):
-    """
-    Converts a pandapower pandas.DataFrame element into dictonary, casting columns to default dtypes.
-    * Columns of type Object are serialized to json
-    * Columns named "geo" or "*_geo" containing strings are parsed into dicts
-    * net_id and index (from element_data df index) are added as values
+def convert_element_to_dict(element_data: pd.DataFrame, net_id, default_dtypes: dict | None = None) -> list[dict]:
+    """Convert a pandapower pandas.DataFrame element into a list of record dicts.
+
+    Casts columns to default dtypes. Columns of type Object are serialized to json.
+    Columns named "geo" or "*_geo" containing strings are parsed into dicts.
+    net_id and index (from element_data df index) are added as values.
 
     Parameters
     ----------
@@ -226,7 +232,11 @@ def convert_element_to_dict(element_data, net_id, default_dtypes=None):
     return element_data.to_dict(orient="records")
 
 
-def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
+def convert_dataframes_to_dicts(net, net_id, version_, datatypes: dict = DATATYPES) -> tuple[dict, dict, dict]:
+    """Convert all DataFrame elements of a pandapower/pandapipes network to dicts.
+
+    Returns separate dicts for dataframe elements, non-dataframe parameters, and column dtypes.
+    """
     dataframes = {}
     other_parameters = {}
     types = {}
@@ -241,7 +251,7 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
                 continue
             # ------------
             # convert pandapower objects in dataframes to dict
-            dataframes[key] = convert_element_to_dict(net[key].copy(deep=True), net_id, datatypes.get(key))
+            dataframes[key] = convert_element_to_dict(data.copy(deep=True), net_id, datatypes.get(key))
         else:
             data = serialize_object_data(key, data, version_)
             if data:
@@ -250,9 +260,8 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes=DATATYPES):
     return dataframes, other_parameters, types
 
 
-def serialize_object_data(element, element_data, version_):
-    """
-    Serialize a pandapower element which is not of type pandas.DataFrame into json.
+def serialize_object_data(element: str, element_data, version_):
+    """Serialize a pandapower element which is not of type pandas.DataFrame into json.
 
     Parameters
     ----------
@@ -272,7 +281,7 @@ def serialize_object_data(element, element_data, version_):
         try:
             element_data = json.dumps(element_data, cls=PPJSONEncoder)
         except:
-            print("Data in net[{}] is not JSON serializable and was therefore omitted on import".format(element))
+            print(f"Data in net[{element}] is not JSON serializable and was therefore omitted on import")
         else:
             return element_data
     else:
@@ -283,9 +292,8 @@ def serialize_object_data(element, element_data, version_):
         return element_data
 
 
-def get_dtypes(element_data, default_dtypes):
-    """
-    Construct data types from a pandas.DataFrame, with given defaults taking precedence.
+def get_dtypes(element_data: pd.DataFrame, default_dtypes: dict | None) -> dict[str, str]:
+    """Construct data types from a pandas.DataFrame, with given defaults taking precedence.
 
     Parameters
     ----------
@@ -308,28 +316,33 @@ def get_dtypes(element_data, default_dtypes):
     return types
 
 
-def load_geojsons(df):
+def load_geojsons(df: pd.DataFrame) -> None:
+    """Parse GeoJSON strings in geo columns of a DataFrame into dicts in-place."""
     for column in df.columns:
         if column == "geo" or column.endswith("_geo"):
             df[column] = df[column].apply(lambda a: json.loads(a) if isinstance(a, str) else a)
 
 
-def convert_geojsons(df, geo_mode="string"):
+def convert_geojsons(df: pd.DataFrame, geo_mode: str = "string") -> None:
+    """Convert geo columns of a DataFrame to the specified representation in-place.
+
+    Supports "dict", "string", and "shapely" output formats.
+    """
 
     def to_dict(geo):
         if isinstance(geo, dict):
             return geo
-        elif isinstance(geo, str):
+        if isinstance(geo, str):
             return json.loads(geo)
-        elif hasattr(geo, "coords"):
+        if hasattr(geo, "coords"):
             return {"type": geo.type, "coordinates": geo.coords}
 
     def to_string(geo):
         if isinstance(geo, str):
             return geo
-        elif isinstance(geo, dict):
+        if isinstance(geo, dict):
             return json.dumps(geo)
-        elif hasattr(geo, "coords"):
+        if hasattr(geo, "coords"):
             return json.dumps({"type": geo.type, "coordinates": geo.coords})
 
     def to_shapely(geo):
@@ -337,9 +350,9 @@ def convert_geojsons(df, geo_mode="string"):
 
         if hasattr(geo, "coords"):
             return geo
-        elif isinstance(geo, str):
+        if isinstance(geo, str):
             return shape(json.loads(geo))
-        elif isinstance(geo, dict):
+        if isinstance(geo, dict):
             return shape(geo)
 
     conv_func = None
@@ -350,24 +363,26 @@ def convert_geojsons(df, geo_mode="string"):
     elif geo_mode == "shapely":
         conv_func = to_shapely
     else:
-        raise NotImplementedError("Unknown geo_mode {}".format(geo_mode))
+        raise NotImplementedError(f"Unknown geo_mode {geo_mode}")
 
     for column in df.columns:
         if column == "geo" or column.endswith("_geo"):
             df[column] = df[column].apply(conv_func)
 
 
-def json_to_object(js):
+def json_to_object(js: dict):
+    """Deserialize a JSON-encoded object back to its original Python class instance."""
     _module = importlib.import_module(js["_module"])
     _class = getattr(_module, js["_class"])
     return _class.from_json(js["_object"])
 
 
-def object_to_json(obj):
+def object_to_json(obj) -> dict:
+    """Serialize a Python object to a JSON-compatible dict with module/class metadata."""
     return {"_module": obj.__class__.__module__, "_class": obj.__class__.__name__, "_object": obj.to_json()}
 
 
-def migrate_userdb_to_beanie(ph):
+def migrate_userdb_to_beanie(ph) -> None:
     """Migrate existing users to beanie backend used by pandahub >= 0.3.0.
 
     Will raise an exception if the user database is inconsistent, and return silently if no users need to be migrated.
@@ -377,11 +392,13 @@ def migrate_userdb_to_beanie(ph):
     ----------
     ph: pandahub.PandaHub
         PandaHub instance with connected mongodb database to apply migrations to.
+
     Returns
     -------
     None
     """
     from datetime import datetime
+
     from pymongo.errors import OperationFailure
 
     userdb_backup = ph.mongo_client["user_management"][datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")]
@@ -397,7 +414,7 @@ def migrate_userdb_to_beanie(ph):
             f"pandahub < 0.3.0 users: {old_users}"
             f"pandahub >= 0.3.0 users: {new_users}"
         )
-    elif not old_users:
+    if not old_users:
         return
     userdb_backup.insert_many(old_users)
     try:
@@ -413,8 +430,14 @@ def migrate_userdb_to_beanie(ph):
 
 
 def get_metadata_for_timeseries_collections(
-    db, data_type=None, net_id=None, element_type=None, element_index=None, **kwargs
-):
+    db: Database,
+    data_type: str | None = None,
+    net_id=None,
+    element_type: str | None = None,
+    element_index=None,
+    **kwargs,
+) -> dict:
+    """Build a metadata dict for a timeseries collection query, validating required fields."""
     if element_type is None:
         raise ValueError("element_type needs to be defined for timeseries collections")
     if element_index is None:

@@ -1,6 +1,7 @@
 from fastapi import Depends
 
 from pandahub import PandaHub
+
 from .internal.db import User
 from .internal.users import fastapi_users
 

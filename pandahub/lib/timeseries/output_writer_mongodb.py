@@ -1,8 +1,10 @@
-import numpy as np
-import pandas as pd
 from datetime import datetime
 from types import FunctionType
+
+import numpy as np
+import pandas as pd
 from pandapower.timeseries import OutputWriter
+
 from pandahub.mongo_io_methods import MongoIOMethods
 
 try:
@@ -10,7 +12,7 @@ try:
 
     logger = pplog.getLogger(__name__)
 except ImportError:
-    import logging
+    pass
 
 
 class OutputWriterMongoDB(OutputWriter):
@@ -50,7 +52,7 @@ class OutputWriterMongoDB(OutputWriter):
     #     pass
 
     # def _save_single_xls_sheet(self, append):
-    # ToDo: implement save to a single sheet
+    # TODO: implement save to a single sheet
     #     raise NotImplementedError("Sorry not implemented yet")
 
     def _init_np_array(self, partial_func):
@@ -67,7 +69,7 @@ class OutputWriterMongoDB(OutputWriter):
 
     def _log(self, table, variable, net, index, eval_function=None, eval_name=None):
         try:
-            # ToDo: Create a mask for the numpy array in the beginning and use this one for getting the values. Faster
+            # TODO: Create a mask for the numpy array in the beginning and use this one for getting the values. Faster
             if net[table].index.equals(pd.Index(index)):
                 # if index equals all values -> get numpy array directly
                 result = net[table][variable].values

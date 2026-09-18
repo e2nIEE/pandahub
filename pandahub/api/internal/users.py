@@ -1,5 +1,6 @@
 import uuid
-from fastapi import Depends, Request
+
+from fastapi import Depends
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
 from fastapi_users.authentication import AuthenticationBackend, BearerTransport
 from fastapi_users.authentication.strategy.db import (
@@ -8,7 +9,7 @@ from fastapi_users.authentication.strategy.db import (
 )
 from fastapi_users.db import BeanieUserDatabase
 
-from ..internal.db import get_user_db, get_access_token_db, User, AccessToken
+from ..internal.db import AccessToken, User, get_access_token_db, get_user_db
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):

@@ -1,11 +1,11 @@
 """Tests for `spinai_backend` package."""
 
 import copy
-import pandas as pd
-import numpy as np
-import pytest
 import datetime
+
+import numpy as np
 import pandapower.networks as nw
+import pandas as pd
 import simbench as sb
 
 code = "1-HV-urban--0--sw"

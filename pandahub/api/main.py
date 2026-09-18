@@ -1,15 +1,16 @@
 from contextlib import asynccontextmanager
 
 import uvicorn
+from beanie import init_beanie
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from pandahub.api.internal.db import AccessToken, User, db
+from pandahub.api.routers import auth, net, projects, timeseries, users, variants
 from pandahub.lib.PandaHub import PandaHubError
-from pandahub.api.routers import net, projects, timeseries, users, auth, variants
-from pandahub.api.internal.db import User, db, AccessToken
+
 from . import pandahub_app_settings as ph_settings
-from beanie import init_beanie
 
 
 @asynccontextmanager

@@ -116,7 +116,6 @@ def _get_db_or_coll(
 ) -> MongoClient | Database | Collection:
     if database is not None and collection is not None:
         return client[database][collection]
-    elif database is not None:
+    if database is not None:
         return client[database]
-    else:
-        return client
+    return client

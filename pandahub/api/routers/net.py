@@ -1,7 +1,6 @@
-from typing import Optional, Any
+from typing import Any
 
 import pandapower as pp
-import pandapipes as pps
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -19,7 +18,7 @@ class GetNetFromDB(BaseModel):
     project_id: str
     name: str
     include_results: bool
-    only_tables: Optional[list] = None
+    only_tables: list | None = None
 
 
 @router.post("/get_net_from_db")
@@ -32,7 +31,7 @@ class WriteNetwork(BaseModel):
     project_id: str
     net: str
     name: str
-    overwrite: Optional[bool] = True
+    overwrite: bool | None = True
 
 
 @router.post("/write_network_to_db")

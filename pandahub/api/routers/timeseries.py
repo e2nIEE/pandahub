@@ -3,7 +3,6 @@ import json
 import pandas as pd
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Optional
 
 from pandahub.api.dependencies import pandahub
 
@@ -16,12 +15,12 @@ router = APIRouter(prefix="/timeseries", tags=["timeseries"])
 
 
 class GetTimeSeriesModel(BaseModel):
-    filter_document: Optional[dict] = {}
-    global_database: Optional[bool] = False
-    project_id: Optional[str] = None
-    timestamp_range: Optional[tuple] = None
-    exclude_timestamp_range: Optional[tuple] = None
-    collection_name: Optional[str] = "timeseries"
+    filter_document: dict | None = {}
+    global_database: bool | None = False
+    project_id: str | None = None
+    timestamp_range: tuple | None = None
+    exclude_timestamp_range: tuple | None = None
+    collection_name: str | None = "timeseries"
 
 
 @router.post("/get_timeseries_from_db")
@@ -33,12 +32,12 @@ def get_timeseries_from_db(data: GetTimeSeriesModel, ph=Depends(pandahub)):
 
 
 class MultiGetTimeSeriesModel(BaseModel):
-    filter_document: Optional[dict] = {}
-    global_database: Optional[bool] = False
-    project_id: Optional[str] = None
-    timestamp_range: Optional[tuple] = None
-    exclude_timestamp_range: Optional[tuple] = None
-    collection_name: Optional[str] = "timeseries"
+    filter_document: dict | None = {}
+    global_database: bool | None = False
+    project_id: str | None = None
+    timestamp_range: tuple | None = None
+    exclude_timestamp_range: tuple | None = None
+    collection_name: str | None = "timeseries"
 
 
 @router.post("/multi_get_timeseries_from_db")
@@ -53,9 +52,9 @@ def multi_get_timeseries_from_db(data: MultiGetTimeSeriesModel, ph=Depends(panda
 
 class GetTimeseriesMetadataModel(BaseModel):
     project_id: str
-    filter_document: Optional[dict] = {}
-    global_database: Optional[bool] = False
-    collection_name: Optional[str] = "timeseries"
+    filter_document: dict | None = {}
+    global_database: bool | None = False
+    collection_name: str | None = "timeseries"
 
 
 @router.post("/get_timeseries_metadata")
@@ -72,14 +71,14 @@ def get_timeseries_metadata(data: GetTimeseriesMetadataModel, ph=Depends(pandahu
 
 class WriteTimeSeriesModel(BaseModel):
     timeseries: str
-    project_id: Optional[str] = None
-    data_type: Optional[str] = None
-    element_type: Optional[str] = None
-    netname: Optional[str] = None
-    element_index: Optional[int] = None
-    global_database: Optional[bool] = False
-    collection_name: Optional[str] = "timeseries"
-    name: Optional[str] = None
+    project_id: str | None = None
+    data_type: str | None = None
+    element_type: str | None = None
+    netname: str | None = None
+    element_index: int | None = None
+    global_database: bool | None = False
+    collection_name: str | None = "timeseries"
+    name: str | None = None
 
 
 @router.post("/write_timeseries_to_db")

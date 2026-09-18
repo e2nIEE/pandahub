@@ -1,14 +1,15 @@
-# -*- coding: utf-8 -*-
 """
 Created on Sun Nov 26 12:25:55 2023
 
 @author: LeonThurner
 """
 
-import pandapower as pp
-from pandahub import PandaHub
 import time
+
+import pandapower as pp
 from line_profiler import LineProfiler
+
+from pandahub import PandaHub
 
 
 def get_test_net(n_buses):

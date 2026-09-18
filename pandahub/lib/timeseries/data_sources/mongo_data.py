@@ -1,15 +1,17 @@
-import numpy as np
 import datetime
-from pandahub.mongo_io_methods import MongoIOMethods
-from pandapower.timeseries.data_source import DataSource
+
+import numpy as np
 import pandas as pd
+from pandapower.timeseries.data_source import DataSource
+
+from pandahub.mongo_io_methods import MongoIOMethods
 
 try:
     import pplog
 
     logger = pplog.getLogger(__name__)
 except ImportError:
-    import logging
+    pass
 
 
 class MongoData(DataSource):
@@ -30,7 +32,7 @@ class MongoData(DataSource):
         **kwargs,
     ):
 
-        super(MongoData, self).__init__()
+        super().__init__()
         self.db_name = db_name
         self.collection_name = collection_name
 
@@ -83,7 +85,7 @@ class MongoData(DataSource):
             if type(profile_name) == pd.Int64Index:
                 self.tseries.columns = self.tseries.columns.astype(int)
                 return self.tseries.loc[fs.isoformat(), profile_name] * scale_factor
-            elif type(profile_name) == list:
+            if type(profile_name) == list:
                 self.tseries.columns = self.tseries.columns.astype(str)
                 t = self.tseries.loc[fs.isoformat(), profile_name] * scale_factor
                 t.index = t.index.astype(int)

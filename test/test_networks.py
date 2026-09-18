@@ -1,11 +1,11 @@
-import pytest
-
 import pandapipes as pps
 import pandapipes.networks as nw_pps
 import pandapower as pp
 import pandapower.networks as nw_pp
-from pandahub import PandaHubError
+import pytest
 from pandapipes.toolbox import nets_equal
+
+from pandahub import PandaHubError
 
 
 def test_additional_res_tables(ph):
