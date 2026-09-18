@@ -1,7 +1,9 @@
+"""FastAPI router for network variant management."""
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from pandahub import PandaHub
 from pandahub.api.dependencies import pandahub
 
 router = APIRouter(prefix="/variants", tags=["variants"])
@@ -13,12 +15,15 @@ router = APIRouter(prefix="/variants", tags=["variants"])
 
 
 class GetVariantsModel(BaseModel):
+    """Request body for retrieving all variants of a network."""
+
     project_id: str
     net_id: int | str
 
 
 @router.post("/get_variants")
-def get_variants(data: GetVariantsModel, ph=Depends(pandahub)):
+def get_variants(data: GetVariantsModel, ph: PandaHub = Depends(pandahub)) -> dict:
+    """Return all variants of the specified network, keyed by variant index."""
     ph.set_active_project_by_id(data.project_id)
     variants_collection = ph.get_project_collection("variant")
 
@@ -27,6 +32,8 @@ def get_variants(data: GetVariantsModel, ph=Depends(pandahub)):
 
 
 class CreateVariantModel(BaseModel):
+    """Request body for creating a new network variant."""
+
     project_id: str
     net_id: int
     name: str | None = None
@@ -34,6 +41,8 @@ class CreateVariantModel(BaseModel):
 
 
 class CreateVariantResponseModel(BaseModel):
+    """Response body returned after creating a variant."""
+
     net_id: int
     index: int
     name: str | None = None
@@ -42,25 +51,31 @@ class CreateVariantResponseModel(BaseModel):
 
 
 @router.post("/create_variant")
-def create_variant(data: CreateVariantModel, ph=Depends(pandahub)) -> CreateVariantResponseModel:
+def create_variant(data: CreateVariantModel, ph: PandaHub = Depends(pandahub)) -> CreateVariantResponseModel:
+    """Create a new variant for the given network and return its metadata."""
     ph.set_active_project_by_id(data.project_id)
     return ph.create_variant(net_id=data.net_id, name=data.name, default_name=data.default_name)
 
 
 class DeleteVariantModel(BaseModel):
+    """Request body for deleting a network variant."""
+
     project_id: str
     net_id: int | str
     index: int
 
 
 @router.post("/delete_variant")
-def delete_variant(data: DeleteVariantModel, ph=Depends(pandahub)):
+def delete_variant(data: DeleteVariantModel, ph: PandaHub = Depends(pandahub)) -> None:
+    """Delete a network variant and all its element changes/additions."""
     project_id = data.project_id
     ph.set_active_project_by_id(project_id)
     return ph.delete_variant(data.net_id, data.index)
 
 
 class UpdateVariantModel(BaseModel):
+    """Request body for updating variant metadata fields."""
+
     project_id: str
     net_id: int | str
     index: int
@@ -68,7 +83,8 @@ class UpdateVariantModel(BaseModel):
 
 
 @router.post("/update_variant")
-def update_variant(data: UpdateVariantModel, ph=Depends(pandahub)):
+def update_variant(data: UpdateVariantModel, ph: PandaHub = Depends(pandahub)) -> None:
+    """Update fields on an existing network variant."""
     project_id = data.project_id
     ph.set_active_project_by_id(project_id)
     return ph.update_variant(data.net_id, data.index, data.data)

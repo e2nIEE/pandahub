@@ -23,7 +23,8 @@ def test_upgrade_project():
             # if project_id:
             #     self.set_active_project_by_id(project_id)
             if self.project_exists(name, realm):
-                raise pandahub.PandaHubError("Project already exists")
+                msg = "Project already exists"
+                raise pandahub.PandaHubError(msg)
             if settings is None:
                 settings = {}
             if metadata is None:
@@ -47,12 +48,14 @@ def test_upgrade_project():
             elif isinstance(net, pp.pandapipesNet):
                 net_type = "pipe"
             else:
-                raise pandahub.PandaHubError("net must be a pandapower or pandapipes object")
+                msg = "net must be a pandapower or pandapipes object"
+                raise pandahub.PandaHubError(msg)
             if self._network_with_name_exists(name, db):
                 if overwrite:
                     self.delete_network_by_name(name)
                 else:
-                    raise pandahub.PandaHubError("Network name already exists")
+                    msg = "Network name already exists"
+                    raise pandahub.PandaHubError(msg)
             max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
             _id = 0 if max_id_network is None else max_id_network["_id"] + 1
             dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, version.parse("0.2.1"))

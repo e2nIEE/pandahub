@@ -68,7 +68,7 @@ def profile_load_test(project_name):
 
 if __name__ == "__main__":
     n_buses = 3e6  # 3 Million buses
-    project_name = "test_%u" % n_buses
+    project_name = f"test_{n_buses:g}"
     net = get_test_net(n_buses)
     write_test_net_to_mongodb(net, project_name)
     profile_load_test(project_name)

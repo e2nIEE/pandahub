@@ -72,10 +72,10 @@ class OutputWriterMongoDB(OutputWriter):
             # TODO: Create a mask for the numpy array in the beginning and use this one for getting the values. Faster
             if net[table].index.equals(pd.Index(index)):
                 # if index equals all values -> get numpy array directly
-                result = net[table][variable].values
+                result = net[table][variable].to_numpy()
             else:
                 # get by loc (slow)
-                result = net[table].loc[index, variable].values
+                result = net[table].loc[index, variable].to_numpy()
 
             if eval_function is not None:
                 result = eval_function(result)
@@ -87,7 +87,7 @@ class OutputWriterMongoDB(OutputWriter):
             self.np_results[hash_name][self.current_pos, :] = result
 
         except Exception as e:
-            logger.error("Error at index %s for %s[%s]: %s" % (index, table, variable, e))
+            logger.error("Error at index %s for %s[%s]: %s", index, table, variable, e)
 
     def _np_to_pd(self):
         # convert numpy arrays (faster so save results) into pd Dataframes (user friendly)
@@ -140,7 +140,7 @@ class OutputWriterMongoDB(OutputWriter):
             for res_name, res_df in res.items():
                 end = self.start_date + (self.current_pos - 1) * pd.Timedelta(self.freq)
                 if self.current_pos < self.write_caching:
-                    res_df.drop(range(self.current_pos, self.write_caching), axis=0, inplace=True)
+                    res_df = res_df.drop(range(self.current_pos, self.write_caching), axis=0)
                 res_df.index = pd.date_range(start=self.start_date, end=end, freq=self.freq)
                 if res_name in self.ids:
                     for ii in res_df.index:

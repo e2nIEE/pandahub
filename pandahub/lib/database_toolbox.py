@@ -117,10 +117,10 @@ def convert_timeseries_to_subdocuments(timeseries: pd.Series) -> list[dict]:
 def compress_timeseries_data(timeseries_data: pd.Series, ts_format: str) -> bytes | None:
     """Compress timeseries data using blosc."""
     if ts_format == "timestamp_value":
-        timeseries_data = np.array([timeseries_data.index.astype("int64"), timeseries_data.values])
+        timeseries_data = np.array([timeseries_data.index.astype("int64"), timeseries_data.to_numpy()])
         return blosc.compress(timeseries_data.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
     if ts_format == "array":
-        return blosc.compress(timeseries_data.astype(float).values.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
+        return blosc.compress(timeseries_data.astype(float).to_numpy().tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
 
 
 def decompress_timeseries_data(timeseries_data: bytes, ts_format: str, num_timestamps: int):
@@ -363,7 +363,8 @@ def convert_geojsons(df: pd.DataFrame, geo_mode: str = "string") -> None:
     elif geo_mode == "shapely":
         conv_func = to_shapely
     else:
-        raise NotImplementedError(f"Unknown geo_mode {geo_mode}")
+        msg = f"Unknown geo_mode {geo_mode}"
+        raise NotImplementedError(msg)
 
     for column in df.columns:
         if column == "geo" or column.endswith("_geo"):
@@ -408,12 +409,13 @@ def migrate_userdb_to_beanie(ph) -> None:
     if old_users and new_users:
         old_users = [user.get("email") for user in old_users]
         new_users = [user.get("email") for user in new_users]
-        raise RuntimeError(
+        msg = (
             "Inconsistent user database - you need to resolve conflicts manually! "
             "See pandahub v0.3.0 release notes for details."
             f"pandahub < 0.3.0 users: {old_users}"
             f"pandahub >= 0.3.0 users: {new_users}"
         )
+        raise RuntimeError(msg)
     if not old_users:
         return
     userdb_backup.insert_many(old_users)
@@ -439,19 +441,21 @@ def get_metadata_for_timeseries_collections(
 ) -> dict:
     """Build a metadata dict for a timeseries collection query, validating required fields."""
     if element_type is None:
-        raise ValueError("element_type needs to be defined for timeseries collections")
+        msg = "element_type needs to be defined for timeseries collections"
+        raise ValueError(msg)
     if element_index is None:
-        raise ValueError("element_index needs to be defined for timeseries collections")
+        msg = "element_index needs to be defined for timeseries collections"
+        raise ValueError(msg)
     if data_type is None:
-        raise ValueError("data_type needs to be defined for timeseries collections")
+        msg = "data_type needs to be defined for timeseries collections"
+        raise ValueError(msg)
     if net_id is None:
         net_ids = db["_networks"].distinct("_id")
         if len(net_ids) == 1:
             net_id = net_ids[0]
         else:
-            raise ValueError(
-                "No net_id was provided and multiple networks exist in the database. Please provide a net_id."
-            )
+            msg = "No net_id was provided and multiple networks exist in the database. Please provide a net_id."
+            raise ValueError(msg)
     metadata = {
         "data_type": data_type,
         "net_id": net_id,

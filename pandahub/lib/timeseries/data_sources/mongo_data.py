@@ -36,8 +36,8 @@ class MongoData(DataSource):
         self.db_name = db_name
         self.collection_name = collection_name
 
-        if type(element_index) is pd.Int64Index:
-            element_index = element_index.values.tolist()
+        if isinstance(element_index, pd.Int64Index):
+            element_index = element_index.to_numpy().tolist()
 
         filter = {
             "netname": netname,
@@ -56,11 +56,11 @@ class MongoData(DataSource):
             filter_document=self.filter, db_name=self.db_name, collection_name=self.collection_name
         )
 
-        first_timestamp = self.metadata["first_timestamp"].values[0]
+        first_timestamp = self.metadata["first_timestamp"].to_numpy()[0]
 
-        if type(first_timestamp) == str:
+        if isinstance(first_timestamp, str):
             self.first_timestamp = datetime.datetime.fromisoformat(first_timestamp)
-        elif type(first_timestamp) == np.datetime64:
+        elif isinstance(first_timestamp, np.datetime64):
             self.first_timestamp = pd.Timestamp(first_timestamp).to_pydatetime()
         else:
             self.first_timestamp = first_timestamp
@@ -82,10 +82,10 @@ class MongoData(DataSource):
         try:
             return self.tseries.loc[fs.isoformat(), profile_name] * scale_factor
         except KeyError:
-            if type(profile_name) == pd.Int64Index:
+            if isinstance(profile_name, pd.Int64Index):
                 self.tseries.columns = self.tseries.columns.astype(int)
                 return self.tseries.loc[fs.isoformat(), profile_name] * scale_factor
-            if type(profile_name) == list:
+            if isinstance(profile_name, list):
                 self.tseries.columns = self.tseries.columns.astype(str)
                 t = self.tseries.loc[fs.isoformat(), profile_name] * scale_factor
                 t.index = t.index.astype(int)

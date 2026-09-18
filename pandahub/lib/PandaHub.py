@@ -124,10 +124,10 @@ class PandaHub:
         connection_user: str = ph_settings.mongodb_user,
         connection_password: str = ph_settings.mongodb_password,
         check_server_available: bool = False,
-        user_id: str = None,
+        user_id: str | None = None,
         datatypes: dict = DATATYPES,
         mongodb_indexes: dict = MONGODB_INDEXES,
-        elements_without_vars: list | tuple = None,
+        elements_without_vars: list | tuple | None = None,
         create_indexes_with_project: bool = ph_settings.create_indexes_with_project,
     ) -> None:
         self._datatypes = datatypes
@@ -205,9 +205,11 @@ class PandaHub:
     def check_permission(self, permission: str) -> None:
         """Raise PandaHubError if the active user lacks the given permission."""
         if self.active_project is None:
-            raise PandaHubError("No project is activated")
+            msg = "No project is activated"
+            raise PandaHubError(msg)
         if not self.has_permission(permission):
-            raise PandaHubError(f"You don't have {permission} rights on this project", 403)
+            msg = f"You don't have {permission} rights on this project"
+            raise PandaHubError(msg, 403)
 
     def has_permission(self, permission: str) -> bool:
         """Return True if the active user has the given permission."""
@@ -271,7 +273,8 @@ class PandaHub:
     ) -> dict:
         """Create a new project in the database and optionally activate it."""
         if self.project_exists(name, realm):
-            raise PandaHubError("Project already exists")
+            msg = "Project already exists"
+            raise PandaHubError(msg)
         if settings is None:
             settings = {}
         if metadata is None:
@@ -304,9 +307,8 @@ class PandaHub:
         project_id = self.active_project["_id"]
         self.check_permission("delete_project")
         if not i_know_this_action_is_final:
-            raise PandaHubError(
-                "Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm."
-            )
+            msg = "Calling this function will delete the whole project and all the nets stored within. It can not be reversed. Add 'i_know_this_action_is_final=True' to confirm."
+            raise PandaHubError(msg)
         self._delete_project(project_id)
 
     def _delete_project(self, project_id: ProjectID) -> None:
@@ -368,9 +370,11 @@ class PandaHub:
         """Set the active project by name, optionally filtered by realm."""
         projects = self.get_projects(query_filter={"name": project_name}, realm=realm, projection=["_id"])
         if len(projects) == 0:
-            raise PandaHubError("Project not found!", 404)
+            msg = "Project not found!"
+            raise PandaHubError(msg, 404)
         if len(projects) > 1:
-            raise PandaHubError("Multiple projects found!")
+            msg = "Multiple projects found!"
+            raise PandaHubError(msg)
         project_id = projects[0]["id"]
         self.set_active_project_by_id(project_id, ignore_user_lock=ignore_user_lock)
 
@@ -382,7 +386,8 @@ class PandaHub:
             pass
         self.active_project = self._get_project_document({"_id": project_id}, ignore_user_lock=ignore_user_lock)
         if self.active_project is None:
-            raise PandaHubError("Project not found!", 404)
+            msg = "Project not found!"
+            raise PandaHubError(msg, 404)
 
     def rename_project(self, project_name: str) -> None:
         """Rename the active project, raising an error if the new name is already taken."""
@@ -390,7 +395,8 @@ class PandaHub:
         project_collection = self.mongo_client["user_management"].projects
         realm = self.active_project["realm"]
         if self.project_exists(project_name, realm):
-            raise PandaHubError("Can't rename - project with this name already exists")
+            msg = "Can't rename - project with this name already exists"
+            raise PandaHubError(msg)
         project_collection.update_one({"_id": self.active_project["_id"]}, {"$set": {"name": project_name}})
         self.set_active_project(project_name, realm)
 
@@ -400,7 +406,8 @@ class PandaHub:
         project_collection = self.mongo_client["user_management"].projects
         project_name = self.active_project["name"]
         if self.project_exists(project_name, realm):
-            raise PandaHubError("Can't change realm - project with this name already exists")
+            msg = "Can't change realm - project with this name already exists"
+            raise PandaHubError(msg)
         project_collection.update_one({"_id": self.active_project["_id"]}, {"$set": {"realm": realm}})
         self.set_active_project(project_name, realm)
 
@@ -437,7 +444,8 @@ class PandaHub:
                 {"_id": ObjectId(project_id)},
                 {"$set": {"locked_by": None}},
             )
-        raise PandaHubError("You don't have rights to access this project", 403)
+        msg = "You don't have rights to access this project"
+        raise PandaHubError(msg, 403)
 
     def project_exists(self, project_name: str | None = None, realm: str | None = None) -> bool:
         """Return True if a project with the given name and realm exists."""
@@ -449,20 +457,21 @@ class PandaHub:
         if len(projects) == 0:  # project doesn't exist
             return None
         if len(projects) > 1:
-            raise PandaHubError(
-                "Duplicate Project detected. This should never happen if you create projects through the API. Remove duplicate projects manually in the database."
-            )
+            msg = "Duplicate Project detected. This should never happen if you create projects through the API. Remove duplicate projects manually in the database."
+            raise PandaHubError(msg)
         project_doc = projects[0]
         if "users" not in project_doc:
             return project_doc  # project is not user protected
 
         user = self._get_user()
         if not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
-            raise PandaHubError("You don't have rights to access this project", 403)
+            msg = "You don't have rights to access this project"
+            raise PandaHubError(msg, 403)
         if not ignore_user_lock:
             locked_by = project_doc.get("locked_by")
             if locked_by is not None and locked_by != self.user_id:
-                raise PandaHubError("Project is locked by another user")
+                msg = "Project is locked by another user"
+                raise PandaHubError(msg)
         return project_doc
 
     def _get_project_database(self) -> Database:
@@ -886,7 +895,7 @@ class PandaHub:
             net.update(data)
         else:
             for key, value in meta["data"].items():
-                if type(value) == str and value.startswith("serialized_"):
+                if isinstance(value, str) and value.startswith("serialized_"):
                     value = json.loads(value[11:], cls=io_pp.PPJSONDecoder, registry_class=registry)
                 net[key] = value
 
@@ -989,7 +998,8 @@ class PandaHub:
             else:
                 add_edge_branches = []
         elif not isinstance(add_edge_branches, list):
-            raise ValueError("add_edge_branches must be a list or a boolean")
+            msg = "add_edge_branches must be a list or a boolean"
+            raise ValueError(msg)
 
         for tbl, (node_cols, add_edge, filter_func, node_getter) in additional_edge_filters.items():
             branch_tables.append(tbl)
@@ -1071,10 +1081,10 @@ class PandaHub:
         name: str,
         sector="power",
         overwrite: bool = True,
-        project_id: str = None,
-        metadata: dict = None,
+        project_id: str | None = None,
+        metadata: dict | None = None,
         skip_results: bool = False,
-        net_id: int | str = None,
+        net_id: int | str | None = None,
     ) -> dict:
         """
         Write a pandapower or pandapipes network to the database.
@@ -1184,7 +1194,8 @@ class PandaHub:
     def delete_network(self, net_id) -> None:
         """Delete a network and all its element collections from the database."""
         if net_id is None:
-            raise PandaHubError("No net_id was passed", 404)
+            msg = "No net_id was passed"
+            raise PandaHubError(msg, 404)
         db = self._get_project_database()
         collection_names = self.get_net_collections(db)
         for collection_name in collection_names:
@@ -1197,7 +1208,8 @@ class PandaHub:
         db = self._get_project_database()
         net_id = self._get_net_id_from_name(name, db)
         if net_id is None:
-            raise PandaHubError(f"Network with name {name} does not exist", 404)
+            msg = f"Network with name {name} does not exist"
+            raise PandaHubError(msg, 404)
         self.delete_network(net_id)
 
     def network_with_name_exists(self, name: str) -> bool:
@@ -1288,8 +1300,8 @@ class PandaHub:
             }
             df = df.astype(dtypes_found_columns, errors="ignore")
         df.index.name = None
-        df.drop(columns=["_id", "net_id"], inplace=True)
-        df.sort_index(inplace=True)
+        df = df.drop(columns=["_id", "net_id"])
+        df = df.sort_index()
         convert_geojsons(df, geo_mode)
         if "object" in df.columns:
             df["object"] = df["object"].apply(json_to_object)
@@ -1323,11 +1335,14 @@ class PandaHub:
         if len(documents) == 1:
             document = documents[0]
         elif len(documents) == 0:
-            raise PandaHubError("Element doesn't exist", 404)
+            msg = "Element doesn't exist"
+            raise PandaHubError(msg, 404)
         else:
-            raise PandaHubError("Multiple elements found", 404)
+            msg = "Multiple elements found"
+            raise PandaHubError(msg, 404)
         if parameter not in document:
-            raise PandaHubError("Parameter doesn't exist", 404)
+            msg = "Parameter doesn't exist"
+            raise PandaHubError(msg, 404)
         if dtypes is not None and parameter in dtypes:
             return dtypes[parameter](document[parameter])
         return document[parameter]
@@ -1394,7 +1409,8 @@ class PandaHub:
             A list of deleted elements as dicts with all fields
         """
         if not isinstance(element_indexes, list):
-            raise TypeError("Parameter element_indexes must be a list of ints!")
+            msg = "Parameter element_indexes must be a list of ints!"
+            raise TypeError(msg)
         self.validate_variant(variant, element_type)
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -1456,7 +1472,8 @@ class PandaHub:
         }
         document = db[collection].find_one({**element_filter})
         if not document:
-            raise UserWarning(f"No element '{element_type}' to change with index '{element_index}' in this variant")
+            msg = f"No element '{element_type}' to change with index '{element_index}' in this variant"
+            raise UserWarning(msg)
 
         old_value = document.get(parameter, None)
         if old_value == value:
@@ -1532,7 +1549,8 @@ class PandaHub:
             element_filter = {**element_filter, **self.get_variant_filter(variant)}
             document = db[collection].find_one({**element_filter})
             if not document:
-                raise UserWarning(f"No element '{element_type}' to change with index '{element_index}' in this variant")
+                msg = f"No element '{element_type}' to change with index '{element_index}' in this variant"
+                raise UserWarning(msg)
             obj = json_to_object(document["object"])
             setattr(obj, parameter, value)
             if document["var_type"] == "base":
@@ -1592,7 +1610,7 @@ class PandaHub:
         element_type: str,
         elements_data: list[dict],
         variant: int | None = None,
-        project_id: str = None,
+        project_id: str | None = None,
         **kwargs,
     ) -> list[dict]:
         """
@@ -1675,7 +1693,7 @@ class PandaHub:
         if dtypes is None:
             return
         for key, val in data.items():
-            if val is not None and key in dtypes and not dtypes[key] == object:
+            if val is not None and key in dtypes and dtypes[key] is not object:
                 data[key] = dtypes[key](val)
 
     def _create_mongodb_indexes(self, project_id: str | None = None, collection: Optional["str"] = None) -> None:
@@ -1831,7 +1849,8 @@ class PandaHub:
         """Raise a ValueError if variant is not int | None or element_type does not support variants."""
         validate_variant_type(variant)
         if element_type is not None and variant is not None and element_type in self._elements_without_vars:
-            raise ValueError(f"{element_type} does not support variants")
+            msg = f"{element_type} does not support variants"
+            raise ValueError(msg)
 
     # -------------------------
     # Bulk operations
@@ -1870,7 +1889,8 @@ class PandaHub:
             project_id=project_id,
             global_database=global_database,
         ):
-            raise NotImplementedError("Bulk write is not fully supported for timeseries collections in MongoDB")
+            msg = "Bulk write is not fully supported for timeseries collections in MongoDB"
+            raise NotImplementedError(msg)
 
         operations = [
             ReplaceOne(
@@ -2124,7 +2144,8 @@ class PandaHub:
         if project_id:
             self.set_active_project_by_id(project_id)
         if self.collection_is_timeseries(collection_name, project_id, global_database):
-            raise NotImplementedError("Not implemented yet for timeseries collections")
+            msg = "Not implemented yet for timeseries collections"
+            raise NotImplementedError(msg)
         for col in timeseries.columns:
             if meta_frame is not None:
                 args = {**kwargs, **meta_frame.loc[col]}
@@ -2227,7 +2248,8 @@ class PandaHub:
         if project_id:
             self.set_active_project_by_id(project_id)
         if self.collection_is_timeseries(collection_name, project_id, global_database):
-            raise NotImplementedError("Not implemented yet for timeseries collections")
+            msg = "Not implemented yet for timeseries collections"
+            raise NotImplementedError(msg)
         documents = []
         for i in range(len(new_ts_content.columns)):
             col = new_ts_content.columns[i]
@@ -2315,10 +2337,12 @@ class PandaHub:
             pipeline.append({"$project": {"_id": 0, "metadata": 0}})
             timeseries = db[collection_name].aggregate_pandas_all(pipeline)
             if len(timeseries) == 0:
-                raise PandaHubError("no documents matching the provided filter found", 404)
-            timeseries.set_index("timestamp", inplace=True)
+                msg = "no documents matching the provided filter found"
+                raise PandaHubError(msg, 404)
+            timeseries = timeseries.set_index("timestamp")
             if include_metadata:
-                raise NotImplementedError("Not implemented yet for timeseries collections")
+                msg = "Not implemented yet for timeseries collections"
+                raise NotImplementedError(msg)
             if len(timeseries.columns) == 1:
                 return timeseries[timeseries.columns[0]]
             return timeseries
@@ -2374,9 +2398,11 @@ class PandaHub:
             pipeline.append({"$project": {"timeseries_data": 1, "num_timestamps": 1}})
         data = db[collection_name].aggregate(pipeline).to_list()
         if len(data) == 0:
-            raise PandaHubError("no documents matching the provided filter found", 404)
+            msg = "no documents matching the provided filter found"
+            raise PandaHubError(msg, 404)
         if len(data) > 1:
-            raise PandaHubError("multiple documents matching the provided filter found")
+            msg = "multiple documents matching the provided filter found"
+            raise PandaHubError(msg)
         data = data[0]
         if compressed_ts_data:
             timeseries_data = decompress_timeseries_data(
@@ -2461,7 +2487,7 @@ class PandaHub:
             metadata = db[collection_name].aggregate(pipeline).to_list()
         df_metadata = pd.DataFrame(metadata)
         if len(df_metadata):
-            df_metadata.set_index("_id", inplace=True)
+            df_metadata = df_metadata.set_index("_id")
         if "return_id" in df_metadata:
             del df_metadata["return_id"]
         return df_metadata
@@ -2495,7 +2521,7 @@ class PandaHub:
         document = db[collection_name].find_one(document_filter, projection={"timestamp": 0, "_id": 0})
         if document is None:
             return []
-        value_fields = ["$%s" % field for field in document.keys() if field != "metadata"]
+        value_fields = [f"${field}" for field in document.keys() if field != "metadata"]
         group_dict = {
             "_id": "$metadata._id",
             "max_value": {"$max": {"$max": value_fields}},
@@ -2504,7 +2530,7 @@ class PandaHub:
             "last_timestamp": {"$max": "$timestamp"},
         }
         metadata_fields = {
-            metadata_field: {"$first": "$metadata.%s" % metadata_field}
+            metadata_field: {"$first": f"$metadata.{metadata_field}"}
             for metadata_field in document["metadata"].keys()
             if metadata_field != "_id"
         }
@@ -2596,7 +2622,7 @@ class PandaHub:
             if len(ts_all) == 0:
                 return timeseries
             for _id, ts in ts_all.groupby("_id"):
-                ts.set_index("timestamp", inplace=True)
+                ts = ts.set_index("timestamp")
                 value_columns = list(set(ts.columns) - {"timestamp", "_id"})
                 value_columns.sort()
                 for col in value_columns:
@@ -2606,10 +2632,7 @@ class PandaHub:
                         if metadata is not None:
                             timeseries_dict.update(metadata)
                         if len(value_columns) > 1:
-                            timeseries_dict["name"] = "%s, %s" % (
-                                timeseries_dict["name"],
-                                col,
-                            )
+                            timeseries_dict["name"] = f"{timeseries_dict['name']}, {col}"
                     timeseries.append(timeseries_dict)
             return timeseries
 
@@ -2617,7 +2640,7 @@ class PandaHub:
         match_filter = []
         for key in filter_document:
             filter_value = filter_document[key]
-            if type(filter_value) == list:
+            if isinstance(filter_value, list):
                 match_filter.append({key: {"$in": filter_value}})
             else:
                 match_filter.append({key: filter_value})
@@ -2694,7 +2717,7 @@ class PandaHub:
                 ts["timeseries_data"] = timeseries_data
             elif ts_format == "timestamp_value":
                 timeseries_data = pd.DataFrame(ts["timeseries_data"])
-                timeseries_data.set_index("timestamp", inplace=True)
+                timeseries_data = timeseries_data.set_index("timestamp")
                 timeseries_data.index.name = None
                 ts["timeseries_data"] = timeseries_data.value
             if include_metadata:
@@ -2777,9 +2800,8 @@ class PandaHub:
         if self.collection_is_timeseries(collection_name, project_id, global_database):
             document_filter = {"metadata." + key: value for key, value in filter_document.items()}
             if timestamp_range is not None and exclude_timestamp_range is not None:
-                raise NotImplementedError(
-                    "timestamp_range and exclude_timestamp_range cannot be used at the same time with timeseries collections"
-                )
+                msg = "timestamp_range and exclude_timestamp_range cannot be used at the same time with timeseries collections"
+                raise NotImplementedError(msg)
             if timestamp_range is not None:
                 document_filter["timestamp"] = {
                     "$gte": timestamp_range[0],
@@ -2797,7 +2819,7 @@ class PandaHub:
         match_filter = []
         for key in filter_document:
             filter_value = filter_document[key]
-            if type(filter_value) == list:
+            if isinstance(filter_value, list):
                 match_filter.append({key: {"$in": filter_value}})
             else:
                 match_filter.append({key: filter_value})
@@ -3010,7 +3032,7 @@ class PandaHub:
             if key == "timestamp_range":
                 continue
             filter_value = filter_document[key]
-            if type(filter_value) == list:
+            if isinstance(filter_value, list):
                 match_filter[key] = {"$in": filter_value}
             else:
                 match_filter[key] = filter_value

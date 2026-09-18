@@ -65,7 +65,8 @@ def get_mongo_client(
 ) -> MongoClient | Database | Collection:
     global _global_mongo_client
     if collection is not None and database is None:
-        raise ValueError("Must specify database to access a collection!")
+        msg = "Must specify database to access a collection!"
+        raise ValueError(msg)
     if _global_mongo_client is None:
         client = _get_mongo_client(connection_url, connection_user, connection_password)
         if settings.pandahub_global_db_client:
@@ -103,7 +104,8 @@ def mongo_client(
         Contextmanager yielding MongoClient / Database / Collection
     """
     if collection is not None and database is None:
-        raise ValueError("Must specify database to access a collection!")
+        msg = "Must specify database to access a collection!"
+        raise ValueError(msg)
     client = _get_mongo_client(connection_url, connection_user, connection_password)
     try:
         yield _get_db_or_coll(client, database, collection)
