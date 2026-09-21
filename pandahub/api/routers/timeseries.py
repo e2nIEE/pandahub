@@ -3,11 +3,10 @@
 import json
 
 import pandas as pd
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from pandahub import PandaHub
-from pandahub.api.dependencies import pandahub
+from pandahub.api.dependencies import PandahubDep
 
 router = APIRouter(prefix="/timeseries", tags=["timeseries"])
 
@@ -29,7 +28,7 @@ class GetTimeSeriesModel(BaseModel):
 
 
 @router.post("/get_timeseries_from_db")
-def get_timeseries_from_db(data: GetTimeSeriesModel, ph: PandaHub = Depends(pandahub)) -> str:
+def get_timeseries_from_db(data: GetTimeSeriesModel, ph: PandahubDep) -> str:
     """Return a single timeseries matching the filter as an ISO JSON string."""
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
@@ -49,7 +48,7 @@ class MultiGetTimeSeriesModel(BaseModel):
 
 
 @router.post("/multi_get_timeseries_from_db")
-def multi_get_timeseries_from_db(data: MultiGetTimeSeriesModel, ph: PandaHub = Depends(pandahub)) -> list:
+def multi_get_timeseries_from_db(data: MultiGetTimeSeriesModel, ph: PandahubDep) -> list:
     """Return multiple timeseries matching the filter, each with ISO-serialised data."""
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
@@ -69,7 +68,7 @@ class GetTimeseriesMetadataModel(BaseModel):
 
 
 @router.post("/get_timeseries_metadata")
-def get_timeseries_metadata(data: GetTimeseriesMetadataModel, ph: PandaHub = Depends(pandahub)) -> dict:
+def get_timeseries_metadata(data: GetTimeseriesMetadataModel, ph: PandahubDep) -> dict:
     """Return timeseries metadata matching the filter as a JSON-serialisable dict."""
     ph.set_active_project_by_id(data.project_id)
     ts = ph.get_timeseries_metadata(
@@ -95,7 +94,7 @@ class WriteTimeSeriesModel(BaseModel):
 
 
 @router.post("/write_timeseries_to_db")
-def write_timeseries_to_db(data: WriteTimeSeriesModel, ph: PandaHub = Depends(pandahub)) -> bool:
+def write_timeseries_to_db(data: WriteTimeSeriesModel, ph: PandahubDep) -> bool:
     """Write a timeseries (provided as JSON string) to the database and return True."""
     data.timeseries = pd.Series(json.loads(data.timeseries))
     data.timeseries.index = pd.to_datetime(data.timeseries.index)

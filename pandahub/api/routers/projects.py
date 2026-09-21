@@ -2,11 +2,10 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from pandahub import PandaHub
-from pandahub.api.dependencies import pandahub
+from pandahub.api.dependencies import PandahubDep
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -24,7 +23,7 @@ class CreateProject(BaseModel):
 
 
 @router.post("/create_project")
-def create_project(data: CreateProject, ph: PandaHub = Depends(pandahub)) -> dict:
+def create_project(data: CreateProject, ph: PandahubDep) -> dict:
     """Create a new project and return a confirmation message."""
     ph.create_project(**data.model_dump(), realm=ph.user_id)
     return {"message": f"Project {data.name} created !"}
@@ -38,14 +37,14 @@ class DeleteProject(BaseModel):
 
 
 @router.post("/delete_project")
-def delete_project(data: DeleteProject, ph: PandaHub = Depends(pandahub)) -> bool:
+def delete_project(data: DeleteProject, ph: PandahubDep) -> bool:
     """Delete a project permanently and return True on success."""
     ph.delete_project(**data.model_dump())
     return True
 
 
 @router.post("/get_projects")
-def get_projects(ph: PandaHub = Depends(pandahub)) -> list:
+def get_projects(ph: PandahubDep) -> list:
     """Return all projects the current user has access to."""
     return ph.get_projects()
 
@@ -57,7 +56,7 @@ class Project(BaseModel):
 
 
 @router.post("/project_exists")
-def project_exists(data: Project, ph: PandaHub = Depends(pandahub)) -> bool:
+def project_exists(data: Project, ph: PandahubDep) -> bool:
     """Return True if a project with the given name exists in the user's realm."""
     return ph.project_exists(**data.model_dump(), realm=ph.user_id)
 
@@ -69,7 +68,7 @@ class SetActiveProjectModel(BaseModel):
 
 
 @router.post("/set_active_project")
-def set_active_project(data: SetActiveProjectModel, ph: PandaHub = Depends(pandahub)) -> str:
+def set_active_project(data: SetActiveProjectModel, ph: PandahubDep) -> str:
     """Activate a project by name and return its id as a string."""
     ph.set_active_project(**data.model_dump())
     return str(ph.active_project["_id"])
@@ -87,7 +86,7 @@ class GetProjectSettingsModel(BaseModel):
 
 
 @router.post("/get_project_settings")
-def get_project_settings(data: GetProjectSettingsModel, ph: PandaHub = Depends(pandahub)) -> dict:
+def get_project_settings(data: GetProjectSettingsModel, ph: PandahubDep) -> dict:
     """Return the settings dict for the specified project."""
     return ph.get_project_settings(**data.model_dump())
 
@@ -100,7 +99,7 @@ class SetProjectSettingsModel(BaseModel):
 
 
 @router.post("/set_project_settings")
-def set_project_settings(data: SetProjectSettingsModel, ph: PandaHub = Depends(pandahub)) -> None:
+def set_project_settings(data: SetProjectSettingsModel, ph: PandahubDep) -> None:
     """Merge the provided settings dict into the project's existing settings."""
     ph.set_project_settings(**data.model_dump())
 
@@ -114,7 +113,7 @@ class SetProjectSettingsValueModel(BaseModel):
 
 
 @router.post("/set_project_settings_value")
-def set_project_settings_value(data: SetProjectSettingsValueModel, ph: PandaHub = Depends(pandahub)) -> None:
+def set_project_settings_value(data: SetProjectSettingsValueModel, ph: PandahubDep) -> None:
     """Set a single project setting by dot-notation parameter name."""
     ph.set_project_settings_value(**data.model_dump())
 
@@ -131,7 +130,7 @@ class GetProjectMetadataModel(BaseModel):
 
 
 @router.post("/get_project_metadata")
-def get_project_metadata(data: GetProjectMetadataModel, ph: PandaHub = Depends(pandahub)) -> dict:
+def get_project_metadata(data: GetProjectMetadataModel, ph: PandahubDep) -> dict:
     """Return the metadata dict for the specified project."""
     return ph.get_project_metadata(**data.model_dump())
 
@@ -144,6 +143,6 @@ class SetProjectMetadataModel(BaseModel):
 
 
 @router.post("/set_project_metadata")
-def set_project_metadata(data: SetProjectMetadataModel, ph: PandaHub = Depends(pandahub)) -> None:
+def set_project_metadata(data: SetProjectMetadataModel, ph: PandahubDep) -> None:
     """Merge the provided metadata dict into the project's existing metadata."""
     return ph.set_project_metadata(**data.model_dump())

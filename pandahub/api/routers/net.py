@@ -3,11 +3,10 @@
 from typing import Any
 
 import pandapower as pp
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 
-from pandahub import PandaHub
-from pandahub.api.dependencies import pandahub
+from pandahub.api.dependencies import PandahubDep
 
 router = APIRouter(prefix="/net", tags=["net"])
 
@@ -27,7 +26,7 @@ class GetNetFromDB(BaseModel):
 
 
 @router.post("/get_net_from_db")
-def get_net_from_db(data: GetNetFromDB, ph: PandaHub = Depends(pandahub)) -> str:
+def get_net_from_db(data: GetNetFromDB, ph: PandahubDep) -> str:
     """Return a network from the database serialised as a pandapower JSON string."""
     net = ph.get_network_by_name(**data.model_dump())
     return pp.to_json(net)
@@ -43,7 +42,7 @@ class WriteNetwork(BaseModel):
 
 
 @router.post("/write_network_to_db")
-def write_network_to_db(data: WriteNetwork, ph: PandaHub = Depends(pandahub)) -> None:
+def write_network_to_db(data: WriteNetwork, ph: PandahubDep) -> None:
     """Write a pandapower network (JSON string) to the database."""
     params = data.model_dump()
     params["net"] = pp.from_json_string(params["net"])
@@ -71,7 +70,7 @@ class GetNetValueModel(BaseCRUDModel):
 
 
 @router.post("/get_net_value_from_db")
-def get_net_value_from_db(data: GetNetValueModel, ph: PandaHub = Depends(pandahub)) -> Any:  # noqa: ANN401
+def get_net_value_from_db(data: GetNetValueModel, ph: PandahubDep) -> Any:  # noqa: ANN401
     """Return the value of a single field from one network element."""
     return ph.get_net_value_from_db(**data.model_dump())
 
@@ -85,7 +84,7 @@ class SetNetValueModel(BaseCRUDModel):
 
 
 @router.post("/set_net_value_in_db")
-def set_net_value_in_db(data: SetNetValueModel, ph: PandaHub = Depends(pandahub)) -> dict | None:
+def set_net_value_in_db(data: SetNetValueModel, ph: PandahubDep) -> dict | None:
     """Set a single field value on one network element."""
     return ph.set_net_value_in_db(**data.model_dump())
 
@@ -98,7 +97,7 @@ class CreateElementModel(BaseCRUDModel):
 
 
 @router.post("/create_element")
-def create_element_in_db(data: CreateElementModel, ph: PandaHub = Depends(pandahub)) -> dict:
+def create_element_in_db(data: CreateElementModel, ph: PandahubDep) -> dict:
     """Create a single network element in the database."""
     return ph.create_element(**data.model_dump())
 
@@ -110,7 +109,7 @@ class CreateElementsModel(BaseCRUDModel):
 
 
 @router.post("/create_elements")
-def create_elements_in_db(data: CreateElementsModel, ph: PandaHub = Depends(pandahub)) -> list[dict]:
+def create_elements_in_db(data: CreateElementsModel, ph: PandahubDep) -> list[dict]:
     """Create multiple network elements of the same type in the database."""
     return ph.create_elements(**data.model_dump())
 
@@ -122,7 +121,7 @@ class DeleteElementModel(BaseCRUDModel):
 
 
 @router.post("/delete_element")
-def delete_net_element(data: DeleteElementModel, ph: PandaHub = Depends(pandahub)) -> dict:
+def delete_net_element(data: DeleteElementModel, ph: PandahubDep) -> dict:
     """Delete a single network element from the database."""
     return ph.delete_element(**data.model_dump())
 
@@ -134,7 +133,6 @@ class DeleteElementsModel(BaseCRUDModel):
 
 
 @router.post("/delete_elements")
-def delete_net_elements(data: DeleteElementsModel, ph: PandaHub = Depends(pandahub)) -> list[dict]:
+def delete_net_elements(data: DeleteElementsModel, ph: PandahubDep) -> list[dict]:
     """Delete multiple network elements of the same type from the database."""
     return ph.delete_elements(**data.model_dump())
-

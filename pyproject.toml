@@ -133,4 +133,10 @@ ignore = [
     "PLR2004",
     # TODO: make boolean positional arguments keyword-only (breaking change)
     "FBT001",
+    "FBT002",
+    # .loc fix breaks geo dict setters, generic style preference
+    "PD008",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"test/*" = ["S101"]
