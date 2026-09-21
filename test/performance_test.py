@@ -1,4 +1,5 @@
-"""
+"""Performance test for pandahub database operations.
+
 Created on Sun Nov 26 12:25:55 2023
 
 @author: LeonThurner
@@ -41,7 +42,7 @@ def write_test_net_to_mongodb(net, project_name):
     ph = PandaHub()
     if ph.project_exists(project_name):
         ph.set_active_project(project_name)
-        ph.delete_project(True)
+        ph.delete_project(i_know_this_action_is_final=True)
     ph.create_project(project_name)
     ph.write_network_to_db(net, "test_net")
 

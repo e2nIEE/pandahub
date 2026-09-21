@@ -1,5 +1,6 @@
 from datetime import datetime
 from types import FunctionType
+from typing import override
 
 import numpy as np
 import pandas as pd
@@ -109,7 +110,8 @@ class OutputWriterMongoDB(OutputWriter):
 
         return res_df
 
-    def save_results(self, net, time_step, pf_converged, ctrl_converged, recycle_options=None):
+    @override
+    def save_results(self, _net, time_step, pf_converged, ctrl_converged, _recycle_options=None):
         # remember the last time step
         self.time_step = time_step
 

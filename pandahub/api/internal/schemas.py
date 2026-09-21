@@ -2,7 +2,7 @@ import uuid
 
 from fastapi_users import schemas
 
-from .. import pandahub_app_settings as ph_settings
+from pandahub.api import pandahub_app_settings as ph_settings
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):

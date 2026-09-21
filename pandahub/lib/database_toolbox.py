@@ -5,17 +5,19 @@ import hashlib
 import importlib
 import json
 import logging
+from datetime import datetime
 
 import blosc
 import numpy as np
 import pandas as pd
+from packaging import version
+from pandapower.io_utils import PPJSONEncoder
+from pymongo.database import Database
+from pymongo.errors import OperationFailure
 
 from pandahub.lib.datatypes import DATATYPES
 
 logger = logging.getLogger(__name__)
-from packaging import version
-from pandapower.io_utils import PPJSONEncoder
-from pymongo.database import Database
 
 
 def get_document_hash(task) -> str:
@@ -122,6 +124,7 @@ def compress_timeseries_data(timeseries_data: pd.Series, ts_format: str) -> byte
         return blosc.compress(timeseries_data.tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
     if ts_format == "array":
         return blosc.compress(timeseries_data.astype(float).to_numpy().tobytes(), shuffle=blosc.SHUFFLE, cname="zlib")
+    return None
 
 
 def decompress_timeseries_data(timeseries_data: bytes, ts_format: str, num_timestamps: int):
@@ -133,6 +136,7 @@ def decompress_timeseries_data(timeseries_data: bytes, ts_format: str, num_times
         return pd.Series(data[:, 1], index=pd.to_datetime(data[:, 0]))
     if ts_format == "array":
         return np.frombuffer(blosc.decompress(timeseries_data), dtype=np.float64)
+    return None
 
 
 def create_timeseries_document(
@@ -281,14 +285,14 @@ def serialize_object_data(element: str, element_data, version_):
     if version_ <= version.parse("0.2.3"):
         try:
             element_data = json.dumps(element_data, cls=PPJSONEncoder)
-        except:
+        except Exception:
             print(f"Data in net[{element}] is not JSON serializable and was therefore omitted on import")
         else:
             return element_data
     else:
         try:
             json.dumps(element_data)
-        except:
+        except Exception:
             element_data = f"serialized_{json.dumps(element_data, cls=PPJSONEncoder)}"
         return element_data
 
@@ -337,6 +341,7 @@ def convert_geojsons(df: pd.DataFrame, geo_mode: str = "string") -> None:
             return json.loads(geo)
         if hasattr(geo, "coords"):
             return {"type": geo.type, "coordinates": geo.coords}
+        return None
 
     def to_string(geo):
         if isinstance(geo, str):
@@ -345,9 +350,10 @@ def convert_geojsons(df: pd.DataFrame, geo_mode: str = "string") -> None:
             return json.dumps(geo)
         if hasattr(geo, "coords"):
             return json.dumps({"type": geo.type, "coordinates": geo.coords})
+        return None
 
     def to_shapely(geo):
-        from shapely.geometry import shape
+        from shapely.geometry import shape  # noqa: PLC0415
 
         if hasattr(geo, "coords"):
             return geo
@@ -355,6 +361,7 @@ def convert_geojsons(df: pd.DataFrame, geo_mode: str = "string") -> None:
             return shape(json.loads(geo))
         if isinstance(geo, dict):
             return shape(geo)
+        return None
 
     conv_func = None
     if geo_mode == "dict":
@@ -399,10 +406,6 @@ def migrate_userdb_to_beanie(ph) -> None:
     -------
     None
     """
-    from datetime import datetime
-
-    from pymongo.errors import OperationFailure
-
     userdb_backup = ph.mongo_client["user_management"][datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")]
     userdb = ph.mongo_client["user_management"]["users"]
     old_users = list(userdb.find({"_id": {"$type": "objectId"}}))

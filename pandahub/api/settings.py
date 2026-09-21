@@ -4,7 +4,7 @@ from pandahub.lib.settings import PandaHubSettings
 
 
 class PandaHubAppSettings(PandaHubSettings):
-    """PandaHub app settings"""
+    """PandaHub app settings."""
 
     model_config = SettingsConfigDict(env_ignore_empty=True)
 

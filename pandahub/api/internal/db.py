@@ -10,7 +10,7 @@ from fastapi_users_db_beanie.access_token import (
 )
 from pydantic import Field
 
-from .. import pandahub_app_settings as ph_settings
+from pandahub.api import pandahub_app_settings as ph_settings
 
 mongo_client_args = {"host": ph_settings.mongodb_url, "uuidRepresentation": "standard", "connect": False}
 if ph_settings.mongodb_user:

@@ -53,8 +53,8 @@ def multi_get_timeseries_from_db(data: MultiGetTimeSeriesModel, ph: PandahubDep)
     if data.timestamp_range is not None:
         data.timestamp_range = [pd.Timestamp(t) for t in data.timestamp_range]
     ts = ph.multi_get_timeseries_from_db(**data.model_dump(), include_metadata=True)
-    for i, data in enumerate(ts):
-        ts[i]["timeseries_data"] = data["timeseries_data"].to_json(date_format="iso")
+    for i, item in enumerate(ts):
+        ts[i]["timeseries_data"] = item["timeseries_data"].to_json(date_format="iso")
     return ts
 
 

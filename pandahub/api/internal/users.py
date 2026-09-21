@@ -10,7 +10,7 @@ from fastapi_users.authentication.strategy.db import (
 )
 from fastapi_users.db import BeanieUserDatabase
 
-from ..internal.db import AccessToken, User, get_access_token_db, get_user_db
+from pandahub.api.internal.db import AccessToken, User, get_access_token_db, get_user_db
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):

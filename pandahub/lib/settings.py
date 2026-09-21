@@ -17,7 +17,7 @@ SecretFromFile = Annotated[str, AfterValidator(get_secret)]
 
 
 class PandaHubSettings(BaseSettings):
-    """PandaHub settings"""
+    """PandaHub settings."""
 
     model_config = SettingsConfigDict(env_ignore_empty=True)
 

@@ -1,4 +1,5 @@
 import datetime
+from typing import override
 
 import numpy as np
 import pandas as pd
@@ -63,6 +64,7 @@ class MongoData(DataSource):
         else:
             self.first_timestamp = first_timestamp
 
+    @override
     def get_time_step_value(self, time_step, profile_name, scale_factor=1.0):
         fs = self.first_timestamp + datetime.timedelta(minutes=15 * time_step)
         if time_step >= self.current_fetch_position:

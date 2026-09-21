@@ -70,7 +70,7 @@ def test_upgrade_project():
                     try:
                         db[key].insert_many(item, ordered=True)
                         db[key].create_index([("net_id", DESCENDING)])
-                    except:
+                    except Exception:
                         print("FAILED TO WRITE TABLE", key)
 
     # we use the implemetation of 0.2.2 to write a net

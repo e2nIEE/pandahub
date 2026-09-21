@@ -168,7 +168,7 @@ def test_del_single_ts_on_db(ph):
             netname=code, element_index=int(i), element_type="load", data_type="p_mw", collection_name="test_collection"
         )
         raise AssertionError  # this line shouldnt be reached, because the function triggers KeyError when no timeseries is found
-    except:
+    except Exception:
         assert True
 
 

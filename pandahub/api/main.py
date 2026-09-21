@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -14,7 +15,7 @@ from . import pandahub_app_settings as ph_settings
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_app: FastAPI):
     await init_beanie(
         database=db,
         document_models=[User, AccessToken],
@@ -46,7 +47,7 @@ app.include_router(variants.router)
 
 
 @app.exception_handler(PandaHubError)
-async def pandahub_exception_handler(request: Request, exc: PandaHubError):
+async def pandahub_exception_handler(_request: Request, exc: PandaHubError):
     return JSONResponse(
         status_code=exc.status_code,
         content=str(exc),
@@ -56,8 +57,6 @@ async def pandahub_exception_handler(request: Request, exc: PandaHubError):
 @app.get("/")
 async def ready():
     if ph_settings.debug:
-        import os
-
         return os.environ
     return "Hello World!"
 

@@ -136,7 +136,9 @@ ignore = [
     "FBT002",
     # .loc fix breaks geo dict setters, generic style preference
     "PD008",
+    # f-strings in logging are acceptable; lazy evaluation not needed here
+    "G004",
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"test/*" = ["S101"]
+"test/*" = ["S101", "ANN", "D"]

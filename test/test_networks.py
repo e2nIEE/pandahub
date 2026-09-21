@@ -1,3 +1,4 @@
+import pandas as pd
 import pandapipes as pps
 import pandapipes.networks as nw_pps
 import pandapower as pp
@@ -9,8 +10,6 @@ from pandahub import PandaHubError
 
 
 def test_additional_res_tables(ph):
-    import pandas as pd
-
     ph.set_active_project("pytest")
 
     # reset project aka delete everything
