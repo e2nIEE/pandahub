@@ -71,7 +71,7 @@ class GetNetValueModel(BaseCRUDModel):
 
 
 @router.post("/get_net_value_from_db")
-def get_net_value_from_db(data: GetNetValueModel, ph: PandaHub = Depends(pandahub)):
+def get_net_value_from_db(data: GetNetValueModel, ph: PandaHub = Depends(pandahub)) -> Any:  # noqa: ANN401
     """Return the value of a single field from one network element."""
     return ph.get_net_value_from_db(**data.model_dump())
 
@@ -138,24 +138,3 @@ def delete_net_elements(data: DeleteElementsModel, ph: PandaHub = Depends(pandah
     """Delete multiple network elements of the same type from the database."""
     return ph.delete_elements(**data.model_dump())
 
-
-### deprecated routes
-@router.post("/create_element_in_db")
-def create_element_in_db_deprecated(*args, **kwargs) -> None:
-    """Raise RuntimeError — this route is deprecated, use /create_element instead."""
-    msg = "create_element_in_db was deprecated - use create_element instead!"
-    raise RuntimeError(msg)
-
-
-@router.post("/create_elements_in_db")
-def create_elements_in_db_deprecated(*args, **kwargs) -> None:
-    """Raise RuntimeError — this route is deprecated, use /create_elements instead."""
-    msg = "create_elements_in_db was deprecated - use create_elements instead!"
-    raise RuntimeError(msg)
-
-
-@router.post("/delete_net_element")
-def delete_net_element_deprecated(*args, **kwargs) -> None:
-    """Raise RuntimeError — this route is deprecated, use /delete_element instead."""
-    msg = "delete_net_element was deprecated - use delete_element instead!"
-    raise RuntimeError(msg)
