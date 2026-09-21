@@ -1,6 +1,7 @@
 """Core PandaHub class for managing pandapower/pandapipes networks and timeseries in MongoDB."""
 
 import builtins
+import contextlib
 import json
 import logging
 import time
@@ -254,8 +255,7 @@ class PandaHub:
 
     def _get_user(self) -> dict | None:
         user_mgmnt_db = self.mongo_client["user_management"]
-        user = user_mgmnt_db["users"].find_one({"_id": UUID(self.user_id)}, projection={"hashed_password": 0})
-        return user
+        return user_mgmnt_db["users"].find_one({"_id": UUID(self.user_id)}, projection={"hashed_password": 0})
 
     # -------------------------
     # Project handling
@@ -380,10 +380,8 @@ class PandaHub:
 
     def set_active_project_by_id(self, project_id: ProjectID, ignore_user_lock: bool | None = False) -> None:
         """Set the active project by its id."""
-        try:
+        with contextlib.suppress(InvalidId):
             project_id = ObjectId(project_id)
-        except InvalidId:
-            pass
         self.active_project = self._get_project_document({"_id": project_id}, ignore_user_lock=ignore_user_lock)
         if self.active_project is None:
             msg = "Project not found!"
@@ -439,7 +437,7 @@ class PandaHub:
         user = self._get_user()
         if project is None:
             return None
-        if "users" not in project or self.user_id in project["users"].keys() or user["is_superuser"]:
+        if "users" not in project or self.user_id in project["users"] or user["is_superuser"]:
             return self.projects_collection.update_one(
                 {"_id": ObjectId(project_id)},
                 {"$set": {"locked_by": None}},
@@ -464,7 +462,7 @@ class PandaHub:
             return project_doc  # project is not user protected
 
         user = self._get_user()
-        if not user["is_superuser"] and self.user_id not in project_doc["users"].keys():
+        if not user["is_superuser"] and self.user_id not in project_doc["users"]:
             msg = "You don't have rights to access this project"
             raise PandaHubError(msg, 403)
         if not ignore_user_lock:
@@ -562,7 +560,7 @@ class PandaHub:
             old_net_collections = [
                 name
                 for name in all_collection_names
-                if not name.startswith("_") and not name == "timeseries" and not name.startswith("net_")
+                if not name.startswith("_") and name != "timeseries" and not name.startswith("net_")
             ]
 
             for element in old_net_collections:
@@ -571,9 +569,9 @@ class PandaHub:
             for d in db["_networks"].find({}, projection={"sector": 1, "data": 1}).to_list():
                 # load old format
                 if d.get("sector", "power") == "power":
-                    data = dict((k, json.loads(v, cls=io_pp.PPJSONDecoder)) for k, v in d["data"].items())
+                    data = {k: json.loads(v, cls=io_pp.PPJSONDecoder) for k, v in d["data"].items()}
                 else:
-                    data = dict((k, from_json_pps(v)) for k, v in d["data"].items())
+                    data = {k: from_json_pps(v) for k, v in d["data"].items()}
                 # save new format
                 for key, dat in data.items():
                     try:
@@ -657,7 +655,7 @@ class PandaHub:
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
-        metadata = self.active_project.get("metadata") or dict()
+        metadata = self.active_project.get("metadata") or {}
 
         # Workaround until mongo 5.0
         def restore_empty(data: dict) -> None:
@@ -681,7 +679,7 @@ class PandaHub:
             self.set_active_project_by_id(project_id)
         self.check_permission("write")
         project_data = self.active_project
-        if "metadata" in project_data.keys():
+        if "metadata" in project_data:
             new_metadata = {**project_data["metadata"], **metadata}
         else:
             new_metadata = metadata
@@ -694,13 +692,13 @@ class PandaHub:
                 elif hasattr(val, "__iter__") and len(val) == 0:
                     updated[key] = f"_empty_{type(val).__name__}"
                 elif isinstance(val, dict):
-                    sub_upd = dict()
+                    sub_upd = {}
                     replace_empty(sub_upd, val)
                     updated[key] = sub_upd
                 else:
                     updated[key] = val
 
-        update_metadata = dict()
+        update_metadata = {}
         replace_empty(update_metadata, new_metadata)
 
         self.mongo_client.user_management.projects.update_one(
@@ -721,7 +719,7 @@ class PandaHub:
         self.check_permission("user_management")
         project_users = self.active_project["users"]
         users = self.mongo_client["user_management"]["users"].find(
-            {"_id": {"$in": [UUID(user_id) for user_id in project_users.keys()]}}
+            {"_id": {"$in": [UUID(user_id) for user_id in project_users]}}
         )
         enriched_users = []
         for user in users:
@@ -889,9 +887,9 @@ class PandaHub:
             io_pp.FromSerializableRegistry if meta.get("sector", "power") == "power" else FromSerializableRegistryPpipe
         )
         if version.parse(self.get_project_version()) <= version.parse("0.2.3"):
-            data = dict(
-                (k, json.loads(v, cls=io_pp.PPJSONDecoder, registry_class=registry)) for k, v in meta["data"].items()
-            )
+            data = {
+                k: json.loads(v, cls=io_pp.PPJSONDecoder, registry_class=registry) for k, v in meta["data"].items()
+            }
             net.update(data)
         else:
             for key, value in meta["data"].items():
@@ -935,7 +933,7 @@ class PandaHub:
         add_edge_branches=True,
         geo_mode="string",
         variant=None,
-        ignore_elements=tuple([]),
+        ignore_elements=(),
         additional_filters: dict[str, Callable[[PandaNet], dict]] | None = None,
         additional_edge_filters: dict[
             str, tuple[list[str] | tuple[str, ...] | None, bool, dict | None, Callable[[PandaNet], dict] | None]
@@ -1055,7 +1053,7 @@ class PandaHub:
                 continue
             # for tables that share an index with an element (e.g. load->res_load) load only relevant entries
             for element in filtered_elements:
-                if table_name.startswith(element + "_") or table_name.startswith("net_res_" + element):
+                if table_name.startswith((element + "_", "net_res_" + element)):
                     element_filter = {"index": {"$in": net[element].index.tolist()}}
                     break
             else:
@@ -1226,8 +1224,7 @@ class PandaHub:
         proj = {"net": 0}
         if not load_area:
             proj["area_geojson"] = 0
-        nets = pd.DataFrame(db.find(fi, projection=proj)).to_list()
-        return nets
+        return pd.DataFrame(db.find(fi, projection=proj)).to_list()
 
     def _get_net_id_from_name(self, name: str, db):
         metadata = db["_networks"].find({"name": name}).to_list()
@@ -1275,7 +1272,7 @@ class PandaHub:
             return
         filter_dict = {"net_id": net_id, **self.get_variant_filter(variant)}
         if filter is not None:
-            if "$or" in filter_dict and "$or" in filter.keys():
+            if "$or" in filter_dict and "$or" in filter:
                 # if 'or' is in both filters create 'and' with
                 # both to avoid override during filter merge
                 filter_and = {
@@ -1681,12 +1678,10 @@ class PandaHub:
                     element_data.update(std_types[std_type])
 
             # add needed parameters not defined in standard type
-            if element_type == "line":
-                if "g_us_per_km" not in element_data:
-                    element_data["g_us_per_km"] = 0
-        if element_type in ["sink", "source"]:
-            if "mdot_kg_per_s" not in element_data:
-                element_data["mdot_kg_per_s"] = None
+            if element_type == "line" and "g_us_per_km" not in element_data:
+                element_data["g_us_per_km"] = 0
+        if element_type in ["sink", "source"] and "mdot_kg_per_s" not in element_data:
+            element_data["mdot_kg_per_s"] = None
 
     def _ensure_dtypes(self, element_type: str, data: dict) -> None:
         dtypes = self._datatypes.get(element_type)
@@ -2521,7 +2516,7 @@ class PandaHub:
         document = db[collection_name].find_one(document_filter, projection={"timestamp": 0, "_id": 0})
         if document is None:
             return []
-        value_fields = [f"${field}" for field in document.keys() if field != "metadata"]
+        value_fields = [f"${field}" for field in document if field != "metadata"]
         group_dict = {
             "_id": "$metadata._id",
             "max_value": {"$max": {"$max": value_fields}},
@@ -2531,7 +2526,7 @@ class PandaHub:
         }
         metadata_fields = {
             metadata_field: {"$first": f"$metadata.{metadata_field}"}
-            for metadata_field in document["metadata"].keys()
+            for metadata_field in document["metadata"]
             if metadata_field != "_id"
         }
         group_dict.update(metadata_fields)
@@ -2962,8 +2957,7 @@ class PandaHub:
         if element_index is not None:
             filter_document["element_index"] = element_index
         filter_document = {**filter_document, **kwargs}
-        del_res = db[collection_name].delete_one(filter_document)
-        return del_res
+        return db[collection_name].delete_one(filter_document)
 
     def delete_timeseries_from_db_by_id(
         self,
@@ -3036,9 +3030,7 @@ class PandaHub:
                 match_filter[key] = {"$in": filter_value}
             else:
                 match_filter[key] = filter_value
-        del_res = None
-        del_res = db[collection_name].delete_many(match_filter)
-        return del_res
+        return db[collection_name].delete_many(match_filter)
 
     def create_timeseries_collection(self, collection_name: str, overwrite: bool = False, project_id=None) -> None:
         """Create a MongoDB timeseries collection with appropriate time/meta field configuration."""
@@ -3093,7 +3085,7 @@ class PandaHub:
         project_id=None,
     ) -> dict:
         """Raise a DeprecationWarning; use create_element instead."""
-        warnings.warn("ph.create_element_in_db was renamed - use ph.create_element instead!")
+        warnings.warn("ph.create_element_in_db was renamed - use ph.create_element instead!", stacklevel=2)
         return self.create_element(
             net_id=net,
             element_type=element,
@@ -3108,12 +3100,13 @@ class PandaHub:
         net: int | str,
         element_type: str,
         elements_data: list[dict],
-        project_id: str = None,
+        project_id: str | None = None,
         variant: int | None = None,
     ) -> list[dict]:
         """Raise a DeprecationWarning; use create_elements instead (note: changed argument order)."""
         warnings.warn(
-            "ph.create_elements_in_db was renamed - use ph.create_elements instead! Watch out for changed order of project_id and variant args"
+            "ph.create_elements_in_db was renamed - use ph.create_elements instead! Watch out for changed order of project_id and variant args",
+            stacklevel=2,
         )
         return self.create_elements(
             net_id=net,
@@ -3125,7 +3118,7 @@ class PandaHub:
 
     def delete_net_element(self, net, element, element_index, variant=None, project_id=None) -> dict:
         """Raise a DeprecationWarning; use delete_element instead."""
-        warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead!")
+        warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead!", stacklevel=2)
         return self.delete_element(
             net_id=net,
             element_type=element,
@@ -3142,13 +3135,13 @@ class PandaHub:
             "If you want to continue to retrieve a network by its name, switch to get_network_by_name(). "
             "get_net_from_db() will be removed in future versions."
         )
-        warnings.warn(msg, DeprecationWarning)
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
         return self.get_network_by_name(*args, **kwargs)
 
     def get_net_from_db_by_id(self, *args, **kwargs) -> None:
         """Raise a DeprecationWarning; use get_network instead."""
         msg = "get_net_from_db_by_id() has been renamed - use get_network() as drop-in replacement. This function will be removed in future versions."
-        warnings.warn(msg, DeprecationWarning)
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
         self.get_network(*args, **kwargs)
 
     def get_subnet_from_db(self, *args, **kwargs) -> PandaNet | (tuple[PandaNet, list] | None):
@@ -3159,13 +3152,13 @@ class PandaHub:
             "If you want to continue to retrieve a subnet by its name, switch to get_subnet_by_name(). "
             "get_subnet_from_db() will be removed in future versions."
         )
-        warnings.warn(msg, DeprecationWarning)
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
         return self.get_subnet_by_name(*args, **kwargs)
 
     def get_subnet_from_db_by_id(self, *args, **kwargs) -> PandaNet | (tuple[PandaNet, list]):
         """Raise a DeprecationWarning; use get_subnet instead."""
         msg = "get_subnet_from_db_by_id() has been renamed - use get_subnet() as drop-in replacement. This function will be removed in future versions."
-        warnings.warn(msg, DeprecationWarning)
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
         return self.get_subnet(*args, **kwargs)
 
     def delete_net_from_db(self, name: str) -> None:
@@ -3176,13 +3169,13 @@ class PandaHub:
             "If you want to continue to delete a net by its name, switch to delete_network_by_name(). "
             "delete_net_from_db() will be removed in future versions."
         )
-        warnings.warn(msg, DeprecationWarning)
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
         return self.delete_network_by_name(name)
 
     def _get_net_collections(self, db, with_areas: bool = True) -> list[str]:
         """Raise a DeprecationWarning; use get_net_collections instead."""
         msg = "_get_net_collections() has been made public - use get_net_collections() as drop-in replacement. This function will be removed in future versions."
-        warnings.warn(msg, DeprecationWarning)
+        warnings.warn(msg, DeprecationWarning, stacklevel=2)
         return self.get_net_collections(db, with_areas)
 
 
@@ -3284,7 +3277,7 @@ def get_subnet_filter_data_pipe(net, filtered_elements, metadata) -> tuple:
             branch_node_cols.append(c.from_to_node_cols())
         if issubclass(c, NodeElementComponent):
             node_elements.append(c.table_name())
-    special_filters = dict()
+    special_filters = {}
     get_nodes_func = dict.fromkeys(branch_tables, get_nodes_from_element)
     return (
         node_name,

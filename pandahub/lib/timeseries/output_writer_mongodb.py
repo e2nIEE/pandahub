@@ -16,9 +16,7 @@ except ImportError:
 
 
 class OutputWriterMongoDB(OutputWriter):
-    """
-    Output Writer which writes to a mongoDB
-    """
+    """Output writer that writes timeseries results to a MongoDB database."""
 
     def __init__(
         self,
@@ -42,9 +40,9 @@ class OutputWriterMongoDB(OutputWriter):
         self.db_name = db_name
         self.write_caching = write_caching
         self.current_pos = 0
-        self.ids = dict()
+        self.ids = {}
         self.collection_name = collection_name
-        self.output = dict()
+        self.output = {}
         self.freq = freq
         self.start_date = start_date
 
@@ -56,13 +54,12 @@ class OutputWriterMongoDB(OutputWriter):
     #     raise NotImplementedError("Sorry not implemented yet")
 
     def _init_np_array(self, partial_func):
-        (table, variable, net, index, eval_function, eval_name) = partial_func.args
+        (_, _, _, index, eval_function, _) = partial_func.args
         hash_name = self._get_np_name(partial_func.args)
         n_columns = len(index)
         if eval_function is not None:
             n_columns = 1
-            if isinstance(eval_function, FunctionType):
-                if "n_columns" in eval_function.__code__.co_varnames:
+            if isinstance(eval_function, FunctionType) and "n_columns" in eval_function.__code__.co_varnames:
                     n_columns = eval_function.__defaults__[0]
         # self.np_results[hash_name] = np.zeros((len(self.time_steps), n_columns))
         self.np_results[hash_name] = np.zeros((self.write_caching, n_columns))
@@ -92,10 +89,10 @@ class OutputWriterMongoDB(OutputWriter):
     def _np_to_pd(self):
         # convert numpy arrays (faster so save results) into pd Dataframes (user friendly)
         # intended use: At the end of time series simulation write results to pandas
-        res_df = dict()
+        res_df = {}
 
         for partial_func in self.output_list:
-            (table, variable, net, index, eval_func, eval_name) = partial_func.args
+            (table, variable, _, index, eval_func, eval_name) = partial_func.args
             # res_name = self._get_hash(table, variable)
             res_name = self._get_output_name(table, variable)
             np_name = self._get_np_name(partial_func.args)

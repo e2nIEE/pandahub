@@ -89,8 +89,7 @@ class GetProjectSettingsModel(BaseModel):
 @router.post("/get_project_settings")
 def get_project_settings(data: GetProjectSettingsModel, ph: PandaHub = Depends(pandahub)) -> dict:
     """Return the settings dict for the specified project."""
-    settings = ph.get_project_settings(**data.model_dump())
-    return settings
+    return ph.get_project_settings(**data.model_dump())
 
 
 class SetProjectSettingsModel(BaseModel):
@@ -134,8 +133,7 @@ class GetProjectMetadataModel(BaseModel):
 @router.post("/get_project_metadata")
 def get_project_metadata(data: GetProjectMetadataModel, ph: PandaHub = Depends(pandahub)) -> dict:
     """Return the metadata dict for the specified project."""
-    metadata = ph.get_project_metadata(**data.model_dump())
-    return metadata
+    return ph.get_project_metadata(**data.model_dump())
 
 
 class SetProjectMetadataModel(BaseModel):

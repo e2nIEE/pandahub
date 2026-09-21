@@ -5,6 +5,7 @@ import hashlib
 import importlib
 import json
 import logging
+
 import blosc
 import numpy as np
 import pandas as pd
@@ -241,7 +242,7 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes: dict = DATATYP
     other_parameters = {}
     types = {}
     for key, data in net.items():
-        if key.startswith("_") or key.startswith("res"):
+        if key.startswith(("_", "res")):
             continue
         if isinstance(data, pd.core.frame.DataFrame):
             # ------------

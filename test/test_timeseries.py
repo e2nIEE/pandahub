@@ -15,11 +15,11 @@ project = "pytest"
 def test_from_tutorial(ph):
     ph.set_active_project(project)
     net = nw.simple_mv_open_ring_net()
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(35041, len(net.load))) / 100 * net.load.p_mw.values
+    p_mw_profiles = np.random.randint(low=0, high=100, size=(35041, len(net.load))) / 100 * net.load.p_mw.to_numpy()
     q_mvar_profiles = np.ones((35041, len(net.load)))
     timestamps = pd.date_range(start="01/01/2020", end="31/12/2020", freq="15min")
     p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
-    weekindex = p_mw_profiles.index[0 : (7 * 96)]
+    _weekindex = p_mw_profiles.index[0 : (7 * 96)]
     q_mvar_profiles = pd.DataFrame(q_mvar_profiles, index=timestamps)
 
     # writing the p_mw profile
@@ -167,9 +167,7 @@ def test_del_single_ts_on_db(ph):
         ph.get_timeseries_from_db(
             netname=code, element_index=int(i), element_type="load", data_type="p_mw", collection_name="test_collection"
         )
-        assert (
-            False
-        )  # this line shouldnt be reached, because the function triggers KeyError when no timeseries is found
+        raise AssertionError  # this line shouldnt be reached, because the function triggers KeyError when no timeseries is found
     except:
         assert True
 
@@ -281,7 +279,7 @@ def test_add_metadata(ph):
 
     meta_before = ph.get_timeseries_metadata(filter, collection_name="test_collection")
 
-    add_meta = {"max": str(result.values.max())}
+    add_meta = {"max": str(result.to_numpy().max())}
 
     ph.add_metadata(filter, add_meta=add_meta, collection_name="test_collection")
     # check for new metadata
@@ -307,7 +305,7 @@ def test_bulk_write_with_meta(ph):
         meta_frame=meta,
     )
 
-    result = ph.bulk_get_timeseries_from_db(
+    _result = ph.bulk_get_timeseries_from_db(
         {
             "netname": "bulk_write_net",
             "element_type": "meta_test_load",
@@ -369,7 +367,7 @@ if __name__ == "__main__":
 
     meta_before = ph.get_timeseries_metadata(filter, collection_name="test_collection")
 
-    add_meta = {"max": str(result.values.max())}
+    add_meta = {"max": str(result.to_numpy().max())}
 
     ph.add_metadata(filter, add_meta=add_meta, collection_name="test_collection")
     # check for new metadata

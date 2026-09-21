@@ -15,9 +15,7 @@ except ImportError:
 
 
 class MongoData(DataSource):
-    """
-    Fetches timeseries data from a mongodb
-    """
+    """Fetch timeseries data from a MongoDB."""
 
     def __init__(
         self,

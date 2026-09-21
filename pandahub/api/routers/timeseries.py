@@ -77,8 +77,7 @@ def get_timeseries_metadata(data: GetTimeseriesMetadataModel, ph: PandaHub = Dep
         global_database=data.global_database,
         collection_name=data.collection_name,
     )
-    ts = json.loads(ts.to_json(orient="index"))
-    return ts
+    return json.loads(ts.to_json(orient="index"))
 
 
 class WriteTimeSeriesModel(BaseModel):

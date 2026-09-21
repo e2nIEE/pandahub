@@ -55,7 +55,7 @@ def test_network_io(ph):
         assert not ph.network_with_name_exists(name)
 
         ph.write_network_to_db(net, name)
-        assert ph.network_with_name_exists(name) == True
+        assert ph.network_with_name_exists(name)
 
         net_loaded = ph.get_network_by_name(name)
 
@@ -73,10 +73,10 @@ def test_network_io(ph):
 
     # delete first network
     ph.delete_network_by_name(name1)
-    assert ph.network_with_name_exists(name1) == False
+    assert not ph.network_with_name_exists(name1)
 
     # check that second network is still in database
-    assert ph.network_with_name_exists(name2) == True
+    assert ph.network_with_name_exists(name2)
     net2_loaded = ph.get_network_by_name(name2)
     pp.runpp(net2_loaded)
     assert pp.nets_equal(net2, net2_loaded, check_only_results=True)
