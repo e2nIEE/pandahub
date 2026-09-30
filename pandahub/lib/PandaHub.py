@@ -1256,7 +1256,23 @@ class PandaHub:
         geo_mode="string",
         variant=None,
         dtypes=None,
+        columns=None,
     ):
+        """
+        Load one element table from the database into ``net``.
+
+        Parameters
+        ----------
+        columns : list[str] or None, optional
+            If given, restricts the mongodb query to these properties, so
+            columns not listed here are never fetched or added to the
+            resulting DataFrame. ``index`` and ``net_id`` are always
+            included regardless of this list, since they are required
+            internally (indexing, `_id`/`net_id` cleanup). Properties that
+            are only post-processed together (e.g. `q_max_characteristic`
+            and `q_min_characteristic`) must both be included or both
+            omitted. ``None`` (default) fetches every stored property.
+        """
         if only_tables is not None and element_type not in only_tables:
             return
         if not include_results and element_type.startswith("res_"):
@@ -1276,7 +1292,17 @@ class PandaHub:
             else:
                 filter_dict = {**filter_dict, **filter}
 
-        data = db[self._collection_name_of_element(element_type)].find(filter_dict).to_list()
+        projection = None
+        if columns is not None:
+            projection = {column: 1 for column in columns}
+            projection["index"] = 1
+            projection["net_id"] = 1
+
+        data = (
+            db[self._collection_name_of_element(element_type)]
+            .find(filter_dict, projection=projection)
+            .to_list()
+        )
         if len(data) == 0:
             return
         if dtypes is None:
