@@ -499,7 +499,7 @@ class PandaHub:
         )
         return self.get_project_collection(collection)
 
-    def get_project_collection(self, collection_name: str) -> Collection:
+    def get_project_collection(self, collection_name: str, *, from_element_name: bool=False) -> Collection:
         """
         Get a MongoClient instance connected to the database for the current active project, optionally set to the given collection.
 
@@ -507,11 +507,15 @@ class PandaHub:
         ----------
         collection_name
             Name of document collection
+        from_element_name
+            Convert the element name to collection name (adds net_ prefix if necessary)
 
         Returns
         -------
         pymongo.collection.Collection
         """
+        if from_element_name:
+            collection_name = self._collection_name_of_element(collection_name)
         return self.get_project_database()[collection_name]
 
     def _get_global_database(self) -> Database:
@@ -1255,8 +1259,23 @@ class PandaHub:
         geo_mode: str = "string",
         variant=None,
         dtypes=None,
+        columns: list[str] | None = None,
     ) -> None:
-        """Load one element type from the database collection and add it to the network."""
+        """
+        Load one element table from the database into ``net``.
+
+        Parameters
+        ----------
+        columns : list[str] or None, optional
+            If given, restricts the mongodb query to these properties, so
+            columns not listed here are never fetched or added to the
+            resulting DataFrame. ``index`` and ``net_id`` are always
+            included regardless of this list, since they are required
+            internally (indexing, `_id`/`net_id` cleanup). Properties that
+            are only post-processed together (e.g. `q_max_characteristic`
+            and `q_min_characteristic`) must both be included or both
+            omitted. ``None`` (default) fetches every stored property.
+        """
         if only_tables is not None and element_type not in only_tables:
             return
         if not include_results and element_type.startswith("res_"):
@@ -1276,7 +1295,15 @@ class PandaHub:
             else:
                 filter_dict = {**filter_dict, **filter}
 
-        data = db[self._collection_name_of_element(element_type)].find(filter_dict).to_list()
+        if columns is not None:
+            for item in ["index", "net_id"]:
+                if item not in columns:
+                    columns.append(item)
+        data = (
+            self.get_project_collection(element_type, from_element_name=True)
+            .find(filter_dict, projection=columns)
+            .to_list()
+        )
         if len(data) == 0:
             return
         if dtypes is None:
