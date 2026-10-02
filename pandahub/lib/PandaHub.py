@@ -12,7 +12,7 @@ from inspect import _empty, signature
 from itertools import chain
 from operator import getitem
 from types import NoneType
-from typing import ClassVar, Optional, TypeAlias
+from typing import Any, ClassVar, Optional, TypeAlias
 from uuid import UUID
 
 import numpy as np
@@ -90,7 +90,7 @@ def validate_variant_type(variant: int | None) -> None:
 def re_arg(kwarg_map: dict[str, str]) -> Callable:
     """Return a decorator that renames deprecated keyword arguments to their new names."""
     def decorator(func: Callable) -> Callable:
-        def wrapped(*args, **kwargs):
+        def wrapped(*args: Any, **kwargs: Any) -> Any:
             new_kwargs = {}
             for k, v in kwargs.items():
                 if k in kwarg_map:
@@ -267,7 +267,7 @@ class PandaHub:
         settings: dict | None = None,
         realm: str | None = None,
         metadata: dict | None = None,
-        project_id=None,
+        project_id: ProjectID | None = None,
         activate: bool = True,
         additional_project_data: dict | None = None,
     ) -> dict:
@@ -576,9 +576,10 @@ class PandaHub:
                 for key, dat in data.items():
                     try:
                         json.dumps(dat)
+                        serialized = dat
                     except Exception:
-                        dat = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
-                    data[key] = dat
+                        serialized = f"serialized_{json.dumps(data, cls=io_pp.PPJSONEncoder)}"
+                    data[key] = serialized
                 db["_networks"].update_one({"_id": d["_id"]}, {"$set": {"data": data}})
 
             logger.info(
@@ -593,14 +594,14 @@ class PandaHub:
     # Project settings and metadata
     # -------------------------
 
-    def get_project_settings(self, project_id=None) -> dict:
+    def get_project_settings(self, project_id: ProjectID | None = None) -> dict:
         """Return the settings dict of the active project."""
         if project_id:
             self.set_active_project_by_id(project_id)
         self.check_permission("read")
         return self.active_project["settings"]
 
-    def get_project_setting_value(self, setting: str, project_id=None):
+    def get_project_setting_value(self, setting: str, project_id: ProjectID | None = None):
         """
         Retrieve the value of a setting.
 
@@ -628,7 +629,7 @@ class PandaHub:
         except KeyError:
             return None
 
-    def set_project_settings(self, settings: dict, project_id=None) -> None:
+    def set_project_settings(self, settings: dict, project_id: ProjectID | None = None) -> None:
         """Merge the given settings dict into the active project's settings."""
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -639,7 +640,7 @@ class PandaHub:
         project_collection.update_one({"_id": _id}, {"$set": {"settings": new_settings}})
         self.active_project["settings"] = new_settings
 
-    def set_project_settings_value(self, parameter: str, value: SettingsValue, project_id=None) -> None:
+    def set_project_settings_value(self, parameter: str, value: SettingsValue, project_id: ProjectID | None = None) -> None:
         """Set a single project setting by dot-notation parameter name."""
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -650,7 +651,7 @@ class PandaHub:
         project_collection.update_one({"_id": _id}, {"$set": {setting_string: value}})
         self.active_project["settings"][parameter] = value
 
-    def get_project_metadata(self, project_id=None) -> dict:
+    def get_project_metadata(self, project_id: ProjectID | None = None) -> dict:
         """Return the metadata dict of the active project."""
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -660,20 +661,21 @@ class PandaHub:
         # Workaround until mongo 5.0
         def restore_empty(data: dict) -> None:
             for key, val in data.items():
+                new_val = val
                 if isinstance(val, dict):
                     restore_empty(val)
                 elif isinstance(val, str):
                     if val == "_none":
-                        val = None
+                        new_val = None
                     elif val.startswith("_empty_"):
                         t = getattr(builtins, val.replace("_empty_", ""))
-                        val = t()
-                data[key] = val
+                        new_val = t()
+                data[key] = new_val
 
         restore_empty(metadata)
         return metadata
 
-    def set_project_metadata(self, metadata: dict, project_id=None) -> None:
+    def set_project_metadata(self, metadata: dict, project_id: ProjectID | None = None) -> None:
         """Merge the given metadata dict into the active project's metadata."""
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -788,7 +790,7 @@ class PandaHub:
     # Net handling
     # -------------------------
 
-    def get_all_nets_metadata_from_db(self, project_id=None) -> list[dict]:
+    def get_all_nets_metadata_from_db(self, project_id: ProjectID | None = None) -> list[dict]:
         """Return metadata documents for all networks in the active project."""
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -801,7 +803,7 @@ class PandaHub:
         name: str,
         include_results: bool = True,
         only_tables=None,
-        project_id=None,
+        project_id: ProjectID | None = None,
         geo_mode="string",
         variant=None,
         convert: bool = True,
@@ -887,9 +889,10 @@ class PandaHub:
             net.update(data)
         else:
             for key, value in meta["data"].items():
+                new_value = value
                 if isinstance(value, str) and value.startswith("serialized_"):
-                    value = json.loads(value[11:], cls=io_pp.PPJSONDecoder, registry_class=registry)
-                net[key] = value
+                    new_value = json.loads(value[11:], cls=io_pp.PPJSONDecoder, registry_class=registry)
+                net[key] = new_value
 
     def get_subnet_by_name(
         self,
@@ -1141,21 +1144,21 @@ class PandaHub:
                 dtypes[element] = get_dtypes(element_data, self._datatypes.get(element))
                 if element_data.empty:
                     continue
-                element_data = element_data.copy(deep=True)
+                element_df = element_data.copy(deep=True)
                 if element not in self._elements_without_vars:
-                    if "var_type" in element_data:
-                        element_data["var_type"] = element_data["var_type"].fillna("base")
+                    if "var_type" in element_df:
+                        element_df["var_type"] = element_df["var_type"].fillna("base")
                     else:
-                        element_data["var_type"] = "base"
-                        element_data["not_in_var"] = np.empty((len(element_data.index), 0)).tolist()
-                        element_data["variant"] = None
-                element_data = convert_element_to_dict(element_data, net_id, self._datatypes.get(element))
-                self._write_element_to_db(db, element, element_data)
+                        element_df["var_type"] = "base"
+                        element_df["not_in_var"] = np.empty((len(element_df.index), 0)).tolist()
+                        element_df["variant"] = None
+                element_records = convert_element_to_dict(element_df, net_id, self._datatypes.get(element))
+                self._write_element_to_db(db, element, element_records)
 
             else:
-                element_data = serialize_object_data(element, element_data, version_)
-                if element_data:
-                    data[element] = element_data
+                serialized = serialize_object_data(element, element_data, version_)
+                if serialized:
+                    data[element] = serialized
 
         # write network metadata
         network_data = {
@@ -1246,7 +1249,7 @@ class PandaHub:
         db,
         element_type: str,
         net_id,
-        filter=None,
+        filter=None,  # noqa: A002
         include_results: bool = True,
         only_tables=None,
         geo_mode: str = "string",
@@ -1304,7 +1307,7 @@ class PandaHub:
     # Net element handling
     # -------------------------
 
-    def get_net_value_from_db(self, net_id, element_type: str, element_index, parameter: str, variant=None, project_id=None):
+    def get_net_value_from_db(self, net_id, element_type: str, element_index, parameter: str, variant=None, project_id: ProjectID | None = None):
         """Return the value of a single field from one network element in the database."""
         if project_id:
             self.set_active_project_by_id(project_id)
@@ -1332,7 +1335,7 @@ class PandaHub:
             return dtypes[parameter](document[parameter])
         return document[parameter]
 
-    def delete_element(self, net_id, element_type, element_index, variant=None, project_id=None) -> dict:
+    def delete_element(self, net_id, element_type, element_index, variant=None, project_id: ProjectID | None = None) -> dict:
         """
         Delete an element from the database.
 
@@ -1435,7 +1438,7 @@ class PandaHub:
         parameter: str,
         value,
         variant=None,
-        project_id=None,
+        project_id: ProjectID | None = None,
     ) -> dict | None:
         """Set a single field value on one network element in the database."""
         self.validate_variant(variant, element_type)
@@ -1496,7 +1499,7 @@ class PandaHub:
         parameter: str,
         value,
         variant=None,
-        project_id=None,
+        project_id: ProjectID | None = None,
     ) -> None:
         """Set an attribute on a serialized object stored in a network element."""
         self.validate_variant(variant, element_type)
@@ -1551,7 +1554,7 @@ class PandaHub:
         element_index: int,
         element_data: dict,
         variant=None,
-        project_id=None,
+        project_id: ProjectID | None = None,
     ) -> dict:
         """
         Create an element in the database.
@@ -1830,7 +1833,7 @@ class PandaHub:
     # Bulk operations
     # -------------------------
 
-    def bulk_write_to_db(self, data: list, collection_name: str = "tasks", global_database: bool = False, project_id=None) -> None:
+    def bulk_write_to_db(self, data: list, collection_name: str = "tasks", global_database: bool = False, project_id: ProjectID | None = None) -> None:
         """Write any number of documents to the database at once.
 
         Check if any document with the same _id already exists in the database. Already existing
@@ -1882,7 +1885,7 @@ class PandaHub:
         document_ids: list,
         collection_name: str = "tasks",
         global_database: bool = False,
-        project_id=None,
+        project_id: ProjectID | None = None,
     ) -> None:
         """Update any number of documents in the database at once, according to their document_ids.
 
@@ -1935,7 +1938,7 @@ class PandaHub:
         compress_ts_data: bool = False,
         global_database: bool = False,
         collection_name: str = "timeseries",
-        project_id=None,
+        project_id: ProjectID | None = None,
         **kwargs,
     ):
         """Write a timeseries to a MongoDB database.
@@ -2002,8 +2005,8 @@ class PandaHub:
             start = timeseries.index.min()
             end = timeseries.index.max()
             # delete overlapping timeseries already in the database
-            filter = {"metadata._id": _id, "timestamp": {"$gte": start, "$lte": end}}
-            db[collection_name].delete_many(filter)
+            query = {"metadata._id": _id, "timestamp": {"$gte": start, "$lte": end}}
+            db[collection_name].delete_many(query)
             # create new timeseries documents
             if isinstance(timeseries, pd.Series):
                 documents = [
@@ -2066,7 +2069,7 @@ class PandaHub:
         compress_ts_data: bool = False,
         global_database: bool = False,
         collection_name: str = "timeseries",
-        project_id=None,
+        project_id: ProjectID | None = None,
         **kwargs,
     ) -> list:
         """Write a pandas DataFrame containing multiple timeseries to a MongoDB database.
@@ -2139,7 +2142,7 @@ class PandaHub:
         document_id,
         collection_name: str = "timeseries",
         global_database: bool = False,
-        project_id=None,
+        project_id: ProjectID | None = None,
     ) -> None:
         """Append a timeseries to an existing timeseries document in the MongoDB database.
 
@@ -2183,7 +2186,7 @@ class PandaHub:
         self,
         new_ts_content,
         document_ids: list,
-        project_id=None,
+        project_id: ProjectID | None = None,
         collection_name: str = "timeseries",
         global_database: bool = False,
     ) -> None:
@@ -2244,7 +2247,7 @@ class PandaHub:
         global_database: bool = False,
         collection_name: str = "timeseries",
         include_metadata: bool = False,
-        project_id=None,
+        project_id: ProjectID | None = None,
         **kwargs,
     ):
         """
@@ -2395,7 +2398,7 @@ class PandaHub:
         filter_document: dict,
         collection_name: str = "timeseries",
         global_database: bool = False,
-        project_id=None,
+        project_id: ProjectID | None = None,
         timestamp_range=None,
     ) -> pd.DataFrame:
         """Return a DataFrame containing all metadata matching the provided filter.
@@ -2546,7 +2549,7 @@ class PandaHub:
         compressed_ts_data: bool = False,
         global_database: bool = False,
         collection_name: str = "timeseries",
-        project_id=None,
+        project_id: ProjectID | None = None,
         **kwargs,
     ):
         """Return multiple timeseries matching the filter as a list or wide DataFrame."""
@@ -2594,11 +2597,11 @@ class PandaHub:
             if len(ts_all) == 0:
                 return timeseries
             for _id, ts in ts_all.groupby("_id"):
-                ts = ts.set_index("timestamp")
-                value_columns = list(set(ts.columns) - {"timestamp", "_id"})
+                ts_indexed = ts.set_index("timestamp")
+                value_columns = list(set(ts_indexed.columns) - {"timestamp", "_id"})
                 value_columns.sort()
                 for col in value_columns:
-                    timeseries_dict = {"timeseries_data": ts[col]}
+                    timeseries_dict = {"timeseries_data": ts_indexed[col]}
                     if include_metadata:
                         metadata = db[f"{collection_name}_metadata"].find_one({"_id": _id})
                         if metadata is not None:
@@ -2714,7 +2717,7 @@ class PandaHub:
         pivot_by_column=None,
         global_database: bool = False,
         collection_name="timeseries",
-        project_id=None,
+        project_id: ProjectID | None = None,
         **kwargs,
     ):
         """Retrieve multiple timeseries at once from a MongoDB database, filtered by their metadata.
@@ -2872,7 +2875,7 @@ class PandaHub:
         columns.remove("timestamp")
         timeseries = timeseries[columns]
         if pivot_by_column:
-            timeseries = timeseries.pivot(columns=pivot_by_column, values="value")
+            timeseries = timeseries.pivot(columns=pivot_by_column, values="value")  # noqa: PD010
         return timeseries
 
     def delete_timeseries_from_db(
@@ -3007,7 +3010,7 @@ class PandaHub:
                 match_filter[key] = filter_value
         return db[collection_name].delete_many(match_filter)
 
-    def create_timeseries_collection(self, collection_name: str, overwrite: bool = False, project_id=None) -> None:
+    def create_timeseries_collection(self, collection_name: str, overwrite: bool = False, project_id: ProjectID | None = None) -> None:
         """Create a MongoDB timeseries collection with appropriate time/meta field configuration."""
         db = self._get_project_database() if project_id is None else self.mongo_client[str(project_id)]
         collection_exists = collection_name in db.list_collection_names()
@@ -3030,7 +3033,7 @@ class PandaHub:
     def collection_is_timeseries(
         self,
         collection_name: str,
-        project_id=None,
+        project_id: ProjectID | None = None,
         global_database: bool = False,
     ) -> bool:
         """Return True if the named collection is a MongoDB timeseries collection."""
@@ -3038,7 +3041,7 @@ class PandaHub:
         collections = db.list_collections(filter={"name": collection_name}).to_list()
         return len(collections) == 1 and collections[0]["type"] == "timeseries"
 
-    def _get_project_or_global_db(self, project_id=None, global_database: bool = False) -> Database:
+    def _get_project_or_global_db(self, project_id: ProjectID | None = None, global_database: bool = False) -> Database:
         if project_id:
             self.set_active_project_by_id(project_id)
         if global_database:
@@ -3054,7 +3057,7 @@ class PandaHub:
         element_index: int,
         data: dict,
         variant=None,
-        project_id=None,
+        project_id: ProjectID | None = None,
     ) -> dict:
         """Raise a DeprecationWarning; use create_element instead."""
         warnings.warn("ph.create_element_in_db was renamed - use ph.create_element instead!", stacklevel=2)
@@ -3088,7 +3091,7 @@ class PandaHub:
             project_id=project_id,
         )
 
-    def delete_net_element(self, net, element, element_index, variant=None, project_id=None) -> dict:
+    def delete_net_element(self, net, element, element_index, variant=None, project_id: ProjectID | None = None) -> dict:
         """Raise a DeprecationWarning; use delete_element instead."""
         warnings.warn("ph.delete_net_element was renamed - use ph.delete_element instead!", stacklevel=2)
         return self.delete_element(
@@ -3099,7 +3102,7 @@ class PandaHub:
             project_id=project_id,
         )
 
-    def get_net_from_db(self, *args, **kwargs) -> PandaNet | None:
+    def get_net_from_db(self, *args: Any, **kwargs: Any) -> PandaNet | None:
         """Raise a DeprecationWarning; use get_network_by_name instead."""
         msg = (
             "Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
@@ -3110,13 +3113,13 @@ class PandaHub:
         warnings.warn(msg, DeprecationWarning, stacklevel=2)
         return self.get_network_by_name(*args, **kwargs)
 
-    def get_net_from_db_by_id(self, *args, **kwargs) -> None:
+    def get_net_from_db_by_id(self, *args: Any, **kwargs: Any) -> None:
         """Raise a DeprecationWarning; use get_network instead."""
         msg = "get_net_from_db_by_id() has been renamed - use get_network() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning, stacklevel=2)
         self.get_network(*args, **kwargs)
 
-    def get_subnet_from_db(self, *args, **kwargs) -> PandaNet | (tuple[PandaNet, list] | None):
+    def get_subnet_from_db(self, *args: Any, **kwargs: Any) -> PandaNet | (tuple[PandaNet, list] | None):
         """Raise a DeprecationWarning; use get_subnet_by_name instead."""
         msg = (
             "Getting a network by name can be ambiguous and will throw an error if more than one Network with the "
@@ -3127,7 +3130,7 @@ class PandaHub:
         warnings.warn(msg, DeprecationWarning, stacklevel=2)
         return self.get_subnet_by_name(*args, **kwargs)
 
-    def get_subnet_from_db_by_id(self, *args, **kwargs) -> PandaNet | (tuple[PandaNet, list]):
+    def get_subnet_from_db_by_id(self, *args: Any, **kwargs: Any) -> PandaNet | (tuple[PandaNet, list]):
         """Raise a DeprecationWarning; use get_subnet instead."""
         msg = "get_subnet_from_db_by_id() has been renamed - use get_subnet() as drop-in replacement. This function will be removed in future versions."
         warnings.warn(msg, DeprecationWarning, stacklevel=2)

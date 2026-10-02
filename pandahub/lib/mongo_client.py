@@ -8,7 +8,9 @@ from pymongo.synchronous.database import Database
 
 from pandahub.lib.settings import pandahub_settings as settings
 
-_global_mongo_client = None
+
+class _ClientCache:
+    client: MongoClient | None = None
 
 
 def _get_mongo_client(
@@ -63,16 +65,16 @@ def get_mongo_client(
     connection_user: str = settings.mongodb_user,
     connection_password: str = settings.mongodb_password,
 ) -> MongoClient | Database | Collection:
-    global _global_mongo_client
+    """Return a cached MongoClient, Database, or Collection depending on the arguments provided."""
     if collection is not None and database is None:
         msg = "Must specify database to access a collection!"
         raise ValueError(msg)
-    if _global_mongo_client is None:
+    if _ClientCache.client is None:
         client = _get_mongo_client(connection_url, connection_user, connection_password)
         if settings.pandahub_global_db_client:
-            _global_mongo_client = client
+            _ClientCache.client = client
     else:
-        client = _global_mongo_client
+        client = _ClientCache.client
     return _get_db_or_coll(client, database, collection)
 
 

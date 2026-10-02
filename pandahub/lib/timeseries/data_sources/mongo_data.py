@@ -1,5 +1,5 @@
 import datetime
-from typing import override
+from typing import Any, override
 
 import numpy as np
 import pandas as pd
@@ -24,12 +24,12 @@ class MongoData(DataSource):
         netname: str,
         db_name: str,
         element_index: list,
-        data_type="p_mw",
-        element_type="load",
-        collection_name="timeseries_data",
-        prefetch_count=1000,
-        **kwargs,
-    ):
+        data_type: str = "p_mw",
+        element_type: str = "load",
+        collection_name: str = "timeseries_data",
+        prefetch_count: int = 1000,
+        **kwargs: Any,
+    ) -> None:
 
         super().__init__()
         self.db_name = db_name
@@ -38,13 +38,13 @@ class MongoData(DataSource):
         if isinstance(element_index, pd.Int64Index):
             element_index = element_index.to_numpy().tolist()
 
-        filter = {
+        query = {
             "netname": netname,
             "data_type": data_type,
             "element_type": element_type,
             # "element_index": element_index
         }
-        self.filter = {**filter, **kwargs}
+        self.filter = {**query, **kwargs}
 
         self.io_methods = io_methods
 
@@ -65,7 +65,7 @@ class MongoData(DataSource):
             self.first_timestamp = first_timestamp
 
     @override
-    def get_time_step_value(self, time_step, profile_name, scale_factor=1.0):
+    def get_time_step_value(self, time_step, profile_name, scale_factor: float = 1.0):
         fs = self.first_timestamp + datetime.timedelta(minutes=15 * time_step)
         if time_step >= self.current_fetch_position:
             self.current_fetch_position = time_step + self.prefetch_count

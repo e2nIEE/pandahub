@@ -6,12 +6,16 @@ from pandahub.api import pandahub_app_settings as ph_settings
 
 
 class UserRead(schemas.BaseUser[uuid.UUID]):
-    pass
+    """Schema for reading a user."""
+
 
 
 class UserCreate(schemas.BaseUserCreate):
+    """Schema for creating a user."""
+
     is_active: bool = not ph_settings.registration_admin_approval
 
 
 class UserUpdate(schemas.BaseUserUpdate):
-    pass
+    """Schema for updating a user."""
+

@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends
@@ -14,10 +15,12 @@ from pandahub.api.internal.db import AccessToken, User, get_access_token_db, get
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
-    pass
+    """Manages user lifecycle operations (create, verify, reset password)."""
 
 
-async def get_user_manager(user_db: Annotated[BeanieUserDatabase, Depends(get_user_db)]):
+
+async def get_user_manager(user_db: Annotated[BeanieUserDatabase, Depends(get_user_db)]) -> AsyncGenerator[UserManager, None]:
+    """Yield a UserManager instance for dependency injection."""
     yield UserManager(user_db)
 
 
@@ -27,6 +30,7 @@ bearer_transport = BearerTransport(tokenUrl="auth/login")
 def get_database_strategy(
     access_token_db: Annotated[AccessTokenDatabase[AccessToken], Depends(get_access_token_db)],
 ) -> DatabaseStrategy:
+    """Return a database-backed authentication strategy."""
     return DatabaseStrategy(access_token_db)
 
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 from types import FunctionType
-from typing import override
+from typing import Any, override
 
 import numpy as np
 import pandas as pd
@@ -29,11 +29,11 @@ class OutputWriterMongoDB(OutputWriter):
         time_steps=None,
         write_time=None,
         log_variables=None,
-        write_caching=10,
-        freq="15min",
-        collection_name="timeseries_data",
-        **kwargs,
-    ):
+        write_caching: int = 10,
+        freq: str = "15min",
+        collection_name: str = "timeseries_data",
+        **kwargs: Any,
+    ) -> None:
         super().__init__(net, time_steps=time_steps, write_time=write_time, log_variables=log_variables)
         self.io_methods = io_methods
         self.args = kwargs
@@ -87,7 +87,7 @@ class OutputWriterMongoDB(OutputWriter):
         except Exception as e:
             logger.error("Error at index %s for %s[%s]: %s", index, table, variable, e)
 
-    def _np_to_pd(self):
+    def _np_to_pd(self) -> dict[str, pd.DataFrame]:
         # convert numpy arrays (faster so save results) into pd Dataframes (user friendly)
         # intended use: At the end of time series simulation write results to pandas
         res_df = {}
@@ -111,7 +111,7 @@ class OutputWriterMongoDB(OutputWriter):
         return res_df
 
     @override
-    def save_results(self, _net, time_step, pf_converged, ctrl_converged, _recycle_options=None):
+    def save_results(self, _net, time_step, pf_converged: bool, ctrl_converged: bool, _recycle_options=None) -> None:
         # remember the last time step
         self.time_step = time_step
 
@@ -138,12 +138,11 @@ class OutputWriterMongoDB(OutputWriter):
         if write_to_db:
             for res_name, res_df in res.items():
                 end = self.start_date + (self.current_pos - 1) * pd.Timedelta(self.freq)
-                if self.current_pos < self.write_caching:
-                    res_df = res_df.drop(range(self.current_pos, self.write_caching), axis=0)
-                res_df.index = pd.date_range(start=self.start_date, end=end, freq=self.freq)
+                trimmed_df = res_df.drop(range(self.current_pos, self.write_caching), axis=0) if self.current_pos < self.write_caching else res_df
+                trimmed_df.index = pd.date_range(start=self.start_date, end=end, freq=self.freq)
                 if res_name in self.ids:
-                    for ii in res_df.index:
-                        row = res_df.loc[ii]
+                    for ii in trimmed_df.index:
+                        row = trimmed_df.loc[ii]
                         self.io_methods.bulk_update_timeseries_in_db(
                             new_ts_content=pd.DataFrame(row).transpose(),
                             document_ids=self.ids[res_name],
@@ -155,7 +154,7 @@ class OutputWriterMongoDB(OutputWriter):
                     et = res_name.split(".")[0]
                     dt = res_name.split(".")[1]
                     self.ids[res_name] = self.io_methods.bulk_write_timeseries_to_db(
-                        timeseries=res_df,
+                        timeseries=trimmed_df,
                         netname=self.NET_NAME,
                         element_type=et,
                         data_type=dt,

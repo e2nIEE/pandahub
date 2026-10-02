@@ -5,7 +5,8 @@ import hashlib
 import importlib
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Any
 
 import blosc
 import numpy as np
@@ -20,7 +21,7 @@ from pandahub.lib.datatypes import DATATYPES
 logger = logging.getLogger(__name__)
 
 
-def get_document_hash(task) -> str:
+def get_document_hash(task: Any) -> str:
     """Return a hash value of the input task to generate consistent but unique _ids.
 
     Parameters
@@ -39,7 +40,7 @@ def get_document_hash(task) -> str:
     return base64.urlsafe_b64encode(hasher.digest()).decode()
 
 
-def make_task_hashable(task):
+def make_task_hashable(task: Any) -> Any:
     """Make a task dict hashable.
 
     Parameters
@@ -127,7 +128,7 @@ def compress_timeseries_data(timeseries_data: pd.Series, ts_format: str) -> byte
     return None
 
 
-def decompress_timeseries_data(timeseries_data: bytes, ts_format: str, num_timestamps: int):
+def decompress_timeseries_data(timeseries_data: bytes, ts_format: str, num_timestamps: int) -> pd.Series | np.ndarray | None:
     """Decompress blosc-compressed timeseries data back to a pandas Series or numpy array."""
     if ts_format == "timestamp_value":
         data = np.frombuffer(blosc.decompress(timeseries_data), dtype=np.float64).reshape(
@@ -144,7 +145,7 @@ def create_timeseries_document(
     data_type: str,
     ts_format: str = "timestamp_value",
     compress_ts_data: bool = False,
-    **kwargs,
+    **kwargs: Any,
 ) -> dict:
     """Create a document containing timeseries metadata and data.
 
@@ -258,9 +259,9 @@ def convert_dataframes_to_dicts(net, net_id, version_, datatypes: dict = DATATYP
             # convert pandapower objects in dataframes to dict
             dataframes[key] = convert_element_to_dict(data.copy(deep=True), net_id, datatypes.get(key))
         else:
-            data = serialize_object_data(key, data, version_)
-            if data:
-                other_parameters[key] = data
+            serialized = serialize_object_data(key, data, version_)
+            if serialized:
+                other_parameters[key] = serialized
 
     return dataframes, other_parameters, types
 
@@ -379,14 +380,14 @@ def convert_geojsons(df: pd.DataFrame, geo_mode: str = "string") -> None:
             df[column] = df[column].apply(conv_func)
 
 
-def json_to_object(js: dict):
+def json_to_object(js: dict) -> Any:
     """Deserialize a JSON-encoded object back to its original Python class instance."""
     _module = importlib.import_module(js["_module"])
     _class = getattr(_module, js["_class"])
     return _class.from_json(js["_object"])
 
 
-def object_to_json(obj) -> dict:
+def object_to_json(obj: Any) -> dict:
     """Serialize a Python object to a JSON-compatible dict with module/class metadata."""
     return {"_module": obj.__class__.__module__, "_class": obj.__class__.__name__, "_object": obj.to_json()}
 
@@ -406,7 +407,7 @@ def migrate_userdb_to_beanie(ph) -> None:
     -------
     None
     """
-    userdb_backup = ph.mongo_client["user_management"][datetime.now().strftime("users_fa9_%Y-%m-%d_%H-%M")]
+    userdb_backup = ph.mongo_client["user_management"][datetime.now(UTC).strftime("users_fa9_%Y-%m-%d_%H-%M")]
     userdb = ph.mongo_client["user_management"]["users"]
     old_users = list(userdb.find({"_id": {"$type": "objectId"}}))
     new_users = list(userdb.find({"_id": {"$not": {"$type": "objectId"}}}))
@@ -441,7 +442,7 @@ def get_metadata_for_timeseries_collections(
     net_id=None,
     element_type: str | None = None,
     element_index=None,
-    **kwargs,
+    **kwargs: Any,
 ) -> dict:
     """Build a metadata dict for a timeseries collection query, validating required fields."""
     if element_type is None:

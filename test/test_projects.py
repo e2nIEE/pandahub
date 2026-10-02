@@ -18,7 +18,7 @@ def test_project_management(ph):
 
 
 def test_upgrade_project():
-    class PandaHubV0_2_2(pandahub.PandaHub):
+    class PandaHubV022(pandahub.PandaHub):
         def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None):
             # if project_id:
             #     self.set_active_project_by_id(project_id)
@@ -74,7 +74,7 @@ def test_upgrade_project():
                         print("FAILED TO WRITE TABLE", key)
 
     # we use the implemetation of 0.2.2 to write a net
-    oldph = PandaHubV0_2_2()
+    oldph = PandaHubV022()
 
     if oldph.project_exists("pytest"):
         oldph.set_active_project("pytest")

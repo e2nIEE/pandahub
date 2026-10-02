@@ -131,14 +131,19 @@ ignore = [
     "TD003",
     # ignore magic numbers rule (use named constants where appropriate manually)
     "PLR2004",
-    # TODO: make boolean positional arguments keyword-only (breaking change)
+    # TODO: make boolean/positional arguments keyword-only (breaking change)
     "FBT001",
     "FBT002",
+    "PLR0917",
     # .loc fix breaks geo dict setters, generic style preference
     "PD008",
     # f-strings in logging are acceptable; lazy evaluation not needed here
     "G004",
 ]
-
 [tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["D104"]
 "test/*" = ["S101", "ANN", "D"]
+# PandaHub.py uses PascalCase filename matching the class name — intentional convention
+"pandahub/lib/PandaHub.py" = ["N999"]
+# tutorials are standalone scripts, not a package
+"tutorials/*" = ["INP001", "N999", "S105"]

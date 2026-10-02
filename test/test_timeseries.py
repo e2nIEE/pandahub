@@ -1,12 +1,14 @@
 """Tests for `spinai_backend` package."""
 
 import copy
-import datetime
+from datetime import UTC, datetime
 
 import numpy as np
 import pandapower.networks as nw
 import pandas as pd
 import simbench as sb
+
+rng = np.random.default_rng()
 
 code = "1-HV-urban--0--sw"
 project = "pytest"
@@ -15,7 +17,7 @@ project = "pytest"
 def test_from_tutorial(ph):
     ph.set_active_project(project)
     net = nw.simple_mv_open_ring_net()
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(35041, len(net.load))) / 100 * net.load.p_mw.to_numpy()
+    p_mw_profiles = rng.integers(low=0, high=100, size=(35041, len(net.load))) / 100 * net.load.p_mw.to_numpy()
     q_mvar_profiles = np.ones((35041, len(net.load)))
     timestamps = pd.date_range(start="01/01/2020", end="31/12/2020", freq="15min")
     p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
@@ -59,7 +61,7 @@ def test_from_tutorial(ph):
         element_type="load",
         data_type="p_mw",
         collection_name="test_collection",
-        timestamp_range=(datetime.datetime(2020, 1, 1, 0, 0), datetime.datetime(2020, 1, 8, 0, 0)),
+        timestamp_range=(datetime(2020, 1, 1, 0, 0, tzinfo=UTC), datetime(2020, 1, 8, 0, 0, tzinfo=UTC)),
     )
 
     assert (result.keys() == ["p_mw", "q_mvar"]).all()
@@ -114,7 +116,6 @@ def test_simbench_loop_ts(ph):
     profiles = net.profiles["load"].set_index("time")
 
     for i in net.load.index[:3]:
-        i = net.load.index[0]
         p_mw_profile = profiles[net.load.profile[i] + "_pload"]  # .astype(float)
 
         ph.write_timeseries_to_db(
@@ -175,7 +176,7 @@ def test_del_single_ts_on_db(ph):
 def test_bulk_ts_on_db(ph):
     ph.set_active_project(project)
     # write bulk cts to db
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(35041, 10)).astype(float)
+    p_mw_profiles = rng.integers(low=0, high=100, size=(35041, 10)).astype(float)
     timestamps = pd.date_range(start="01/01/2020", end="31/12/2020", freq="15min")
     p_mw_profiles_no_time = pd.DataFrame(copy.deepcopy(p_mw_profiles))
     p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
@@ -204,7 +205,7 @@ def test_bulk_ts_on_db(ph):
         },
         collection_name="test_collection",
         pivot_by_column="element_index",
-        timestamp_range=(datetime.datetime(2020, 1, 1, 0, 0), datetime.datetime(2020, 1, 8, 0, 0)),
+        timestamp_range=(datetime(2020, 1, 1, 0, 0, tzinfo=UTC), datetime(2020, 1, 8, 0, 0, tzinfo=UTC)),
     )
 
     p_mw_profiles_no_time = pd.DataFrame(p_mw_profiles_no_time)
@@ -251,7 +252,7 @@ def test_bulk_ts_on_db(ph):
 
 def test_add_metadata(ph):
     ph.set_active_project(project)
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(25, 10)).astype(float)
+    p_mw_profiles = rng.integers(low=0, high=100, size=(25, 10)).astype(float)
     timestamps = pd.date_range(start="01/01/2020", end="01/02/2020", freq="60min")
     p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
     ph.write_timeseries_to_db(
@@ -271,19 +272,19 @@ def test_add_metadata(ph):
         data_type="p_mw",
         collection_name="test_collection",
     )
-    filter = {
+    query = {
         "netname": "test_add_metadata",
         "element_type": "load",
         "element_index": 0,
     }
 
-    meta_before = ph.get_timeseries_metadata(filter, collection_name="test_collection")
+    meta_before = ph.get_timeseries_metadata(query, collection_name="test_collection")
 
     add_meta = {"max": str(result.to_numpy().max())}
 
-    ph.add_metadata(filter, add_meta=add_meta, collection_name="test_collection")
+    ph.add_metadata(query, add_meta=add_meta, collection_name="test_collection")
     # check for new metadata
-    meta_after = ph.get_timeseries_metadata(filter, collection_name="test_collection")
+    meta_after = ph.get_timeseries_metadata(query, collection_name="test_collection")
 
     assert len(meta_after.columns) == 13
     assert len(meta_before.columns) == 12
@@ -291,7 +292,7 @@ def test_add_metadata(ph):
 
 def test_bulk_write_with_meta(ph):
     ph.set_active_project(project)
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(97, 10)).astype(float)
+    p_mw_profiles = rng.integers(low=0, high=100, size=(97, 10)).astype(float)
     timestamps = pd.date_range(start="01/01/2020", end="01/02/2020", freq="15min")
     p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
     meta = pd.DataFrame(p_mw_profiles.max(), columns=["max"], dtype=object)
@@ -339,7 +340,7 @@ if __name__ == "__main__":
     ph.create_project(project_name)
     ph.set_active_project(project_name)
 
-    p_mw_profiles = np.random.randint(low=0, high=100, size=(24, 10))
+    p_mw_profiles = rng.integers(low=0, high=100, size=(24, 10))
     timestamps = pd.date_range(start="01/01/2020", end="01/02/2020", freq="60min", closed="right")
     p_mw_profiles = pd.DataFrame(p_mw_profiles, index=timestamps)
     ph.write_timeseries_to_db(
@@ -359,19 +360,19 @@ if __name__ == "__main__":
         data_type="p_mw",
         collection_name="test_collection",
     )
-    filter = {
+    query = {
         "netname": "test_add_metadata",
         "element_type": "load",
         "element_index": 0,
     }
 
-    meta_before = ph.get_timeseries_metadata(filter, collection_name="test_collection")
+    meta_before = ph.get_timeseries_metadata(query, collection_name="test_collection")
 
     add_meta = {"max": str(result.to_numpy().max())}
 
-    ph.add_metadata(filter, add_meta=add_meta, collection_name="test_collection")
+    ph.add_metadata(query, add_meta=add_meta, collection_name="test_collection")
     # check for new metadata
-    meta_after = ph.get_timeseries_metadata(filter, collection_name="test_collection")
+    meta_after = ph.get_timeseries_metadata(query, collection_name="test_collection")
 
     assert len(meta_after.columns) == 12
     assert len(meta_before.columns) == 11

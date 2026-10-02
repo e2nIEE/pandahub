@@ -1,8 +1,8 @@
-import pandas as pd
 import pandapipes as pps
 import pandapipes.networks as nw_pps
 import pandapower as pp
 import pandapower.networks as nw_pp
+import pandas as pd
 import pytest
 from pandapipes.toolbox import nets_equal
 
