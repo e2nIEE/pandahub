@@ -486,7 +486,7 @@ class PandaHub:
         logger.warning(f"Passing a collection to get_project_database is deprecated. Use get_project_collection instead!")
         return self.get_project_collection(collection)
 
-    def get_project_collection(self, collection_name: str) -> Collection:
+    def get_project_collection(self, collection_name: str, *, from_element_name: bool=False) -> Collection:
         """
         Get a MongoClient instance connected to the database for the current active project, optionally set to the given collection.
 
@@ -494,11 +494,15 @@ class PandaHub:
         ----------
         collection_name
             Name of document collection
+        from_element_name
+            Convert the element name to collection name (adds net_ prefix if necessary)
 
         Returns
         -------
         pymongo.collection.Collection
         """
+        if from_element_name:
+            collection_name = self._collection_name_of_element(collection_name)
         return self.get_project_database()[collection_name]
 
 
@@ -1256,7 +1260,7 @@ class PandaHub:
         geo_mode="string",
         variant=None,
         dtypes=None,
-        columns=None,
+        columns: list[str] | None =None,
     ):
         """
         Load one element table from the database into ``net``.
@@ -1292,15 +1296,13 @@ class PandaHub:
             else:
                 filter_dict = {**filter_dict, **filter}
 
-        projection = None
         if columns is not None:
-            projection = {column: 1 for column in columns}
-            projection["index"] = 1
-            projection["net_id"] = 1
-
+            for item in ["index", "net_id"]:
+                if item not in columns:
+                    columns.append(item)
         data = (
-            db[self._collection_name_of_element(element_type)]
-            .find(filter_dict, projection=projection)
+            self.get_project_collection(element_type, from_element_name=True)
+            .find(filter_dict, projection=columns)
             .to_list()
         )
         if len(data) == 0:
@@ -1318,8 +1320,8 @@ class PandaHub:
             }
             df = df.astype(dtypes_found_columns, errors="ignore")
         df.index.name = None
-        df.drop(columns=["_id", "net_id"], inplace=True)
-        df.sort_index(inplace=True)
+        df = df.drop(columns=["_id", "net_id"])
+        df = df.sort_index()
         convert_geojsons(df, geo_mode)
         if "object" in df.columns:
             df["object"] = df["object"].apply(json_to_object)
