@@ -1,8 +1,8 @@
 from fastapi import APIRouter
 
-from pandahub.api.internal.users import auth_backend, fastapi_users
+from pandahub.api import pandahub_app_settings as ph_settings
 from pandahub.api.internal.schemas import UserCreate, UserRead
-from .. import pandahub_app_settings as ph_settings
+from pandahub.api.internal.users import auth_backend, fastapi_users
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

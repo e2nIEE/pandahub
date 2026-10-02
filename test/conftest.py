@@ -1,5 +1,7 @@
 import pytest
+
 from pandahub import PandaHub
+
 # from pandahub.lib.settings import pandahub_settings
 
 
@@ -18,5 +20,3 @@ def ph():
     yield ph
 
     ph.delete_project(i_know_this_action_is_final=True)
-
-

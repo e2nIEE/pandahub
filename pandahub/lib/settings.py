@@ -1,8 +1,8 @@
 import os
 from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import AfterValidator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def get_secret(secret: str) -> str:
@@ -17,7 +17,7 @@ SecretFromFile = Annotated[str, AfterValidator(get_secret)]
 
 
 class PandaHubSettings(BaseSettings):
-    """PandaHub settings"""
+    """PandaHub settings."""
 
     model_config = SettingsConfigDict(env_ignore_empty=True)
 

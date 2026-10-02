@@ -1,5 +1,8 @@
 import uuid
-from fastapi import Depends, Request
+from collections.abc import AsyncGenerator
+from typing import Annotated
+
+from fastapi import Depends
 from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
 from fastapi_users.authentication import AuthenticationBackend, BearerTransport
 from fastapi_users.authentication.strategy.db import (
@@ -8,20 +11,26 @@ from fastapi_users.authentication.strategy.db import (
 )
 from fastapi_users.db import BeanieUserDatabase
 
-from ..internal.db import get_user_db, get_access_token_db, User, AccessToken
+from pandahub.api.internal.db import AccessToken, User, get_access_token_db, get_user_db
+
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
-  pass
+    """Manages user lifecycle operations (create, verify, reset password)."""
 
-async def get_user_manager(user_db:BeanieUserDatabase = Depends(get_user_db)):
+
+
+async def get_user_manager(user_db: Annotated[BeanieUserDatabase, Depends(get_user_db)]) -> AsyncGenerator[UserManager, None]:
+    """Yield a UserManager instance for dependency injection."""
     yield UserManager(user_db)
+
 
 bearer_transport = BearerTransport(tokenUrl="auth/login")
 
 
 def get_database_strategy(
-    access_token_db: AccessTokenDatabase[AccessToken] = Depends(get_access_token_db),
+    access_token_db: Annotated[AccessTokenDatabase[AccessToken], Depends(get_access_token_db)],
 ) -> DatabaseStrategy:
+    """Return a database-backed authentication strategy."""
     return DatabaseStrategy(access_token_db)
 
 

@@ -1,9 +1,10 @@
-import pandapower.networks as nw
-import pandahub
 import pandapower as pp
-from pandahub.lib.database_toolbox import convert_dataframes_to_dicts
-from pymongo import DESCENDING
+import pandapower.networks as nw
 from packaging import version
+from pymongo import DESCENDING
+
+import pandahub
+from pandahub.lib.database_toolbox import convert_dataframes_to_dicts
 
 
 def test_project_management(ph):
@@ -17,24 +18,22 @@ def test_project_management(ph):
 
 
 def test_upgrade_project():
-    class PandaHubV0_2_2(pandahub.PandaHub):
+    class PandaHubV022(pandahub.PandaHub):
         def create_project(self, name, settings=None, realm=None, metadata=None, project_id=None):
             # if project_id:
             #     self.set_active_project_by_id(project_id)
             if self.project_exists(name, realm):
-                raise pandahub.PandaHubError("Project already exists")
+                msg = "Project already exists"
+                raise pandahub.PandaHubError(msg)
             if settings is None:
-                 settings = {}
+                settings = {}
             if metadata is None:
                 metadata = {}
-            project_data = {"name": name,
-                            "realm": realm,
-                            "settings": settings,
-                            "metadata": metadata}
+            project_data = {"name": name, "realm": realm, "settings": settings, "metadata": metadata}
             if project_id:
                 project_data["_id"] = project_id
             if self.user_id is not None:
-                 project_data["users"] = {self.user_id: "owner"}
+                project_data["users"] = {self.user_id: "owner"}
             self.mongo_client["user_management"]["projects"].insert_one(project_data)
             self.set_active_project(name, realm)
             return project_data
@@ -49,32 +48,33 @@ def test_upgrade_project():
             elif isinstance(net, pp.pandapipesNet):
                 net_type = "pipe"
             else:
-                raise pandahub.PandaHubError("net must be a pandapower or pandapipes object")
+                msg = "net must be a pandapower or pandapipes object"
+                raise pandahub.PandaHubError(msg)
             if self._network_with_name_exists(name, db):
                 if overwrite:
                     self.delete_network_by_name(name)
                 else:
-                    raise pandahub.PandaHubError("Network name already exists")
+                    msg = "Network name already exists"
+                    raise pandahub.PandaHubError(msg)
             max_id_network = db["_networks"].find_one(sort=[("_id", -1)])
             _id = 0 if max_id_network is None else max_id_network["_id"] + 1
             dataframes, other_parameters, types = convert_dataframes_to_dicts(net, _id, version.parse("0.2.1"))
             self._write_net_collections_to_db(db, dataframes)
 
-            net_dict = {"_id": _id, "name": name, "dtypes": types,
-                        "net_type": net_type,
-                        "data": other_parameters}
+            net_dict = {"_id": _id, "name": name, "dtypes": types, "net_type": net_type, "data": other_parameters}
             db["_networks"].insert_one(net_dict)
 
         def _write_net_collections_to_db(self, db, collections):
             for key, item in collections.items():
                 if len(item) > 0:
                     try:
-                        db[key].insert_many(item, ordered= True)
+                        db[key].insert_many(item, ordered=True)
                         db[key].create_index([("net_id", DESCENDING)])
-                    except:
+                    except Exception:
                         print("FAILED TO WRITE TABLE", key)
+
     # we use the implemetation of 0.2.2 to write a net
-    oldph = PandaHubV0_2_2()
+    oldph = PandaHubV022()
 
     if oldph.project_exists("pytest"):
         oldph.set_active_project("pytest")
@@ -100,12 +100,5 @@ def reset_project(db):
         db.drop_collection(cname)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_upgrade_project()
-
-
-
-
-
-
-

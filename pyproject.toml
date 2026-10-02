@@ -41,7 +41,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pandapower>=3.0",
     "pandapipes>=0.7.0",
-    "pymongo>=4.9",
+    "pymongo",
     "pydantic",
     "pydantic-settings",
     "pymongoarrow",
@@ -51,7 +51,6 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 rest-api = ["fastapi[standard-no-fastapi-cloud-cli]>=0.104.0", "fastapi-users[beanie]>=12.0"]
-test = ["pytest", "pytest-xdist", "simbench", "line_profiler"]
 
 [project.urls]
 Homepage = "https://github.com/e2nIEE/pandahub"
@@ -62,5 +61,89 @@ Issues = "https://github.com/e2nIEE/pandahub/issues"
 Download = "https://pypi.org/project/pandahub/#files"
 Changelog = "https://github.com/e2nIEE/pandahub/blob/develop/CHANGELOG.md"
 
+[dependency-groups]
+dev = [
+    "ruff~=0.16.0",
+    "pytest",
+    "pytest-xdist",
+    "simbench",
+    "line_profiler",
+]
+
 [tool.ruff]
 line-length = 120
+
+[tool.ruff.lint]
+pydocstyle.convention = "numpy"
+select = ["F",
+    "E",
+    "I",
+    "N",
+    "D",
+    "UP",
+    "ANN",
+    "ASYNC",
+    "S",
+    "FBT",
+    "B",
+    "A",
+    "C4",
+    "DTZ",
+    "T10",
+    "EM",
+    "ISC",
+    "ICN",
+    "LOG",
+    "G",
+    "PIE",
+    "RSE",
+    "PT",
+    "RET",
+    "SIM",
+    "TID251",
+    "TID252",
+    "TCH",
+    "ARG",
+    "FLY",
+    "NPY",
+    "TD",
+    "PD",
+    "PERF",
+    "INP001",
+    "PL",
+    "RUF",
+]
+
+ignore = [
+    # line length (leave to formatter)
+    "E501",
+    # "too many" rules (branches, arguments, statements)
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    # do not require public module definitions
+    "D100",
+    # not compatible with formatter
+    "ISC001",
+    # No author in todos necessary
+    "TD002",
+    # No issue link in todos necessary
+    "TD003",
+    # ignore magic numbers rule (use named constants where appropriate manually)
+    "PLR2004",
+    # TODO: make boolean/positional arguments keyword-only (breaking change)
+    "FBT001",
+    "FBT002",
+    "PLR0917",
+    # .loc fix breaks geo dict setters, generic style preference
+    "PD008",
+    # f-strings in logging are acceptable; lazy evaluation not needed here
+    "G004",
+]
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["D104"]
+"test/*" = ["S101", "ANN", "D"]
+# PandaHub.py uses PascalCase filename matching the class name — intentional convention
+"pandahub/lib/PandaHub.py" = ["N999"]
+# tutorials are standalone scripts, not a package
+"tutorials/*" = ["INP001", "N999", "S105"]
